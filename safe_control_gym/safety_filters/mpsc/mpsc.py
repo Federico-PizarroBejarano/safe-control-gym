@@ -16,6 +16,9 @@ import numpy as np
 from safe_control_gym.safety_filters.base_safety_filter import BaseSafetyFilter
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_trajectory_on_horizon
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.one_step_cost import ONE_STEP_COST
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.lqr_cost import LQR_COST
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.precomputed_cost import PRECOMPUTED_COST
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.learned_cost import LEARNED_COST
 from safe_control_gym.controllers.mpc.mpc_utils import get_cost_weight_matrix, reset_constraints
 from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
@@ -92,6 +95,12 @@ class MPSC(BaseSafetyFilter, ABC):
 
         if cost_function == Cost_Function.ONE_STEP_COST:
             self.cost_function = ONE_STEP_COST()
+        elif cost_function == Cost_Function.LQR_COST:
+            self.cost_function = LQR_COST(env_func,  self.horizon, q_lin, r_lin)
+        elif cost_function == Cost_Function.PRECOMPUTED_COST:
+            self.cost_function = PRECOMPUTED_COST(env_func, self.horizon, self.output_dir, **kwargs)
+        elif cost_function == Cost_Function.LEARNED_COST:
+            self.cost_function = LEARNED_COST(env_func, self.horizon, self.output_dir, **kwargs)
         else:
             raise NotImplementedError(f'The MPSC cost function {cost_function} has not been implemented')
 
@@ -170,7 +179,7 @@ class MPSC(BaseSafetyFilter, ABC):
             self.prev_action = next_u_val
             feasible = True
         except Exception as e:
-            print('Error Return Status: ', opti.debug.return_status())
+            print('Error Return Status:', opti.debug.return_status())
             print(e)
             feasible = False
             action = None

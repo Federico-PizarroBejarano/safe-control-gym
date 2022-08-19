@@ -6,11 +6,13 @@ from functools import partial
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.fftpack import fft, fftfreq
 
 from safe_control_gym.experiment import Experiment
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 
 
 def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
@@ -88,6 +90,23 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
         safety_filter.load(path=f'{curr_path}/models/{config.safety_filter}_{system}.pkl')
 
     ctrl.reset()
+
+    if config.sf_config.cost_function in [Cost_Function.PRECOMPUTED_COST, Cost_Function.LEARNED_COST]:
+        safety_filter.cost_function.set_uncertified_controller(ctrl)
+        safety_filter.cost_function.output_dir = curr_path
+
+        if config.algo in ['ppo', 'sac']:
+            ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.pt')
+        else:
+            ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
+
+        if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
+            if config.task == Environment.CARTPOLE:
+                init_state = [config.task_config['init_state']['init_x'], config.task_config['init_state']['init_x_dot'], config.task_config['init_state']['init_theta'], config.task_config['init_state']['init_theta_dot']]
+            else:
+                init_state = [config.task_config['init_state']['init_x'], config.task_config['init_state']['init_x_dot'], config.task_config['init_state']['init_z'], config.task_config['init_state']['init_z_dot'], config.task_config['init_state']['init_theta'], config.task_config['init_state']['init_theta_dot']]
+            safety_filter.cost_function.learn_policy(init_state)
+            safety_filter.setup_optimizer()
 
     # Run with safety filter
     experiment = Experiment(env, ctrl, safety_filter=safety_filter)
@@ -182,18 +201,53 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
         ax_act.set_ylabel('Input')
         ax_act.set_box_aspect(0.5)
 
-        print(f'Total Uncertified Time: {elapsed_time_uncert}s')
-        print(f'Total Certified Time: {elapsed_time_cert}s')
-        print('Number of Corrections: ', np.sum(corrections))
-        print('Sum of Corrections: ', np.linalg.norm(mpsc_results['correction'][0]))
-        print('Max Correction: ', np.max(np.abs(mpsc_results['correction'][0])))
-        print('Number of Feasible Iterations: ', np.sum(mpsc_results['feasible'][0]))
-        print('Total Number of Iterations: ', uncert_metrics['average_length'])
-        print('Total Number of Certified Iterations: ', cert_metrics['average_length'])
-        print('Number of Violations: ', uncert_metrics['average_constraint_violation'])
-        print('Number of Certified Violations: ', cert_metrics['average_constraint_violation'])
-        print('RMSE Uncertified: ', uncert_metrics['average_rmse'])
-        print('RMSE Certified: ', cert_metrics['average_rmse'])
+        _, ax_fft = plt.subplots()
+        N_cert = max(certified_results['current_physical_action'][0].shape)
+        N_uncert = max(results['current_physical_action'][0].shape)
+        if config.task == Environment.CARTPOLE:
+            spectrum_cert = fft(np.squeeze(certified_results['current_physical_action'][0]))
+            spectrum_uncert = fft(np.squeeze(results['current_physical_action'][0]))
+            freq_cert = fftfreq(len(spectrum_cert), 1/config.task_config['ctrl_freq'])[:N_cert//2]
+            freq_uncert = fftfreq(len(spectrum_uncert), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
+            ax_fft.plot(freq_cert, 2.0/N_cert * np.abs(spectrum_cert[0:N_cert//2]), 'b-', label='Certified')
+            ax_fft.plot(freq_uncert, 2.0/N_uncert * np.abs(spectrum_uncert[0:N_uncert//2]), 'r--', label='Uncertified')
+            HFC_uncert = freq_uncert.T @ (2.0/N_uncert * np.abs(spectrum_uncert[0:N_uncert//2]))
+            HFC_cert = freq_cert.T @ (2.0/N_cert * np.abs(spectrum_cert[0:N_cert//2]))
+        else:
+            spectrum_cert1 = fft(np.squeeze(certified_results['current_physical_action'][0][:, 0]))
+            spectrum_cert2 = fft(np.squeeze(certified_results['current_physical_action'][0][:, 1]))
+            spectrum_uncert1 = fft(np.squeeze(results['current_physical_action'][0][:, 0]))
+            spectrum_uncert2 = fft(np.squeeze(results['current_physical_action'][0][:, 1]))
+            freq_cert1 = fftfreq(len(spectrum_cert1), 1/config.task_config['ctrl_freq'])[:N_cert//2]
+            freq_cert2 = fftfreq(len(spectrum_cert2), 1/config.task_config['ctrl_freq'])[:N_cert//2]
+            freq_uncert1 = fftfreq(len(spectrum_uncert1), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
+            freq_uncert2 = fftfreq(len(spectrum_uncert2), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
+            ax_fft.plot(freq_cert1, 2.0/N_cert * np.abs(spectrum_cert1[0:N_cert//2]), 'b-', label='Certified 1')
+            ax_fft.plot(freq_cert2, 2.0/N_cert * np.abs(spectrum_cert2[0:N_cert//2]), 'b-', label='Certified 2')
+            ax_fft.plot(freq_uncert1, 2.0/N_uncert * np.abs(spectrum_uncert1[0:N_uncert//2]), 'r--', label='Uncertified 1')
+            ax_fft.plot(freq_uncert2, 2.0/N_uncert * np.abs(spectrum_uncert2[0:N_uncert//2]), 'r--', label='Uncertified 2')
+            HFC_uncert = freq_uncert1.T @ (2.0/N_uncert * np.abs(spectrum_uncert1[0:N_uncert//2])) + freq_uncert2.T @ (2.0/N_uncert * np.abs(spectrum_uncert2[0:N_uncert//2]))
+            HFC_cert = freq_cert1.T @ (2.0/N_cert * np.abs(spectrum_cert1[0:N_cert//2])) + freq_cert2.T @ (2.0/N_cert * np.abs(spectrum_cert2[0:N_cert//2]))
+
+        ax_fft.legend()
+        ax_fft.set_title('Fourier Analysis of Inputs')
+        ax_fft.set_xlabel('Frequency')
+        ax_fft.set_ylabel('Magnitude')
+
+        print('Total Uncertified (s):', elapsed_time_uncert)
+        print('Total Certified Time (s):', elapsed_time_cert)
+        print('Number of Corrections:', np.sum(corrections))
+        print('Sum of Corrections:', np.linalg.norm(mpsc_results['correction'][0]))
+        print('Max Correction:', np.max(np.abs(mpsc_results['correction'][0])))
+        print('Number of Feasible Iterations:', np.sum(mpsc_results['feasible'][0]))
+        print('Total Number of Iterations:', uncert_metrics['average_length'])
+        print('Total Number of Certified Iterations:', cert_metrics['average_length'])
+        print('Number of Violations:', uncert_metrics['average_constraint_violation'])
+        print('Number of Certified Violations:', cert_metrics['average_constraint_violation'])
+        print('HFC Uncertified:', HFC_uncert)
+        print('HFC Certified:', HFC_cert)
+        print('RMSE Uncertified:', uncert_metrics['average_rmse'])
+        print('RMSE Certified:', cert_metrics['average_rmse'])
 
         plt.tight_layout()
         plt.show()

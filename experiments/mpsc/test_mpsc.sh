@@ -2,6 +2,7 @@
 
 SYS='cartpole'
 # SYS='quadrotor_2D'
+# SYS='quadrotor_3D'
 
 TASK='stab'
 # TASK='track'
@@ -12,8 +13,15 @@ ALGO='ppo'
 # ALGO='sac'
 
 SAFETY_FILTER='linear_mpsc'
+# SAFETY_FILTER='nl_mpsc'
 
 MPSC_COST='one_step_cost'
+# MPSC_COST='lqr_cost'
+# MPSC_COST='precomputed_cost'
+# MPSC_COST='learned_cost'
+
+EXPERIMENT='single'
+# EXPERIMENT='stat'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
