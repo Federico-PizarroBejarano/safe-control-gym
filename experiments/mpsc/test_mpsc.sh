@@ -20,9 +20,6 @@ MPSC_COST='one_step_cost'
 # MPSC_COST='precomputed_cost'
 # MPSC_COST='learned_cost'
 
-EXPERIMENT='single'
-# EXPERIMENT='stat'
-
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
 else

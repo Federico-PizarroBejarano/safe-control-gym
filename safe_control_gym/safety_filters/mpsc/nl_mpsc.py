@@ -46,7 +46,7 @@ class NL_MPSC(MPSC):
             env_func (partial BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
             integration_algo (str): The algorithm used for integrating the dynamics,
-                either 'LTI', 'rk4', 'rk', or 'cvodes'.
+                either 'rk4', 'rk', or 'cvodes'.
             warmstart (bool): If the previous MPC soln should be used to warmstart the next mpc step.
             additional_constraints (list): List of additional constraints to consider.
             use_terminal_set (bool): Whether to use a terminal set constraint or not.
@@ -95,8 +95,10 @@ class NL_MPSC(MPSC):
 
         if self.env.NAME == Environment.CARTPOLE:
             self.x_r = np.array([self.env.X_EQ[0], 0, 0, 0])
-        if self.env.NAME == Environment.QUADROTOR:
+        elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
             self.x_r = np.array([self.env.X_EQ[0], 0, self.env.X_EQ[2], 0, 0, 0])
+        elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 3:
+            self.x_r = np.array([self.env.X_EQ[0], 0, self.env.X_EQ[2], 0, self.env.X_EQ[4], 0, 0, 0, 0, 0, 0, 0])
         self.u_r = self.U_EQ
 
         x_sym = self.model.x_sym
@@ -160,7 +162,7 @@ class NL_MPSC(MPSC):
         for i in range(self.n_samples):
             init_state, _ = env.reset()
             if self.env.NAME == Environment.QUADROTOR:
-                u = np.random.rand(2)/20 - 1/40 + self.U_EQ
+                u = np.random.rand(self.model.nu)/20 - 1/40 + self.U_EQ
             else:
                 u = env.action_space.sample() # Will yield a random action within action space.
             x_next_obs, _, _, _ = env.step(u)
@@ -648,7 +650,7 @@ class NL_MPSC(MPSC):
                 'ipopt.sb': 'yes',
                 'ipopt.max_iter': 50,
                 'print_time': 1}
-        if self.integration_algo in ['LTI', 'rk4']:
+        if self.integration_algo == 'rk4':
             opts['expand'] = True
         opti.solver('ipopt', opts)
         self.opti_dict = {

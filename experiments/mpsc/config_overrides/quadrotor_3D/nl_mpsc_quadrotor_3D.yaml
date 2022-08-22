@@ -1,15 +1,15 @@
-safety_filter: linear_mpsc
+safety_filter: nl_mpsc
 sf_config:
   # LQR controller parameters
   r_lin:
     - 0.1
   q_lin:
-    - 0.01
-    - 0.01
-    - 0.01
-    - 0.01
-    - 0.01
-    - 0.01
+    - 0.0001
+    - 1
+    - 0.0001
+    - 1
+    - 0.0001
+    - 1
     - 1
     - 1
     - 1
@@ -21,15 +21,10 @@ sf_config:
   horizon: 20
   warmstart: True
   integration_algo: rk4
-  use_terminal_set: False
+  use_terminal_set: True
 
-  # Safe set calculation
+  # Learning disturbance bounds
   n_samples: 600
-  n_samples_terminal_set: 10
-  learn_terminal_set: False
-
-  # Tau parameter for the calcuation of the RPI
-  tau: 0.975
 
   # Cost function
   cost_function: one_step_cost

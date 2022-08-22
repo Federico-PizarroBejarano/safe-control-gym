@@ -17,8 +17,9 @@ sf_config:
   integration_algo: rk4
   use_terminal_set: True
 
-  # Decay Factor for P_MPSC and LEARN_MPSC
-  decay_factor: 0.85
+  # Learning disturbance bounds
+  n_samples: 600
 
   # Cost function
   cost_function: one_step_cost
+  decay_factor: 0.85 # Decay Factor for P_MPSC and LEARN_MPSC
