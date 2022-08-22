@@ -12,6 +12,7 @@ Based on
 '''
 
 import pickle
+
 import numpy as np
 import casadi as cs
 import cvxpy as cp
@@ -361,11 +362,11 @@ class NL_MPSC(MPSC):
         return X, Y, Cost, Constraints
 
     def randsphere(self, num, dim, r):
-        '''This function returns an num by dim array, X, in which
-            each of the num rows has the dim Cartesian coordinates
-            of a random point uniformly-distributed over the
-            interior of an dim-dimensional hypersphere with
-            radius r and center at the origin.
+        '''This function returns an num by dim array in which
+           each of the num rows has the dim Cartesian coordinates
+           of a random point uniformly-distributed over the
+           interior of an dim-dimensional hypersphere with
+           radius r and center at the origin.
 
         Args:
             num (int): The number of vectors.
@@ -379,9 +380,11 @@ class NL_MPSC(MPSC):
         vectors = []
 
         while len(vectors) < num:
-            vec = np.random.uniform(size=(1, dim), low=-r, high=r)
-            if np.linalg.norm(vec) < r:
-                vectors.append(vec)
+            u = np.random.normal(0,1,dim)  # an array of d normally distributed random variables
+            norm=np.sum(u**2)**(0.5)
+            radius = r * np.random.rand()**(1.0/dim)
+            vec= radius*u/norm
+            vectors.append(vec)
 
         return np.vstack(vectors)
 
