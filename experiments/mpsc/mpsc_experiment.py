@@ -113,7 +113,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     mpsc_results = certified_results['safety_filter_data'][0]
     safety_filter.close()
 
-    elapsed_time_cert = results['timestamp'][0][-1] - results['timestamp'][0][0]
+    elapsed_time_cert = certified_results['timestamp'][0][-1] - certified_results['timestamp'][0][0]
 
     corrections = mpsc_results['correction'][0] > 1e-6
     corrections = np.append(corrections, False)
