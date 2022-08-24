@@ -5,6 +5,7 @@ task_config:
   pyb_freq: 1000
   physics: pyb
   quad_type: 2
+  normalized_rl_action_space: True
 
   init_state:
     init_x: 0
@@ -15,7 +16,6 @@ task_config:
     init_theta_dot: 0
   randomized_init: True
   randomized_inertial_prop: False
-  normalized_rl_action_space: True
 
   init_state_randomization_info:
     init_x:
@@ -45,14 +45,12 @@ task_config:
 
   task: traj_tracking
   task_info:
-    stabilization_goal: [0, 1]
-    stabilization_goal_tolerance: 0.01
     trajectory_type: figure8
     num_cycles: 1
     trajectory_plane: 'xz'
     trajectory_position_offset: [0, 1]
     trajectory_scale: 1
-  
+
   inertial_prop:
     M: 0.027
     Iyy: 1.4e-05

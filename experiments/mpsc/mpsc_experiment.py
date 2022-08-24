@@ -111,7 +111,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     # Run with safety filter
     experiment = Experiment(env, ctrl, safety_filter=safety_filter)
     certified_results, cert_metrics = experiment.run_evaluation(n_episodes=n_episodes, n_steps=n_steps)
-    ctrl.close()
+    experiment.close()
     mpsc_results = certified_results['safety_filter_data'][0]
     safety_filter.close()
 
@@ -126,11 +126,16 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
             graph1_2 = 3
             graph3_1 = 0
             graph3_2 = 1
-        elif config.task == Environment.QUADROTOR:
+        elif system == 'quadrotor_2D':
             graph1_1 = 4
             graph1_2 = 5
             graph3_1 = 0
             graph3_2 = 2
+        elif system == 'quadrotor_3D':
+            graph1_1 = 6
+            graph1_2 = 7
+            graph3_1 = 0
+            graph3_2 = 4
 
         _, ax = plt.subplots()
         ax.plot(results['obs'][0][:, graph1_1], results['obs'][0][:, graph1_2], 'r--', label='Uncertified')
@@ -160,9 +165,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
             ax2.legend(loc='upper right')
         elif config.task == Environment.QUADROTOR:
             _, ax2 = plt.subplots()
-            ax2.plot(results['obs'][0][:,1], results['obs'][0][:,3],'r--', label='Uncertified')
-            ax2.plot(certified_results['obs'][0][:,1], certified_results['obs'][0][:,3],'.-', label='Certified')
-            ax2.plot(certified_results['obs'][0][corrections, 1], certified_results['obs'][0][corrections, 3], 'r.', label='Modified')
+            ax2.plot(results['obs'][0][:,graph3_1+1], results['obs'][0][:,graph3_2+1],'r--', label='Uncertified')
+            ax2.plot(certified_results['obs'][0][:,graph3_1+1], certified_results['obs'][0][:,graph3_2+1],'.-', label='Certified')
+            ax2.plot(certified_results['obs'][0][corrections, graph3_1+1], certified_results['obs'][0][corrections, graph3_2+1], 'r.', label='Modified')
             ax2.set_xlabel(r'x_dot')
             ax2.set_ylabel(r'z_dot')
             ax2.set_box_aspect(0.5)
@@ -172,7 +177,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
         ax3.plot(results['obs'][0][:,graph3_1], results['obs'][0][:,graph3_2],'r--', label='Uncertified')
         ax3.plot(certified_results['obs'][0][:,graph3_1], certified_results['obs'][0][:,graph3_2],'.-', label='Certified')
         if config.task_config.task == Task.TRAJ_TRACKING and config.task == Environment.QUADROTOR:
-            ax3.plot(safety_filter.env.X_GOAL[:,0], safety_filter.env.X_GOAL[:,2],'g--', label='Reference')
+            ax3.plot(safety_filter.env.X_GOAL[:,graph3_1], safety_filter.env.X_GOAL[:,graph3_2],'g--', label='Reference')
         ax3.plot(certified_results['obs'][0][corrections, graph3_1], certified_results['obs'][0][corrections, graph3_2], 'r.', label='Modified')
         ax3.scatter(results['obs'][0][0, graph3_1], results['obs'][0][0, graph3_2], color='g', marker='o', s=100, label='Initial State')
         ax3.set_xlabel(r'X')

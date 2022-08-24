@@ -4,16 +4,16 @@ task_config:
   ctrl_freq: 15
   pyb_freq: 750
   physics: pyb
-  
+  normalized_rl_action_space: True
+
   # state initialization
   init_state:
     init_x: 0
     init_x_dot: 0
     init_theta: 0
-    init_theta_dot: 0 
+    init_theta_dot: 0
   randomized_init: True
   randomized_inertial_prop: False
-  normalized_rl_action_space: True
 
   init_state_randomization_info:
     init_x:
@@ -35,8 +35,6 @@ task_config:
 
   task: traj_tracking
   task_info:
-    stabilization_goal: [0, 0]
-    stabilization_goal_tolerance: 0.05
     trajectory_type: 'circle'
     num_cycles: 2
     trajectory_plane: 'zx'
