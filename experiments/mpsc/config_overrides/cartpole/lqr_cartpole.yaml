@@ -1,9 +1,9 @@
 algo: lqr
 algo_config:
   # Cost parameters
-  r_lin:
+  r_lqr:
     - 0.1
-  q_lin:
+  q_lqr:
     - 1
     - 1
     - 1

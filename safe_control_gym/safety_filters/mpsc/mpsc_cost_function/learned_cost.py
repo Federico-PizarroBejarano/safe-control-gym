@@ -16,7 +16,6 @@ class LEARNED_COST(MPSC_COST):
     def __init__(self,
                  env,
                  horizon: int = 10,
-                 output_dir: str = '.',
                  **kwargs
                  ):
         '''Initialize the MPSC Cost.
@@ -24,14 +23,12 @@ class LEARNED_COST(MPSC_COST):
         Args:
             env (BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
-            output_dir (str): Folder to write outputs.
         '''
 
         self.env = env
         self.model = self.env.symbolic
 
         self.horizon = horizon
-        self.output_dir = output_dir
 
         if 'decay_factor' in kwargs:
             self.decay_factor = kwargs['decay_factor']

@@ -15,29 +15,32 @@ class LQR_COST(MPSC_COST):
     def __init__(self,
                  env,
                  horizon: int = 10,
-                 q_lin: list = None,
-                 r_lin: list = None,
                  ):
         '''Initialize the MPSC Cost.
 
         Args:
             env (BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
-            q_lin, r_lin (list): Q and R gain matrices for linear controller.
         '''
 
         self.env = env
 
         # Setup attributes.
         self.model = self.env.symbolic
+        self.horizon = horizon
+
+    def set_lqr_matrices(self, q_lin, r_lin):
+        '''Sets the Q and R matrices and calculates the initial gain.
+
+        Args:
+            q_lin, r_lin (list): Q and R gain matrices for linear quadratic controller.
+        '''
         self.Q = get_cost_weight_matrix(q_lin, self.model.nx)
         self.R = get_cost_weight_matrix(r_lin, self.model.nu)
 
         if self.env.TASK == Task.STABILIZATION:
             self.gain = compute_lqr_gain(self.model, self.env.X_GOAL, self.env.U_GOAL,
                                          self.Q, self.R)
-
-        self.horizon = horizon
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.

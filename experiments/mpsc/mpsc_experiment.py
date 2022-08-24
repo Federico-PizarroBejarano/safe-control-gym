@@ -84,7 +84,16 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     else:
         safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
 
-    if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
+
+    if config.sf_config.cost_function == Cost_Function.LQR_COST:
+        if config.algo == 'lqr':
+            q_lin = config.algo_config.q_lqr
+            r_lin = config.algo_config.r_lqr
+        else:
+            q_lin = [1]*safety_filter.model.nx
+            r_lin = [0.1]
+        safety_filter.cost_function.set_lqr_matrices(q_lin, r_lin)
+    elif config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
         safety_filter.cost_function.uncertified_controller = ctrl
         safety_filter.cost_function.output_dir = curr_path
 
