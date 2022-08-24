@@ -1,6 +1,5 @@
 '''This script tests the MPSC safety filter implementation. '''
 
-import os
 import shutil
 from functools import partial
 
@@ -29,10 +28,10 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     # Define arguments.
     fac = ConfigFactory()
     config = fac.merge()
+    config.algo_config['training'] = False
     config.task_config['randomized_init'] = False
     if config.algo in ['ppo', 'sac']:
         config.task_config['cost'] = Cost.RL_REWARD
-        config.algo_config['training'] = False
     else:
         config.task_config['cost'] = Cost.QUADRATIC
         config.task_config['normalized_rl_action_space'] = False
@@ -55,25 +54,21 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
 
     if config.algo in ['ppo', 'sac']:
         # Load state_dict from trained.
-        model_dir = os.path.dirname(os.path.abspath(__file__))+'/models'
         task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
-        ctrl.load(os.path.join(model_dir, f'{config.algo}_model_{system}_{task}.pt'))
+        ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
 
         # Remove temporary files and directories
-        shutil.rmtree(os.path.dirname(os.path.abspath(__file__))+'/temp', ignore_errors=True)
+        shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
 
     # Run without safety filter
     experiment = Experiment(env, ctrl)
     results, uncert_metrics = experiment.run_evaluation(n_episodes=n_episodes, n_steps=n_steps)
     elapsed_time_uncert = results['timestamp'][0][-1] - results['timestamp'][0][0]
+    ctrl.reset()
 
     # Setup MPSC.
-    config.task_config['normalized_rl_action_space'] = False
-    env_func_filter = partial(make,
-                       config.task,
-                       **config.task_config)
     safety_filter = make(config.safety_filter,
-                env_func_filter,
+                env_func,
                 **config.sf_config)
     safety_filter.reset()
 
@@ -85,28 +80,22 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
                              disturbance=None,
                             )
         safety_filter.learn(env=train_env)
-        safety_filter.save(path=f'{curr_path}/models/{config.safety_filter}_{system}.pkl')
+        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
     else:
-        safety_filter.load(path=f'{curr_path}/models/{config.safety_filter}_{system}.pkl')
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
 
-    ctrl.reset()
-
-    if config.sf_config.cost_function in [Cost_Function.PRECOMPUTED_COST, Cost_Function.LEARNED_COST]:
-        safety_filter.cost_function.set_uncertified_controller(ctrl)
+    if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
+        safety_filter.cost_function.uncertified_controller = ctrl
         safety_filter.cost_function.output_dir = curr_path
 
         if config.algo in ['ppo', 'sac']:
             ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.pt')
         else:
             ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
-
-        if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
-            if config.task == Environment.CARTPOLE:
-                init_state = [config.task_config['init_state']['init_x'], config.task_config['init_state']['init_x_dot'], config.task_config['init_state']['init_theta'], config.task_config['init_state']['init_theta_dot']]
-            else:
-                init_state = [config.task_config['init_state']['init_x'], config.task_config['init_state']['init_x_dot'], config.task_config['init_state']['init_z'], config.task_config['init_state']['init_z_dot'], config.task_config['init_state']['init_theta'], config.task_config['init_state']['init_theta_dot']]
-            safety_filter.cost_function.learn_policy(init_state)
-            safety_filter.setup_optimizer()
+    elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
+        safety_filter.cost_function.uncertified_controller = ctrl
+        safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{config.algo}_data_{system}_{config.task_config.task}.pkl')
+        safety_filter.setup_optimizer()
 
     # Run with safety filter
     experiment = Experiment(env, ctrl, safety_filter=safety_filter)
@@ -121,7 +110,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     corrections = np.append(corrections, False)
 
     if plot is True:
-        if config.task == Environment.CARTPOLE:
+        if system == Environment.CARTPOLE:
             graph1_1 = 2
             graph1_2 = 3
             graph3_1 = 0
@@ -142,10 +131,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
         ax.plot(certified_results['obs'][0][:,graph1_1], certified_results['obs'][0][:,graph1_2],'.-', label='Certified')
         ax.plot(certified_results['obs'][0][corrections, graph1_1], certified_results['obs'][0][corrections, graph1_2], 'r.', label='Modified')
         ax.scatter(results['obs'][0][0, graph1_1], results['obs'][0][0, graph1_2], color='g', marker='o', s=100, label='Initial State')
-        if config.task == Environment.CARTPOLE:
-            theta_constraint = config.task_config['constraints'][0].upper_bounds[2]
-        elif config.task == Environment.QUADROTOR:
-            theta_constraint = config.task_config['constraints'][0].upper_bounds[4]
+        theta_constraint = config.task_config['constraints'][0].upper_bounds[graph1_1]
         ax.axvline(x=-theta_constraint, color='k', lw=2, label='Limit')
         ax.axvline(x=theta_constraint, color='k', lw=2)
         ax.set_xlabel(r'$\theta$')

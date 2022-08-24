@@ -309,6 +309,8 @@ class RecordDataWrapper(gym.Wrapper):
             obs, info = self.env.reset(**kwargs)
             if 'symbolic_model' in info:
                 info.pop('symbolic_model')
+            if 'symbolic_constraints' in info:
+                info.pop('symbolic_constraints')
             step_data = dict(
                 obs=obs, info=info, state=self.env.state
             )

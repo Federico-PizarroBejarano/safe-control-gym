@@ -3,14 +3,16 @@ import pytest
 
 from experiments.mpsc.mpsc_experiment import run
 
-@pytest.mark.parametrize('SYS',             ['cartpole', 'quadrotor_2D'])
+@pytest.mark.parametrize('SYS',             ['cartpole', 'quadrotor_2D', 'quadrotor_3D'])
 @pytest.mark.parametrize('TASK',            ['stab', 'track'])
 @pytest.mark.parametrize('ALGO',            ['lqr', 'pid', 'ppo', 'sac'])
 @pytest.mark.parametrize('SAFETY_FILTER',   ['linear_mpsc', 'nl_mpsc'])
 @pytest.mark.parametrize('MPSC_COST',       ['one_step_cost', 'lqr_cost', 'precomputed_cost', 'learned_cost'])
 def test_mpsc(SYS, TASK, ALGO, SAFETY_FILTER, MPSC_COST):
     if SYS == 'cartpole' and ALGO == 'pid':
-        return True
+        pytest.skip('PID is designed for quadrotors and does not function for the carpole system.')
+    if SYS == 'quadrotor_3D' and SAFETY_FILTER == 'linear_mpsc':
+        pytest.skip('Linear MPSC currently does not function with the 3D quadrotor.')
     SYS_NAME = SYS if SYS == 'cartpole' else 'quadrotor'
     sys.argv[1:] = [
         '--task', SYS_NAME,

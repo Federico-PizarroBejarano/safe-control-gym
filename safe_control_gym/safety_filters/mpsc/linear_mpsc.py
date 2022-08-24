@@ -174,6 +174,8 @@ class LINEAR_MPSC(MPSC):
                     self.setup_optimizer()
 
             self.terminal_set_verts = points
+            self.terminal_constraint = LinearConstraint(env=self.env, A=self.terminal_set.A, b=self.terminal_set.b, constrained_variable=ConstrainedVariableType.STATE)
+            self.terminal_constraint = self.terminal_constraint.get_symbolic_model()
 
     def load(self,
              path,
@@ -259,11 +261,6 @@ class LINEAR_MPSC(MPSC):
         self.tightened_state_constraint = tightened_state_constraint_func(env=self.env,
                                                                             constrained_variable=ConstrainedVariableType.STATE)
 
-        self.simple_terminal_set = QuadraticContstraint(env=self.env,
-                                                        P=np.eye(self.model.nx),
-                                                        b=self.env.TASK_INFO['stabilization_goal_tolerance'],
-                                                        constrained_variable=ConstrainedVariableType.STATE)
-
     def setup_optimizer(self):
         '''Setup the certifying MPC problem. '''
 
@@ -294,7 +291,6 @@ class LINEAR_MPSC(MPSC):
         state_constraints = self.tightened_state_constraint.get_symbolic_model()
         input_constraints = self.tightened_input_constraint.get_symbolic_model()
         omega_constraint = self.omega_constraint.get_symbolic_model()
-        simple_terminal_constraint = self.simple_terminal_set.get_symbolic_model()
         for i in range(self.horizon):
             # Dynamics constraints (eqn 5.b).
             next_state = self.dynamics_func(x0=z_var[:,i], p=v_var[:,i])['xf']
@@ -305,13 +301,8 @@ class LINEAR_MPSC(MPSC):
             opti.subject_to(state_constraints(z_var[:,i] + X_EQ) <= 0)
 
         # Final state constraints (5.d).
-        if self.use_terminal_set:
-            if self.terminal_set is not None:
-                terminal_constraint = LinearConstraint(env=self.env, A=self.terminal_set.A, b=self.terminal_set.b, constrained_variable=ConstrainedVariableType.STATE)
-                terminal_constraint = terminal_constraint.get_symbolic_model()
-                opti.subject_to(terminal_constraint(z_var[:, -1]) <= 0)
-            else:
-                opti.subject_to(simple_terminal_constraint(z_var[:, -1]) <= 0)
+        if self.use_terminal_set and self.terminal_set is not None:
+            opti.subject_to(self.terminal_constraint(z_var[:, -1]) <= 0)
 
         # Initial state constraints (5.e).
         opti.subject_to(omega_constraint(x_init - z_var[:, 0]) <= 0)

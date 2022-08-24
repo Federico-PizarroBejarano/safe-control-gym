@@ -61,7 +61,7 @@ class MPSC(BaseSafetyFilter, ABC):
         super().__init__(env_func)
 
         # Setup the Environments.
-        self.env = env_func(randomized_init=False)
+        self.env = env_func(normalized_rl_action_space=False)
         self.training_env = env_func(randomized_init=True,
                                      init_state=None,
                                      cost='quadratic',
@@ -96,11 +96,11 @@ class MPSC(BaseSafetyFilter, ABC):
         if cost_function == Cost_Function.ONE_STEP_COST:
             self.cost_function = ONE_STEP_COST()
         elif cost_function == Cost_Function.LQR_COST:
-            self.cost_function = LQR_COST(env_func,  self.horizon, q_lin, r_lin)
+            self.cost_function = LQR_COST(self.env,  self.horizon, q_lin, r_lin)
         elif cost_function == Cost_Function.PRECOMPUTED_COST:
-            self.cost_function = PRECOMPUTED_COST(env_func, self.horizon, self.output_dir, **kwargs)
+            self.cost_function = PRECOMPUTED_COST(self.env, self.horizon, self.output_dir, **kwargs)
         elif cost_function == Cost_Function.LEARNED_COST:
-            self.cost_function = LEARNED_COST(env_func, self.horizon, self.output_dir, **kwargs)
+            self.cost_function = LEARNED_COST(self.env, self.horizon, self.output_dir, **kwargs)
         else:
             raise NotImplementedError(f'The MPSC cost function {cost_function} has not been implemented')
 

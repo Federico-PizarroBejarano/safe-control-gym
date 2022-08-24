@@ -1,4 +1,4 @@
-'''LQR Cost Function for Smooth MPSC'''
+'''LQR Cost Function for Smooth MPSC. '''
 
 import numpy as np
 import casadi as cs
@@ -13,7 +13,7 @@ class LQR_COST(MPSC_COST):
     '''LQR MPSC Cost Function. '''
 
     def __init__(self,
-                 env_func,
+                 env,
                  horizon: int = 10,
                  q_lin: list = None,
                  r_lin: list = None,
@@ -21,12 +21,12 @@ class LQR_COST(MPSC_COST):
         '''Initialize the MPSC Cost.
 
         Args:
-            env_func (partial BenchmarkEnv): Environment for the task.
+            env (BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
             q_lin, r_lin (list): Q and R gain matrices for linear controller.
         '''
 
-        self.env = env_func()
+        self.env = env
 
         # Setup attributes.
         self.model = self.env.symbolic

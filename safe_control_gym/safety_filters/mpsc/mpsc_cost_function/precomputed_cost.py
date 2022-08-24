@@ -1,4 +1,4 @@
-'''Precomputed Cost Function for Smooth MPSC'''
+'''Precomputed Cost Function for Smooth MPSC. '''
 
 import numpy as np
 
@@ -12,7 +12,7 @@ class PRECOMPUTED_COST(MPSC_COST):
     '''Precomputed future states MPSC Cost Function. '''
 
     def __init__(self,
-                 env_func,
+                 env,
                  horizon: int = 10,
                  output_dir: str = '.',
                  **kwargs
@@ -20,12 +20,12 @@ class PRECOMPUTED_COST(MPSC_COST):
         '''Initialize the MPSC Cost.
 
         Args:
-            env_func (partial BenchmarkEnv): Environment for the task.
+            env (BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
             output_dir (str): Folder to write outputs.
         '''
 
-        self.env = env_func()
+        self.env = env
         self.model = self.env.symbolic
 
         self.horizon = horizon
@@ -37,14 +37,6 @@ class PRECOMPUTED_COST(MPSC_COST):
             self.decay_factor = 1
 
         self.uncertified_controller = None
-
-    def set_uncertified_controller(self, uncertified_controller):
-        '''Sets the uncertified controller to be used.
-
-        Args:
-            uncertified_controller (BaseController): The uncertified controller to be certified.
-        '''
-        self.uncertified_controller = uncertified_controller
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
