@@ -18,7 +18,7 @@ from pytope import Polytope
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
 from safe_control_gym.controllers.mpc.mpc_utils import discretize_linear_system, rk_discrete
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import compute_RPI_set, pontryagin_difference_AABB, ellipse_bounding_box, Cost_Function
-from safe_control_gym.envs.constraints import LinearConstraint, QuadraticContstraint, ConstrainedVariableType
+from safe_control_gym.envs.constraints import BoundedConstraint, LinearConstraint, QuadraticContstraint, ConstrainedVariableType
 from safe_control_gym.envs.benchmark_env import Task, Environment
 
 
@@ -247,8 +247,13 @@ class LINEAR_MPSC(MPSC):
         if self.training_env.NAME == Environment.QUADROTOR:
             min_input = input_constraint.lower_bounds[0] + np.max(self.U_vertices) - np.max(self.tightened_input_constraint_verts)
             self.tightened_input_constraint_verts = np.clip(self.tightened_input_constraint_verts, min_input, 100)
-        self.tightened_input_constraint = tightened_input_constr_func(env=self.env,
-                                                                        constrained_variable=ConstrainedVariableType.INPUT)
+            self.tightened_input_constraint = BoundedConstraint(env=self.env,
+                                                                lower_bounds=np.min(self.tightened_input_constraint_verts, axis=0),
+                                                                upper_bounds=np.max(self.tightened_input_constraint_verts, axis=0),
+                                                                constrained_variable=ConstrainedVariableType.INPUT)
+        else:
+            self.tightened_input_constraint = tightened_input_constr_func(env=self.env,
+                                                                          constrained_variable=ConstrainedVariableType.INPUT)
         # Get the state constraint vertices.
         state_constraints = self.constraints.state_constraints
         if len(state_constraints) > 1:

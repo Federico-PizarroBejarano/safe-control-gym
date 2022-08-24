@@ -252,6 +252,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
         plt.tight_layout()
         plt.show()
 
+    return cert_metrics, np.sum(mpsc_results['feasible'][0])
 
 if __name__ == '__main__':
     run()
