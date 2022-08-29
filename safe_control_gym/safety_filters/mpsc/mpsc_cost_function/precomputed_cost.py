@@ -3,8 +3,7 @@
 import numpy as np
 
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
-from safe_control_gym.controllers.ppo.ppo import PPO
-from safe_control_gym.controllers.sac.sac import SAC
+from safe_control_gym.controllers.pid.pid import PID
 from safe_control_gym.envs.benchmark_env import Environment
 
 
@@ -100,13 +99,9 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         v_L = np.zeros((self.model.nu, self.horizon))
 
-        if isinstance(self.uncertified_controller, (PPO, SAC)):
-            file_end = 'pt'
-        else:
-            file_end = 'npy'
-
-        self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.{file_end}')
-        self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.{file_end}')
+        if isinstance(self.uncertified_controller, PID):
+            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
+            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
         for h in range(self.horizon):
             next_step = min(iteration+h, self.env.X_GOAL.shape[0]-1)
@@ -133,7 +128,8 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             obs = np.squeeze(self.model.fd_func(x0=obs, p=action)['xf'].toarray())
 
-        self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.{file_end}')
-        self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.{file_end}')
+        if isinstance(self.uncertified_controller, PID):
+            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
+            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
         return v_L
