@@ -78,7 +78,7 @@ class LEARNED_COST(MPSC_COST):
                 state_error = z_var[:, h] - X_GOAL.T + X_EQ
             elif self.env.TASK == Task.TRAJ_TRACKING:
                 state_error = z_var[:, h] - X_GOAL[h, :].T + X_EQ
-            v_L = self.policy(state_error)
+            v_L = self.policy(state_error) + self.env.U_EQ
             cost += (self.decay_factor**h)*(v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
 
         return cost
@@ -95,7 +95,7 @@ class LEARNED_COST(MPSC_COST):
 
         for ep in range(len(trajs_data['action'])):
             for ite in range(trajs_data['action'][ep].shape[0]):
-                obs, action = trajs_data['obs'][ep][ite], trajs_data['action'][ep][ite]
+                obs, action = trajs_data['state'][ep][ite], trajs_data['current_physical_action'][ep][ite]
                 self.update_policy(obs[0:self.model.nx], action, ite)
 
         self.generate_policy()
