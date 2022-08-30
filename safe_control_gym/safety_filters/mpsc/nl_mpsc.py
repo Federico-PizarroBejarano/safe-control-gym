@@ -112,6 +112,8 @@ class NL_MPSC(MPSC):
         self.state_constraint = self.constraints.state_constraints[0]
         self.input_constraint = self.constraints.input_constraints[0]
 
+        self.x_center = (self.state_constraint.upper_bounds + self.state_constraint.lower_bounds)/2.0
+
         [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
         [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
 
@@ -259,7 +261,10 @@ class NL_MPSC(MPSC):
         self.rho = np.exp(-rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / rho_c  # even using rho_c from the paper yields different w_bar
         self.s_bar = (1 - self.rho**self.horizon) / (1 - self.rho) * self.w_bar
-        self.gamma = 1 / c_max
+        assert self.s_bar < self.max_w * self.horizon, '[ERROR] s_bar is too small with respect to max_w.'
+        assert self.max_w * self.horizon < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
+        self.s_bar = self.max_w * self.horizon
+        self.gamma = 1 / c_max - self.s_bar
 
     def get_terminal_ingredients(self):
         '''Calculate the terminal ingredients of the MPC optimization. '''
@@ -409,7 +414,7 @@ class NL_MPSC(MPSC):
             x_test[-2] = angle
             A_theta = self.Ac(x_test, u_test - self.U_mid, w_test).toarray()
             B_theta = self.Bc(x_test, u_test - self.U_mid, w_test).toarray()
-            assert(max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ K) @ X_sqrt)[0]) + 2*rho_c <= self.tolerance)
+            assert max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ K) @ X_sqrt)[0]) + 2*rho_c <= self.tolerance
 
     def check_lyapunov_func(self, P, K, rho_c):
         '''Check the incremental Lyapunov function.
@@ -543,6 +548,8 @@ class NL_MPSC(MPSC):
         state_constraint = self.constraints.state_constraints[0]
         input_constraint = self.constraints.input_constraints[0]
 
+        self.x_center = (state_constraint.upper_bounds + state_constraint.lower_bounds)/2.0
+
         [self.X_mid, L_x, l_x] = self.box2polytopic(state_constraint)
         [self.U_mid, L_u, l_u] = self.box2polytopic(input_constraint)
 
@@ -635,9 +642,9 @@ class NL_MPSC(MPSC):
         # Final state constraints
         if self.use_terminal_set:
             if self.env.TASK == Task.STABILIZATION:
-                terminal_cost = (z_var[:, -1] - X_GOAL.T).T @ self.P_f @ (z_var[:, -1] - X_GOAL.T)
+                terminal_cost = (z_var[:, -1] - self.x_center).T @ self.P_f @ (z_var[:, -1] - self.x_center)
             if self.env.TASK == Task.TRAJ_TRACKING:
-                terminal_cost = (z_var[:, -1] - X_GOAL[-1, :].T).T @ self.P_f @ (z_var[:, -1] - X_GOAL[-1, :].T)
+                terminal_cost = (z_var[:, -1] - self.x_center).T @ self.P_f @ (z_var[:, -1] - self.x_center)
             opti.subject_to(terminal_cost <= self.gamma**2)
 
         # Initial state constraints

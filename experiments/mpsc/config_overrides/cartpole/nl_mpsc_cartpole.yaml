@@ -13,7 +13,7 @@ sf_config:
   horizon: 20
   warmstart: True
   integration_algo: rk4
-  use_terminal_set: False
+  use_terminal_set: True
 
   # Learning disturbance bounds
   n_samples: 600
