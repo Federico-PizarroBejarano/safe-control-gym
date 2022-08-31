@@ -28,4 +28,5 @@ sf_config:
 
   # Cost function
   cost_function: one_step_cost
-  decay_factor: 0.85 # Decay Factor for P_MPSC and LEARN_MPSC
+  mpsc_cost_horizon: 5
+  decay_factor: 0.85

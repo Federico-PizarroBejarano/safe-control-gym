@@ -15,12 +15,16 @@ class LQR_COST(MPSC_COST):
     def __init__(self,
                  env,
                  horizon: int = 10,
+                 mpsc_cost_horizon: int = 5,
+                 decay_factor: float = 0.85,
                  ):
         '''Initialize the MPSC Cost.
 
         Args:
             env (BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
+            mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
+            decay_factor (float): How much to discount future costs.
         '''
 
         self.env = env
@@ -28,6 +32,9 @@ class LQR_COST(MPSC_COST):
         # Setup attributes.
         self.model = self.env.symbolic
         self.horizon = horizon
+
+        self.mpsc_cost_horizon = mpsc_cost_horizon
+        self.decay_factor = decay_factor
 
     def set_lqr_matrices(self, q_lin, r_lin):
         '''Sets the Q and R matrices and calculates the initial gain.
@@ -71,17 +78,17 @@ class LQR_COST(MPSC_COST):
         if self.env.TASK == Task.STABILIZATION:
             gains = opti.parameter(nu, nx)
         elif self.env.TASK == Task.TRAJ_TRACKING:
-            gains = opti.parameter(self.horizon*nu, nx)
+            gains = opti.parameter(self.mpsc_cost_horizon*nu, nx)
 
         opti_dict['gains'] = gains
 
         cost = (u_L - next_u).T @ (u_L - next_u)
-        for h in range(1, self.horizon):
+        for h in range(1, self.mpsc_cost_horizon):
             if self.env.TASK == Task.STABILIZATION:
                 v_L = -gains @ (z_var[:, h] - X_GOAL.T + X_EQ) + self.env.U_EQ
             elif self.env.TASK == Task.TRAJ_TRACKING:
                 v_L = -gains[h*nu:h*nu+nu, :] @ (z_var[:, h] - X_GOAL[h, :].T + X_EQ) + self.env.U_EQ
-            cost += (v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
+            cost += (self.decay_factor**h)*(v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
 
         return cost
 
@@ -110,14 +117,14 @@ class LQR_COST(MPSC_COST):
             iteration (int): The current iteration, used for trajectory tracking.
 
         Returns:
-            gains (ndarray): The gains for the whole horizon.
+            gains (ndarray): The gains for the whole mpsc_cost_horizon.
         '''
 
         nu = self.model.nu
         nx = self.model.nx
 
-        gains = np.zeros((self.horizon*nu, nx))
-        for h in range(self.horizon):
+        gains = np.zeros((self.mpsc_cost_horizon*nu, nx))
+        for h in range(self.mpsc_cost_horizon):
             next_iter = min(iteration+h, self.env.X_GOAL.shape[0]-1)
             gain = compute_lqr_gain(self.model, self.env.X_GOAL[next_iter],
                                         self.env.U_GOAL, self.Q, self.R)

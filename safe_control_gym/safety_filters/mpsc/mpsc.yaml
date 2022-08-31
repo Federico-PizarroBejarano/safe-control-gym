@@ -12,3 +12,5 @@ use_terminal_set: False
 
 # Cost function
 cost_function: one_step_cost
+mpsc_cost_horizon: 5
+decay_factor: 0.85

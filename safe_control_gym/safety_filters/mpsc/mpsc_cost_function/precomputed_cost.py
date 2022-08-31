@@ -13,6 +13,8 @@ class PRECOMPUTED_COST(MPSC_COST):
     def __init__(self,
                  env,
                  horizon: int = 10,
+                 mpsc_cost_horizon: int = 5,
+                 decay_factor: float = 0.85,
                  output_dir: str = '.',
                  **kwargs
                  ):
@@ -22,12 +24,18 @@ class PRECOMPUTED_COST(MPSC_COST):
             env (BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
             output_dir (str): Folder to write outputs.
+            mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
+            decay_factor (float): How much to discount future costs.
         '''
 
         self.env = env
         self.model = self.env.symbolic
 
         self.horizon = horizon
+
+        self.mpsc_cost_horizon = mpsc_cost_horizon
+        self.decay_factor = decay_factor
+
         self.output_dir = output_dir
 
         if 'decay_factor' in kwargs:
@@ -54,12 +62,12 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         nu = self.model.nu
 
-        v_L = opti.parameter(nu, self.horizon)
+        v_L = opti.parameter(nu, self.mpsc_cost_horizon)
 
         opti_dict['v_L'] = v_L
 
         cost = (u_L - next_u).T @ (u_L - next_u)
-        for h in range(1, self.horizon):
+        for h in range(1, self.mpsc_cost_horizon):
             cost += (self.decay_factor**h)*(v_L[:, h] - v_var[:, h]).T @ (v_L[:, h] - v_var[:, h])
 
         return cost
@@ -97,13 +105,13 @@ class PRECOMPUTED_COST(MPSC_COST):
         if self.uncertified_controller is None:
             raise Exception('[ERROR] No underlying controller passed to P_MPSC')
 
-        v_L = np.zeros((self.model.nu, self.horizon))
+        v_L = np.zeros((self.model.nu, self.mpsc_cost_horizon))
 
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
-        for h in range(self.horizon):
+        for h in range(self.mpsc_cost_horizon):
             next_step = min(iteration+h, self.env.X_GOAL.shape[0]-1)
             # Concatenate goal info (goal state(s)) for RL
             if next_step == 0:

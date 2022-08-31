@@ -16,13 +16,16 @@ class LEARNED_COST(MPSC_COST):
     def __init__(self,
                  env,
                  horizon: int = 10,
-                 **kwargs
+                 mpsc_cost_horizon: int = 5,
+                 decay_factor: float = 0.85,
                  ):
         '''Initialize the MPSC Cost.
 
         Args:
             env (BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
+            mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
+            decay_factor (float): How much to discount future costs.
         '''
 
         self.env = env
@@ -30,15 +33,8 @@ class LEARNED_COST(MPSC_COST):
 
         self.horizon = horizon
 
-        if 'decay_factor' in kwargs:
-            self.decay_factor = kwargs['decay_factor']
-        else:
-            self.decay_factor = 1.0
-
-        if 'num_policy_samples' in kwargs:
-            self.num_policy_samples = kwargs['num_policy_samples']
-        else:
-            self.num_policy_samples = 10
+        self.mpsc_cost_horizon = mpsc_cost_horizon
+        self.decay_factor = decay_factor
 
         self.uncertified_controller = None
 
@@ -73,7 +69,7 @@ class LEARNED_COST(MPSC_COST):
             X_EQ = cs.MX(np.zeros(nx))
 
         cost = (u_L - next_u).T @ (u_L - next_u)
-        for h in range(1, self.horizon):
+        for h in range(1, self.mpsc_cost_horizon):
             if self.env.TASK == Task.STABILIZATION:
                 state_error = z_var[:, h] - X_GOAL.T + X_EQ
             elif self.env.TASK == Task.TRAJ_TRACKING:
