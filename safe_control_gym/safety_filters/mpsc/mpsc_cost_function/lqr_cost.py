@@ -12,30 +12,6 @@ from safe_control_gym.envs.benchmark_env import Task
 class LQR_COST(MPSC_COST):
     '''LQR MPSC Cost Function. '''
 
-    def __init__(self,
-                 env,
-                 horizon: int = 10,
-                 mpsc_cost_horizon: int = 5,
-                 decay_factor: float = 0.85,
-                 ):
-        '''Initialize the MPSC Cost.
-
-        Args:
-            env (BenchmarkEnv): Environment for the task.
-            horizon (int): The MPC horizon.
-            mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
-            decay_factor (float): How much to discount future costs.
-        '''
-
-        self.env = env
-
-        # Setup attributes.
-        self.model = self.env.symbolic
-        self.horizon = horizon
-
-        self.mpsc_cost_horizon = mpsc_cost_horizon
-        self.decay_factor = decay_factor
-
     def set_lqr_matrices(self, q_lin, r_lin):
         '''Sets the Q and R matrices and calculates the initial gain.
 

@@ -38,7 +38,7 @@ class LINEAR_MPSC(MPSC):
                  additional_constraints: list = None,
                  use_terminal_set: bool = True,
                  learn_terminal_set: bool = False,
-                 cost_function: str = Cost_Function.ONE_STEP_COST,
+                 cost_function: Cost_Function = Cost_Function.ONE_STEP_COST,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
                  **kwargs
@@ -58,7 +58,7 @@ class LINEAR_MPSC(MPSC):
             additional_constraints (list): List of additional constraints to consider.
             use_terminal_set (bool): Whether to use a terminal set constraint or not.
             learn_terminal_set (bool): Whether to learn a terminal set or not.
-            cost_function (str): A string (from Cost_Function) representing the cost function to be used.
+            cost_function (Cost_Function): A string (from Cost_Function) representing the cost function to be used.
             mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
             decay_factor (float): How much to discount future costs.
         '''

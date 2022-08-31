@@ -15,7 +15,6 @@ class LEARNED_COST(MPSC_COST):
 
     def __init__(self,
                  env,
-                 horizon: int = 10,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
                  ):
@@ -23,18 +22,11 @@ class LEARNED_COST(MPSC_COST):
 
         Args:
             env (BenchmarkEnv): Environment for the task.
-            horizon (int): The MPC horizon.
             mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
             decay_factor (float): How much to discount future costs.
         '''
 
-        self.env = env
-        self.model = self.env.symbolic
-
-        self.horizon = horizon
-
-        self.mpsc_cost_horizon = mpsc_cost_horizon
-        self.decay_factor = decay_factor
+        super().__init__(env, mpsc_cost_horizon, decay_factor)
 
         self.uncertified_controller = None
 

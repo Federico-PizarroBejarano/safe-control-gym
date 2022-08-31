@@ -36,7 +36,7 @@ class MPSC(BaseSafetyFilter, ABC):
                  warmstart: bool = True,
                  additional_constraints: list = None,
                  use_terminal_set: bool = True,
-                 cost_function: str = Cost_Function.ONE_STEP_COST,
+                 cost_function: Cost_Function = Cost_Function.ONE_STEP_COST,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
                  **kwargs
@@ -52,7 +52,7 @@ class MPSC(BaseSafetyFilter, ABC):
             warmstart (bool): If the previous MPC soln should be used to warmstart the next mpc step.
             additional_constraints (list): List of additional constraints to consider.
             use_terminal_set (bool): Whether to use a terminal set constraint or not.
-            cost_function (str): A string (from Cost_Function) representing the cost function to be used.
+            cost_function (Cost_Function): A string (from Cost_Function) representing the cost function to be used.
             mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
             decay_factor (float): How much to discount future costs.
         '''
@@ -100,14 +100,13 @@ class MPSC(BaseSafetyFilter, ABC):
         if cost_function == Cost_Function.ONE_STEP_COST:
             self.cost_function = ONE_STEP_COST()
         elif cost_function == Cost_Function.LQR_COST:
-            self.cost_function = LQR_COST(self.env,  self.horizon, self.mpsc_cost_horizon, self.decay_factor)
+            self.cost_function = LQR_COST(self.env, mpsc_cost_horizon, decay_factor)
         elif cost_function == Cost_Function.PRECOMPUTED_COST:
-            self.cost_function = PRECOMPUTED_COST(self.env, self.horizon, self.mpsc_cost_horizon, self.decay_factor, self.output_dir)
+            self.cost_function = PRECOMPUTED_COST(self.env, mpsc_cost_horizon, decay_factor, self.output_dir)
         elif cost_function == Cost_Function.LEARNED_COST:
-            self.cost_function = LEARNED_COST(self.env, self.horizon, self.mpsc_cost_horizon, self.decay_factor)
+            self.cost_function = LEARNED_COST(self.env, mpsc_cost_horizon, decay_factor)
         else:
             raise NotImplementedError(f'The MPSC cost function {cost_function} has not been implemented')
-
 
     @abstractmethod
     def set_dynamics(self):

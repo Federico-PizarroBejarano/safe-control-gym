@@ -12,37 +12,22 @@ class PRECOMPUTED_COST(MPSC_COST):
 
     def __init__(self,
                  env,
-                 horizon: int = 10,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
                  output_dir: str = '.',
-                 **kwargs
                  ):
         '''Initialize the MPSC Cost.
 
         Args:
             env (BenchmarkEnv): Environment for the task.
-            horizon (int): The MPC horizon.
-            output_dir (str): Folder to write outputs.
             mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
             decay_factor (float): How much to discount future costs.
+            output_dir (str): Folder to write outputs.
         '''
 
-        self.env = env
-        self.model = self.env.symbolic
-
-        self.horizon = horizon
-
-        self.mpsc_cost_horizon = mpsc_cost_horizon
-        self.decay_factor = decay_factor
+        super().__init__(env, mpsc_cost_horizon, decay_factor)
 
         self.output_dir = output_dir
-
-        if 'decay_factor' in kwargs:
-            self.decay_factor = kwargs['decay_factor']
-        else:
-            self.decay_factor = 1
-
         self.uncertified_controller = None
 
     def get_cost(self, opti_dict):

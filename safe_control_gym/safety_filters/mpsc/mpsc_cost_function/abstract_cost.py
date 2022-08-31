@@ -2,9 +2,32 @@
 
 from abc import ABC, abstractmethod
 
+from safe_control_gym.envs.benchmark_env import BenchmarkEnv
+
 
 class MPSC_COST(ABC):
     '''Abstract MPSC Cost Function to be extended for different cost functions. '''
+
+    def __init__(self,
+                 env: BenchmarkEnv = None,
+                 mpsc_cost_horizon: int = 5,
+                 decay_factor: float = 0.85,
+                 ):
+        '''Initialize the MPSC Cost.
+
+        Args:
+            env (BenchmarkEnv): Environment for the task.
+            mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
+            decay_factor (float): How much to discount future costs.
+        '''
+
+        self.env = env
+
+        # Setup attributes.
+        self.model = self.env.symbolic if env is not None else None
+
+        self.mpsc_cost_horizon = mpsc_cost_horizon
+        self.decay_factor = decay_factor
 
     @abstractmethod
     def get_cost(self, opti_dict):
