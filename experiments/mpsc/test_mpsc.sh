@@ -12,8 +12,8 @@ TASK='stab'
 ALGO='ppo'
 # ALGO='sac'
 
-SAFETY_FILTER='linear_mpsc'
-# SAFETY_FILTER='nl_mpsc'
+# SAFETY_FILTER='linear_mpsc'
+SAFETY_FILTER='nl_mpsc'
 
 MPSC_COST='one_step_cost'
 # MPSC_COST='lqr_cost'
