@@ -116,8 +116,6 @@ class NL_MPSC(MPSC):
         self.state_constraint = self.constraints.state_constraints[0]
         self.input_constraint = self.constraints.input_constraints[0]
 
-        self.x_center = (self.state_constraint.upper_bounds + self.state_constraint.lower_bounds)/2.0
-
         [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
         [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
 
@@ -265,7 +263,7 @@ class NL_MPSC(MPSC):
         self.rho = np.exp(-rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / rho_c  # even using rho_c from the paper yields different w_bar
         self.s_bar = (1 - self.rho**self.horizon) / (1 - self.rho) * self.w_bar
-        assert self.s_bar < self.max_w * self.horizon, '[ERROR] s_bar is too small with respect to max_w.'
+        assert self.s_bar > self.max_w * self.horizon, '[ERROR] s_bar is too small with respect to max_w.'
         assert self.max_w * self.horizon < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
         self.s_bar = self.max_w * self.horizon
         self.gamma = 1 / c_max - self.s_bar
@@ -296,7 +294,7 @@ class NL_MPSC(MPSC):
         L = []
         l = []
 
-        Z_mid = np.array([(constraint.upper_bounds[i] + constraint.lower_bounds[i])/2 for i in range(constraint.upper_bounds.shape[0])])
+        Z_mid = (constraint.upper_bounds + constraint.lower_bounds)/2.0
         Z_limits = np.array([[constraint.upper_bounds[i]-Z_mid[i], constraint.lower_bounds[i]-Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
 
         dim = Z_limits.shape[0]
@@ -552,8 +550,6 @@ class NL_MPSC(MPSC):
         state_constraint = self.constraints.state_constraints[0]
         input_constraint = self.constraints.input_constraints[0]
 
-        self.x_center = (state_constraint.upper_bounds + state_constraint.lower_bounds)/2.0
-
         [self.X_mid, L_x, l_x] = self.box2polytopic(state_constraint)
         [self.U_mid, L_u, l_u] = self.box2polytopic(input_constraint)
 
@@ -645,10 +641,7 @@ class NL_MPSC(MPSC):
 
         # Final state constraints
         if self.use_terminal_set:
-            if self.env.TASK == Task.STABILIZATION:
-                terminal_cost = (z_var[:, -1] - self.x_center).T @ self.P_f @ (z_var[:, -1] - self.x_center)
-            if self.env.TASK == Task.TRAJ_TRACKING:
-                terminal_cost = (z_var[:, -1] - self.x_center).T @ self.P_f @ (z_var[:, -1] - self.x_center)
+            terminal_cost = (z_var[:, -1] - self.X_mid).T @ self.P_f @ (z_var[:, -1] - self.X_mid)
             opti.subject_to(terminal_cost <= self.gamma**2)
 
         # Initial state constraints
