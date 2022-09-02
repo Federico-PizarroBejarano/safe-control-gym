@@ -36,6 +36,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
         config.task_config['cost'] = Cost.QUADRATIC
         config.task_config['normalized_rl_action_space'] = False
 
+    task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:
         system = f'quadrotor_{str(config.task_config.quad_type)}D'
     else:
@@ -54,7 +55,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
 
     if config.algo in ['ppo', 'sac']:
         # Load state_dict from trained.
-        task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
         ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
 
         # Remove temporary files and directories
@@ -80,9 +80,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
                              disturbance=None,
                             )
         safety_filter.learn(env=train_env)
-        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
+        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
     else:
-        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
 
 
     if config.sf_config.cost_function == Cost_Function.LQR_COST:
@@ -96,13 +96,12 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     elif config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
         safety_filter.cost_function.uncertified_controller = ctrl
         safety_filter.cost_function.output_dir = curr_path
-
-        if config.algo in ['ppo', 'sac']:
-            ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.pt')
-        else:
+        if config.algo == 'pid':
             ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
     elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.cost_function.uncertified_controller = ctrl
+        if config.algo in ['ppo', 'sac']:
+            safety_filter.cost_function.regularization_const = 200.0
         safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{config.algo}_data_{system}_{config.task_config.task}.pkl')
         safety_filter.setup_optimizer()
 

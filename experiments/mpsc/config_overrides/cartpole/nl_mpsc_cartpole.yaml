@@ -5,9 +5,9 @@ sf_config:
     - 0.1
   q_lin:
     - 0.0001
-    - 1
-    - 1
-    - 1
+    - 0.0001
+    - 0.0001
+    - 0.0001
 
   # MPC Parameters
   horizon: 20

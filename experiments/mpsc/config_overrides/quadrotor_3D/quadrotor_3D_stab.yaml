@@ -105,10 +105,10 @@ task_config:
         - 2
         - 2
         - 0.2
-        - 1
+        - 0.2
         - 0.2
         - 1
-        - 0.2
+        - 1
         - 1
       lower_bounds:
         - -2
@@ -118,10 +118,10 @@ task_config:
         - 0
         - -2
         - -0.2
-        - -1
+        - -0.2
         - -0.2
         - -1
-        - -0.2
+        - -1
         - -1
     - constraint_form: default_constraint
       constrained_variable: input

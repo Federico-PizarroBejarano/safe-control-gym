@@ -63,6 +63,25 @@ class NL_MPSC(MPSC):
 
         self.n_samples = n_samples
 
+        self.n = self.model.nx
+        self.m = self.model.nu
+        self.q = self.model.nx
+
+        self.state_constraint = self.constraints.state_constraints[0]
+        self.input_constraint = self.constraints.input_constraints[0]
+
+        [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
+        [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
+
+        # number of constraints
+        p_x = l_x.shape[0]
+        p_u = l_u.shape[0]
+        self.p = p_x + p_u
+
+        self.L_x = np.vstack((L_x, np.zeros((p_u, self.n))))
+        self.L_u = np.vstack((np.zeros((p_x, self.m)), L_u))
+        self.l = np.concatenate([l_x, l_u])
+
     def set_dynamics(self):
         '''Compute the discrete dynamics. '''
 
@@ -93,9 +112,6 @@ class NL_MPSC(MPSC):
         if env is None:
             env = self.training_env
 
-        self.n = self.model.nx
-        self.m = self.model.nu
-        self.q = self.model.nx
         self.tolerance = 1e-5
 
         if self.env.NAME == Environment.CARTPOLE:
@@ -112,21 +128,6 @@ class NL_MPSC(MPSC):
 
         self.get_error_function(env=env)
         self.E = np.diag(self.error_distrib)
-
-        self.state_constraint = self.constraints.state_constraints[0]
-        self.input_constraint = self.constraints.input_constraints[0]
-
-        [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
-        [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
-
-        # number of constraints
-        p_x = l_x.shape[0]
-        p_u = l_u.shape[0]
-        self.p = p_x + p_u
-
-        self.L_x = np.vstack((L_x, np.zeros((p_u, self.n))))
-        self.L_u = np.vstack((np.zeros((p_x, self.m)), L_u))
-        self.l = np.concatenate([l_x, l_u])
 
         self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym+self.X_mid, u_sym+self.U_mid) + self.E @ w_sym], ['x', 'u', 'w'], ['f'])
         phi_1 = cs.Function('phi_1', [x_sym, u_sym, w_sym], [self.f(x_sym, u_sym, w_sym)], ['x', 'u', 'w'], ['phi_1'])
@@ -347,8 +348,13 @@ class NL_MPSC(MPSC):
         u_test = self.U_EQ
         w_test = np.zeros((self.q, 1))
 
-        for i in range(3):
-            x_test[-2] = Theta[i]
+        for angle in Theta:
+            if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
+                x_test[-2] = angle
+            else:
+                x_test[-4] = angle
+                x_test[-5] = angle
+                x_test[-6] = angle
             A_theta = self.Ac(x_test, u_test - self.U_mid, w_test).toarray()
             B_theta = self.Bc(x_test, u_test - self.U_mid, w_test).toarray()
 
@@ -413,10 +419,16 @@ class NL_MPSC(MPSC):
         X_sqrt = sqrtm(X)
         P_sqrt = sqrtm(P)
         for angle in Theta:
-            x_test[-2] = angle
+            if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
+                x_test[-2] = angle
+            else:
+                x_test[-4] = angle
+                x_test[-5] = angle
+                x_test[-6] = angle
             A_theta = self.Ac(x_test, u_test - self.U_mid, w_test).toarray()
             B_theta = self.Bc(x_test, u_test - self.U_mid, w_test).toarray()
-            assert max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ K) @ X_sqrt)[0]) + 2*rho_c <= self.tolerance
+            left_side = max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ K) @ X_sqrt)[0]) + 2*rho_c
+            assert left_side <= self.tolerance, f'[ERROR] The solution {left_side} is not within the tolerance {self.tolerance}'
 
     def check_lyapunov_func(self, P, K, rho_c):
         '''Check the incremental Lyapunov function.
@@ -543,24 +555,9 @@ class NL_MPSC(MPSC):
             path (str): Path to the required file.
         '''
 
-        self.n = self.model.nx
-        self.m = self.model.nu
-        self.q = self.model.nu
-
-        state_constraint = self.constraints.state_constraints[0]
-        input_constraint = self.constraints.input_constraints[0]
-
-        [self.X_mid, L_x, l_x] = self.box2polytopic(state_constraint)
-        [self.U_mid, L_u, l_u] = self.box2polytopic(input_constraint)
-
-        # number of constraints
-        p_x = l_x.shape[0]
-        p_u = l_u.shape[0]
-        self.p = p_x + p_u
-
-        self.L_x = cs.MX(np.vstack((L_x, np.zeros((p_u, self.n)))))
-        self.L_u = cs.MX(np.vstack((np.zeros((p_x, self.m)), L_u)))
-        self.l = cs.MX(np.concatenate([l_x, l_u]))
+        self.L_x = cs.MX(self.L_x)
+        self.L_u = cs.MX(self.L_u)
+        self.l = cs.MX(self.l)
 
         with open(path, 'rb') as f:
             parameters = pickle.load(f)

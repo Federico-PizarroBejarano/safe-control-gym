@@ -32,6 +32,7 @@ class LEARNED_COST(MPSC_COST):
 
         self.max_order = 2
         self.power_list = [p for p in product(range(self.max_order+1), repeat=self.model.nx) if sum(p) <= self.max_order]
+        self.regularization_const = 10.0
 
         self.gamma = self.transform_state_errors(np.zeros((self.model.nx)))
         self.prev_actions = np.zeros((1, self.model.nu))
@@ -134,7 +135,7 @@ class LEARNED_COST(MPSC_COST):
         action = np.zeros((self.model.nu, 1))
         counter = 0
 
-        self.weights = np.linalg.pinv(self.gamma.T @ self.gamma) @ self.gamma.T @ self.prev_actions
+        self.weights = np.linalg.pinv(self.gamma.T @ self.gamma + self.regularization_const*np.eye(self.gamma.shape[1])) @ self.gamma.T @ self.prev_actions
         state_error = cs.MX.sym('x', self.model.nx, 1)
 
         for powers in self.power_list:

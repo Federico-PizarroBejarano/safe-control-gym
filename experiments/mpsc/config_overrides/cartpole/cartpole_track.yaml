@@ -63,12 +63,12 @@ task_config:
       - 2
       - 2
       - 0.16
-      - 2
+      - 1
     lower_bounds:
       - -2
       - -2
       - -0.16
-      - -2
+      - -1
   - constraint_form: default_constraint
     constrained_variable: input
   done_on_out_of_bound: True
