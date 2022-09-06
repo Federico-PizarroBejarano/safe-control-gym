@@ -127,7 +127,7 @@ class NL_MPSC(MPSC):
         w_sym = cs.MX.sym('delta_w', self.q, 1)
 
         self.get_error_function(env=env)
-        self.E = np.diag(self.error_distrib)
+        self.E = np.diag(self.error_distrib) * self.max_w / self.dt
 
         self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym+self.X_mid, u_sym+self.U_mid) + self.E @ w_sym], ['x', 'u', 'w'], ['f'])
         phi_1 = cs.Function('phi_1', [x_sym, u_sym, w_sym], [self.f(x_sym, u_sym, w_sym)], ['x', 'u', 'w'], ['phi_1'])
@@ -264,7 +264,7 @@ class NL_MPSC(MPSC):
         self.rho = np.exp(-rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / rho_c  # even using rho_c from the paper yields different w_bar
         self.s_bar = (1 - self.rho**self.horizon) / (1 - self.rho) * self.w_bar
-        assert self.s_bar > self.max_w * self.horizon, '[ERROR] s_bar is too small with respect to max_w.'
+        assert self.s_bar > self.max_w * self.horizon, f'[ERROR] s_bar ({self.s_bar}) is too small with respect to max_w ({self.max_w}).'
         assert self.max_w * self.horizon < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
         self.s_bar = self.max_w * self.horizon
         self.gamma = 1 / c_max - self.s_bar

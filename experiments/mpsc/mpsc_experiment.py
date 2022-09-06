@@ -14,6 +14,96 @@ from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 
 
+reachable_state_randomization = {
+    'cartpole': {
+        'init_x': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
+        'init_x_dot': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
+        'init_theta': {
+            'distrib': 'uniform',
+            'low': -0.18,
+            'high': 0.18},
+        'init_theta_dot': {
+            'distrib': 'uniform',
+            'low': -1,
+            'high': 1}
+        },
+    'quadrotor_2D': {
+        'init_x': {
+            'distrib': 'uniform',
+            'low': -1,
+            'high': 1},
+        'init_x_dot': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
+        'init_z': {
+            'distrib': 'uniform',
+            'low': 1,
+            'high': 2},
+        'init_z_dot': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
+        'init_theta': {
+            'distrib': 'uniform',
+            'low': -0.2,
+            'high': 0.2},
+        'init_theta_dot': {
+            'distrib': 'uniform',
+            'low': -1,
+            'high': 1}
+        },
+    'quadrotor_3D': {
+        'init_x': {
+            'distrib': 'uniform',
+            'low': -1,
+            'high': 1},
+        'init_x_dot': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
+        'init_z': {
+            'distrib': 'uniform',
+            'low': 1,
+            'high': 2},
+        'init_z_dot': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
+        'init_phi': {
+            'distrib': 'uniform',
+            'low': -0.2,
+            'high': 0.2},
+        'init_theta': {
+            'distrib': 'uniform',
+            'low': -0.2,
+            'high': 0.2},
+        'init_psi': {
+            'distrib': 'uniform',
+            'low': -0.2,
+            'high': 0.2},
+        'init_p': {
+            'distrib': 'uniform',
+            'low': -0.1,
+            'high': 0.1},
+        'init_q': {
+            'distrib': 'uniform',
+            'low': -0.1,
+            'high': 0.1},
+        'init_r': {
+            'distrib': 'uniform',
+            'low': -0.1,
+            'high': 0.1}
+        },
+}
+
+
 def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     '''Main function to run MPSC experiments.
 
@@ -74,6 +164,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
 
     if training is True:
         train_env = env_func(randomized_init=True,
+                             init_state_randomization_info=reachable_state_randomization[system],
                              init_state=None,
                              cost='quadratic',
                              normalized_rl_action_space=False,
