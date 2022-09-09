@@ -17,6 +17,12 @@ sf_config:
   integration_algo: rk4
   use_terminal_set: True
 
+  # Prior info
+  prior_info:
+    prior_prop: null
+    randomize_prior_prop: False
+    prior_prop_rand_info: null
+
   # Learning disturbance bounds
   n_samples: 600
 

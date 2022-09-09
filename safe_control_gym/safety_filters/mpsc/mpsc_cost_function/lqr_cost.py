@@ -61,9 +61,9 @@ class LQR_COST(MPSC_COST):
         cost = (u_L - next_u).T @ (u_L - next_u)
         for h in range(1, self.mpsc_cost_horizon):
             if self.env.TASK == Task.STABILIZATION:
-                v_L = -gains @ (z_var[:, h] - X_GOAL.T + X_EQ) + self.env.U_EQ
+                v_L = -gains @ (z_var[:, h] - X_GOAL.T + X_EQ) + self.env.symbolic.U_EQ
             elif self.env.TASK == Task.TRAJ_TRACKING:
-                v_L = -gains[h*nu:h*nu+nu, :] @ (z_var[:, h] - X_GOAL[h, :].T + X_EQ) + self.env.U_EQ
+                v_L = -gains[h*nu:h*nu+nu, :] @ (z_var[:, h] - X_GOAL[h, :].T + X_EQ) + self.env.symbolic.U_EQ
             cost += (self.decay_factor**h)*(v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
 
         return cost

@@ -67,7 +67,7 @@ class LEARNED_COST(MPSC_COST):
                 state_error = z_var[:, h] - X_GOAL.T + X_EQ
             elif self.env.TASK == Task.TRAJ_TRACKING:
                 state_error = z_var[:, h] - X_GOAL[h, :].T + X_EQ
-            v_L = self.policy(state_error) + self.env.U_EQ
+            v_L = self.policy(state_error) + self.env.symbolic.U_EQ
             cost += (self.decay_factor**h)*(v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
 
         return cost
@@ -104,7 +104,7 @@ class LEARNED_COST(MPSC_COST):
         else:
             state_error = np.squeeze(obs) - np.squeeze(np.atleast_2d(self.env.X_GOAL)[iteration, :])
 
-        self.prev_actions = np.vstack((self.prev_actions, u_L-self.env.U_EQ))
+        self.prev_actions = np.vstack((self.prev_actions, u_L-self.env.symbolic.U_EQ))
         transformed_error = self.transform_state_errors(state_error)
         self.gamma = np.vstack((self.gamma, transformed_error))
 

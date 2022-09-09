@@ -59,7 +59,7 @@ class NL_MPSC(MPSC):
             decay_factor (float): How much to discount future costs.
         '''
 
-        super().__init__(env_func, horizon, q_lin, r_lin, integration_algo, warmstart, additional_constraints, use_terminal_set, cost_function, mpsc_cost_horizon, decay_factor)
+        super().__init__(env_func, horizon, q_lin, r_lin, integration_algo, warmstart, additional_constraints, use_terminal_set, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
         self.n_samples = n_samples
 
@@ -115,11 +115,11 @@ class NL_MPSC(MPSC):
         self.tolerance = 1e-5
 
         if self.env.NAME == Environment.CARTPOLE:
-            self.x_r = np.array([self.env.X_EQ[0], 0, 0, 0])
+            self.x_r = np.array([self.X_EQ[0], 0, 0, 0])
         elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
-            self.x_r = np.array([self.env.X_EQ[0], 0, self.env.X_EQ[2], 0, 0, 0])
+            self.x_r = np.array([self.X_EQ[0], 0, self.X_EQ[2], 0, 0, 0])
         elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 3:
-            self.x_r = np.array([self.env.X_EQ[0], 0, self.env.X_EQ[2], 0, self.env.X_EQ[4], 0, 0, 0, 0, 0, 0, 0])
+            self.x_r = np.array([self.X_EQ[0], 0, self.X_EQ[2], 0, self.X_EQ[4], 0, 0, 0, 0, 0, 0, 0])
         self.u_r = self.U_EQ
 
         x_sym = self.model.x_sym
