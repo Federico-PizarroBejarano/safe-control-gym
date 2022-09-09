@@ -68,6 +68,14 @@ reachable_state_randomization = {
             'distrib': 'uniform',
             'low': -2,
             'high': 2},
+        'init_y': {
+            'distrib': 'uniform',
+            'low': -1,
+            'high': 1},
+        'init_y_dot': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
         'init_z': {
             'distrib': 'uniform',
             'low': 1,

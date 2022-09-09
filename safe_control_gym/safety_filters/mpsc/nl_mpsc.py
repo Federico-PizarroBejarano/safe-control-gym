@@ -21,6 +21,7 @@ from scipy.linalg import sqrtm, solve_discrete_are
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
 from safe_control_gym.controllers.mpc.mpc_utils import rk_discrete
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
+from safe_control_gym.safety_filters.cbf.cbf_utils import cartesian_product
 from safe_control_gym.envs.benchmark_env import Task, Environment
 
 
@@ -255,7 +256,7 @@ class NL_MPSC(MPSC):
 
         c_max = max(self.c_js)
         w_bar_c = np.sqrt(np.max(np.linalg.eig(self.E.T @ P @ self.E)[0]))
-        self.delta_loc = 1  # Tuning parameter determines how far from the origin you can be and still be nominal
+        self.delta_loc = 0.6  # Tuning parameter determines how far from the origin you can be and still be nominal
 
         self.check_decay_rate(X, P, K, Theta, rho_c)
         self.check_lyapunov_func(P, K, rho_c)
@@ -280,6 +281,7 @@ class NL_MPSC(MPSC):
         btp = np.dot(B_lin.T, self.P_f)
         self.K_f = -np.dot(np.linalg.inv(self.R + np.dot(btp, B_lin)), np.dot(btp, A_lin))
         self.check_terminal_ingredients()
+        self.check_terminal_constraints()
 
     def box2polytopic(self, constraint):
         '''Convert constraints into an explicit polytopic form. This assumes that constraints contain the origin.
@@ -545,6 +547,64 @@ class NL_MPSC(MPSC):
 
         print('NUM_VALID:', num_valid / num_random_vectors)
         print('INSIDE SET:', inside_set / num_random_vectors)
+
+    def check_terminal_constraints(self,
+                                   num_points: int=100,
+                                   tolerance: float=0.01
+                                   ):
+        '''
+        Check if the provided terminal set is only contains valid states using a gridded approach.
+
+        Args:
+            num_points (int): The number of points in each dimension to check.
+            tolerance (float): The tolerance of the condition outside the superlevel set.
+
+        Returns:
+            valid_cbf (bool): Whether the provided CBF candidate is valid.
+            infeasible_states (list): List of all states for which the QP is infeasible.
+        '''
+
+        # Add some tolerance to the bounds to also check the condition outside of the superlevel set
+        max_bounds = self.state_constraint.upper_bounds + tolerance
+        min_bounds = self.state_constraint.lower_bounds - tolerance
+
+        # Make sure that every vertex is checked
+        num_points = max(2 * self.n, num_points + num_points % (2 * self.n))
+        num_points_per_dim = num_points // self.n
+
+        # Create the lists of states to check
+        states_to_sample = [np.linspace(min_bounds[i], max_bounds[i], num_points_per_dim) for i in range(self.n)]
+        states_to_check = cartesian_product(*states_to_sample)
+
+        num_states_inside_set = 0
+        failed_inputs = 0
+        failed_states = 0
+        failed_checks = 0
+
+        for state in states_to_check:
+            terminal_cost = (state - self.X_mid).T @ self.P_f @ (state - self.X_mid)
+            in_terminal_set = terminal_cost < self.gamma**2
+
+            if in_terminal_set:
+                stabilizing_input = self.K_f @ (state - self.X_mid)
+                num_states_inside_set += 1
+                failed = False
+
+                if np.any(stabilizing_input < self.input_constraint.lower_bounds) or np.any(stabilizing_input > self.input_constraint.upper_bounds):
+                    failed_inputs += 1
+                    failed = True
+                if np.any(state < self.state_constraint.lower_bounds) or np.any(state > self.state_constraint.upper_bounds):
+                    failed_states += 1
+                    failed = True
+
+                if failed:
+                    failed_checks += 1
+
+        print(f'Number of states checked: {len(states_to_check)}')
+        print(f'Number of states inside terminal set: {num_states_inside_set}')
+        print(f'Number of checks failed: {failed_checks}')
+        print(f'Number of states failed: {failed_states}')
+        print(f'Number of inputs failed: {failed_inputs}')
 
     def load(self,
              path,
