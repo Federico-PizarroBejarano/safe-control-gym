@@ -128,7 +128,7 @@ class NL_MPSC(MPSC):
         w_sym = cs.MX.sym('delta_w', self.q, 1)
 
         self.get_error_function(env=env)
-        self.E = np.diag(self.error_distrib) * self.max_w / self.dt
+        self.E = np.diag(self.max_w_per_dim) / self.dt
 
         self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym+self.X_mid, u_sym+self.U_mid) + self.E @ w_sym], ['x', 'u', 'w'], ['f'])
         phi_1 = cs.Function('phi_1', [x_sym, u_sym, w_sym], [self.f(x_sym, u_sym, w_sym)], ['x', 'u', 'w'], ['phi_1'])
@@ -179,8 +179,10 @@ class NL_MPSC(MPSC):
         normed_w = np.linalg.norm(w, axis=1)
         print('MAX ERROR:', np.max(normed_w))
         print('MEAN ERROR:', np.mean(normed_w))
+        print('MAX ERROR PER DIM:', np.max(w, axis=0))
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
         self.error_distrib = np.sum(np.abs(w), axis=0) / np.linalg.norm(np.sum(np.abs(w), axis=0))
+        self.max_w_per_dim = np.max(w, axis=0)
         self.max_w = np.max(normed_w)
         self.w_func = lambda x, u, s: self.max_w
 
@@ -264,10 +266,11 @@ class NL_MPSC(MPSC):
         ## Get Discrete-time system values
         self.rho = np.exp(-rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / rho_c  # even using rho_c from the paper yields different w_bar
-        self.s_bar = (1 - self.rho**self.horizon) / (1 - self.rho) * self.w_bar
-        assert self.s_bar > self.max_w * self.horizon, f'[ERROR] s_bar ({self.s_bar}) is too small with respect to max_w ({self.max_w}).'
-        assert self.max_w * self.horizon < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
-        self.s_bar = self.max_w * self.horizon
+        horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
+        self.s_bar = horizon_multiplier * self.w_bar
+        assert self.s_bar > self.max_w * horizon_multiplier + self.tolerance, f'[ERROR] s_bar ({self.s_bar}) is too small with respect to max_w ({self.max_w}).'
+        assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
+        self.s_bar = self.max_w * horizon_multiplier + self.tolerance
         self.gamma = 1 / c_max - self.s_bar
 
     def get_terminal_ingredients(self):
@@ -549,7 +552,7 @@ class NL_MPSC(MPSC):
         print('INSIDE SET:', inside_set / num_random_vectors)
 
     def check_terminal_constraints(self,
-                                   num_points: int=100,
+                                   num_points: int=20,
                                    tolerance: float=0.01
                                    ):
         '''
@@ -630,6 +633,7 @@ class NL_MPSC(MPSC):
         self.c_js = parameters['c_js']
         self.gamma = parameters['gamma']
         self.P_f = parameters['P_f']
+        self.K_f = parameters['K_f']
 
         self.setup_optimizer()
 
@@ -648,6 +652,7 @@ class NL_MPSC(MPSC):
         parameters['c_js'] = self.c_js
         parameters['gamma'] = self.gamma
         parameters['P_f'] = self.P_f
+        parameters['K_f'] = self.K_f
 
         with open(path, 'wb') as f:
             pickle.dump(parameters, f)

@@ -10,8 +10,8 @@ task_config:
   init_state:
     init_x: 0.1
     init_x_dot: -1.5
-    init_theta: -0.175
-    init_theta_dot: 0.5
+    init_theta: -0.155
+    init_theta_dot: 0.75
   randomized_init: True
   randomized_inertial_prop: False
 
@@ -59,12 +59,12 @@ task_config:
     upper_bounds:
       - 2
       - 2
-      - 0.18
+      - 0.16
       - 1
     lower_bounds:
       - -2
       - -2
-      - -0.18
+      - -0.16
       - -1
   - constraint_form: default_constraint
     constrained_variable: input

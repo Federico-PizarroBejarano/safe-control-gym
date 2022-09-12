@@ -40,24 +40,24 @@ reachable_state_randomization = {
             'high': 1},
         'init_x_dot': {
             'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
+            'low': -0.9,
+            'high': 0.9},
         'init_z': {
             'distrib': 'uniform',
             'low': 1,
             'high': 2},
         'init_z_dot': {
             'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
+            'low': -0.9,
+            'high': 0.9},
         'init_theta': {
             'distrib': 'uniform',
             'low': -0.2,
             'high': 0.2},
         'init_theta_dot': {
             'distrib': 'uniform',
-            'low': -1,
-            'high': 1}
+            'low': -0.8,
+            'high': 0.8}
         },
     'quadrotor_3D': {
         'init_x': {
@@ -66,24 +66,24 @@ reachable_state_randomization = {
             'high': 1},
         'init_x_dot': {
             'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
+            'low': -0.9,
+            'high': 0.9},
         'init_y': {
             'distrib': 'uniform',
             'low': -1,
             'high': 1},
         'init_y_dot': {
             'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
+            'low': -0.9,
+            'high': 0.9},
         'init_z': {
             'distrib': 'uniform',
             'low': 1,
             'high': 2},
         'init_z_dot': {
             'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
+            'low': -0.9,
+            'high': 0.9},
         'init_phi': {
             'distrib': 'uniform',
             'low': -0.2,
@@ -98,16 +98,16 @@ reachable_state_randomization = {
             'high': 0.2},
         'init_p': {
             'distrib': 'uniform',
-            'low': -0.1,
-            'high': 0.1},
+            'low': -0.5,
+            'high': 0.5},
         'init_q': {
             'distrib': 'uniform',
-            'low': -0.1,
-            'high': 0.1},
+            'low': -0.5,
+            'high': 0.5},
         'init_r': {
             'distrib': 'uniform',
-            'low': -0.1,
-            'high': 0.1}
+            'low': -0.5,
+            'high': 0.5}
         },
 }
 
