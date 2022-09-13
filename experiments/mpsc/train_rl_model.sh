@@ -24,7 +24,7 @@ python3 ../main.py --algo ${ALGO} --task ${SYS_NAME} --overrides ./config_overri
                     --tag unsafe_rl_temp_data/ --seed 2 --kv_overrides task_config.init_state=None
 
 # Move the newly trained unsafe model.
-mv ./unsafe_rl_temp_data/seed2_*/model_latest.pt ./models/${ALGO}_model_${SYS}_${TASK}.pt
+mv ./unsafe_rl_temp_data/seed2_*/model_latest.pt ./models/rl_models/${ALGO}_model_${SYS}_${TASK}.pt
 
 # Removed the temporary data used to train the new unsafe model.
 rm -r -f ./unsafe_rl_temp_data/
