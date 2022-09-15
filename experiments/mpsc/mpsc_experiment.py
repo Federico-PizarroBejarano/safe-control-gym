@@ -36,54 +36,54 @@ reachable_state_randomization = {
     'quadrotor_2D': {
         'init_x': {
             'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
+            'low': -2,
+            'high': 2},
         'init_x_dot': {
             'distrib': 'uniform',
-            'low': -0.9,
-            'high': 0.9},
+            'low': -1,
+            'high': 1},
         'init_z': {
             'distrib': 'uniform',
             'low': 1,
             'high': 2},
         'init_z_dot': {
             'distrib': 'uniform',
-            'low': -0.9,
-            'high': 0.9},
+            'low': -1,
+            'high': 1},
         'init_theta': {
             'distrib': 'uniform',
             'low': -0.2,
             'high': 0.2},
         'init_theta_dot': {
             'distrib': 'uniform',
-            'low': -0.8,
-            'high': 0.8}
+            'low': -1.5,
+            'high': 1.5}
         },
     'quadrotor_3D': {
         'init_x': {
             'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
+            'low': -2,
+            'high': 2},
         'init_x_dot': {
             'distrib': 'uniform',
-            'low': -0.9,
-            'high': 0.9},
+            'low': -1,
+            'high': 1},
         'init_y': {
+            'distrib': 'uniform',
+            'low': -2,
+            'high': 2},
+        'init_y_dot': {
             'distrib': 'uniform',
             'low': -1,
             'high': 1},
-        'init_y_dot': {
-            'distrib': 'uniform',
-            'low': -0.9,
-            'high': 0.9},
         'init_z': {
             'distrib': 'uniform',
             'low': 1,
             'high': 2},
         'init_z_dot': {
             'distrib': 'uniform',
-            'low': -0.9,
-            'high': 0.9},
+            'low': -1,
+            'high': 1},
         'init_phi': {
             'distrib': 'uniform',
             'low': -0.2,
@@ -98,16 +98,16 @@ reachable_state_randomization = {
             'high': 0.2},
         'init_p': {
             'distrib': 'uniform',
-            'low': -0.5,
-            'high': 0.5},
+            'low': -1,
+            'high': 1},
         'init_q': {
             'distrib': 'uniform',
-            'low': -0.5,
-            'high': 0.5},
+            'low': -1,
+            'high': 1},
         'init_r': {
             'distrib': 'uniform',
-            'low': -0.5,
-            'high': 0.5}
+            'low': -1,
+            'high': 1}
         },
 }
 
@@ -183,7 +183,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
     else:
         safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
 
-
     if config.sf_config.cost_function == Cost_Function.LQR_COST:
         if config.algo == 'lqr':
             q_lin = config.algo_config.q_lqr
@@ -229,7 +228,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.'):
             graph3_2 = 2
         elif system == 'quadrotor_3D':
             graph1_1 = 6
-            graph1_2 = 7
+            graph1_2 = 9
             graph3_1 = 0
             graph3_2 = 4
 

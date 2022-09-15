@@ -113,7 +113,7 @@ class NL_MPSC(MPSC):
         if env is None:
             env = self.training_env
 
-        self.tolerance = 1e-5
+        self.tolerance = 1e-4
 
         if self.env.NAME == Environment.CARTPOLE:
             self.x_r = np.array([self.X_EQ[0], 0, 0, 0])
@@ -129,6 +129,9 @@ class NL_MPSC(MPSC):
 
         self.get_error_function(env=env)
         self.E = np.diag(self.max_w_per_dim) / self.dt
+
+        if self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
+            self.E *= 2
 
         self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym+self.X_mid, u_sym+self.U_mid) + self.E @ w_sym], ['x', 'u', 'w'], ['f'])
         phi_1 = cs.Function('phi_1', [x_sym, u_sym, w_sym], [self.f(x_sym, u_sym, w_sym)], ['x', 'u', 'w'], ['phi_1'])
@@ -248,8 +251,8 @@ class NL_MPSC(MPSC):
 
         # Resulting continuous-time parameters
         X = X.value
-        P = np.linalg.pinv(X)
-        K = Y.value @ P
+        self.P = np.linalg.pinv(X)
+        K = Y.value @ self.P
 
         self.c_js = np.zeros(self.p)
 
@@ -257,21 +260,23 @@ class NL_MPSC(MPSC):
             self.c_js[j] = np.linalg.norm((self.L_x[j, :] + self.L_u[j, :] @ K) @ sqrtm(X))
 
         c_max = max(self.c_js)
-        w_bar_c = np.sqrt(np.max(np.linalg.eig(self.E.T @ P @ self.E)[0]))
+        w_bar_c = np.sqrt(np.max(np.linalg.eig(self.E.T @ self.P @ self.E)[0]))
         self.delta_loc = 0.6  # Tuning parameter determines how far from the origin you can be and still be nominal
 
-        self.check_decay_rate(X, P, K, Theta, rho_c)
-        self.check_lyapunov_func(P, K, rho_c)
+        self.check_decay_rate(X, K, Theta, rho_c)
+        self.check_lyapunov_func(K, rho_c)
 
         ## Get Discrete-time system values
         self.rho = np.exp(-rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / rho_c  # even using rho_c from the paper yields different w_bar
         horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
-        self.s_bar = horizon_multiplier * self.w_bar
-        assert self.s_bar > self.max_w * horizon_multiplier + self.tolerance, f'[ERROR] s_bar ({self.s_bar}) is too small with respect to max_w ({self.max_w}).'
+        self.s_bar_f = horizon_multiplier * self.w_bar
+        assert self.w_bar > self.max_w, f'[ERROR] w_bar ({self.w_bar}) is too small compared to max_w ({self.max_w}).'
+        assert self.s_bar_f <= self.delta_loc**0.5, f'[ERROR], s_bar_f ({self.s_bar_f}) is larger than the square root of delta_loc ({self.delta_loc}).'
+        assert self.s_bar_f > self.max_w * horizon_multiplier + self.tolerance, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
         assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
-        self.s_bar = self.max_w * horizon_multiplier + self.tolerance
-        self.gamma = 1 / c_max - self.s_bar
+        self.s_bar_f = self.max_w * horizon_multiplier + self.tolerance
+        self.gamma = 1 / c_max - self.s_bar_f
 
     def get_terminal_ingredients(self):
         '''Calculate the terminal ingredients of the MPC optimization. '''
@@ -406,12 +411,11 @@ class NL_MPSC(MPSC):
 
         return np.vstack(vectors)
 
-    def check_decay_rate(self, X, P, K, Theta, rho_c):
+    def check_decay_rate(self, X, K, Theta, rho_c):
         '''Check the decay rate.
 
         Args:
             X (ndarray): The X matrix.
-            P (ndarray): The lyapunov matrix.
             K (ndarray): The gain matrix.
             Theta (list): The angles for which to test.
             rho_c (float): A tuning parameter determining how fast the lyapunov function contracts.
@@ -422,7 +426,7 @@ class NL_MPSC(MPSC):
         w_test = np.zeros((self.q, 1))
 
         X_sqrt = sqrtm(X)
-        P_sqrt = sqrtm(P)
+        P_sqrt = sqrtm(self.P)
         for angle in Theta:
             if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
                 x_test[-2] = angle
@@ -435,11 +439,10 @@ class NL_MPSC(MPSC):
             left_side = max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ K) @ X_sqrt)[0]) + 2*rho_c
             assert left_side <= self.tolerance, f'[ERROR] The solution {left_side} is not within the tolerance {self.tolerance}'
 
-    def check_lyapunov_func(self, P, K, rho_c):
+    def check_lyapunov_func(self, K, rho_c):
         '''Check the incremental Lyapunov function.
 
         Args:
-            P (ndarray): The lyapunov matrix.
             K (ndarray): The gain matrix.
             rho_c (float): A tuning parameter determining how fast the lyapunov function contracts.
         '''
@@ -449,7 +452,7 @@ class NL_MPSC(MPSC):
 
         # Sample random points inside the set V_delta(x, z) <= delta_loc
         delta_x = self.randsphere(num_random_vectors, self.n, self.delta_loc).T
-        dx_transform = np.linalg.inv(sqrtm(P)) @ delta_x
+        dx_transform = np.linalg.inv(sqrtm(self.P)) @ delta_x
         dx_transform = self.x_r[:, None] + dx_transform  # transform point from error to actual state
 
         # sample random disturbance bounded by max_w
@@ -477,8 +480,8 @@ class NL_MPSC(MPSC):
             z_dot = np.squeeze(self.f(self.x_r-self.X_mid, u_z-self.U_mid, w_none).toarray())
 
             # evaluate Lyapunov function and its time derivative
-            V_d = (x_i - self.x_r).T @ P @ (x_i - self.x_r)
-            dVdt = (x_i - self.x_r).T @ P @ (x_dot - z_dot)
+            V_d = (x_i - self.x_r).T @ self.P @ (x_i - self.x_r)
+            dVdt = (x_i - self.x_r).T @ self.P @ (x_dot - z_dot)
 
             # Check incremental Lypaunov function condition
             if dVdt <= -rho_c * V_d:
@@ -490,7 +493,7 @@ class NL_MPSC(MPSC):
 
             # get next state
             x_plus = np.squeeze(self.disc_f(x_i-self.X_mid, u_x-self.U_mid, w_dist[:, i]).toarray())
-            V_d_plus = (x_plus - self.x_r).T @ P @ (x_plus - self.x_r)
+            V_d_plus = (x_plus - self.x_r).T @ self.P @ (x_plus - self.x_r)
 
             # check robust control invariance
             if V_d_plus <= self.delta_loc:
@@ -552,24 +555,36 @@ class NL_MPSC(MPSC):
         print('INSIDE SET:', inside_set / num_random_vectors)
 
     def check_terminal_constraints(self,
-                                   num_points: int=20,
-                                   tolerance: float=0.01
+                                   num_points: int=None,
                                    ):
         '''
         Check if the provided terminal set is only contains valid states using a gridded approach.
 
         Args:
             num_points (int): The number of points in each dimension to check.
-            tolerance (float): The tolerance of the condition outside the superlevel set.
 
         Returns:
             valid_cbf (bool): Whether the provided CBF candidate is valid.
             infeasible_states (list): List of all states for which the QP is infeasible.
         '''
 
-        # Add some tolerance to the bounds to also check the condition outside of the superlevel set
-        max_bounds = self.state_constraint.upper_bounds + tolerance
-        min_bounds = self.state_constraint.lower_bounds - tolerance
+        if num_points is None:
+            num_points = 200 // self.n
+
+        # Determine if terminal set inside constraints
+        terminal_max = np.sqrt(np.diag(np.linalg.inv(self.P_f/self.gamma**2)))
+        terminal_min = -np.sqrt(np.diag(np.linalg.inv(self.P_f/self.gamma**2)))
+
+        max_bounds = np.zeros((self.n))
+        min_bounds = np.zeros((self.n))
+        for i in range(self.n):
+            tighten_by_max = self.c_js[i*2]*self.s_bar_f
+            tighten_by_min = self.c_js[i*2+1]*self.s_bar_f
+            max_bounds[i] = 1.0/self.L_x[i*2, i] * (self.l[i*2] - tighten_by_max)
+            min_bounds[i] = 1.0/self.L_x[i*2+1, i] * (self.l[i*2+1] - tighten_by_min)
+
+        if np.any(terminal_max > max_bounds) or np.any(terminal_min < min_bounds):
+            raise ValueError('Terminal set is not constrained within the constraint set.')
 
         # Make sure that every vertex is checked
         num_points = max(2 * self.n, num_points + num_points % (2 * self.n))
@@ -580,25 +595,49 @@ class NL_MPSC(MPSC):
         states_to_check = cartesian_product(*states_to_sample)
 
         num_states_inside_set = 0
-        failed_inputs = 0
-        failed_states = 0
         failed_checks = 0
+        failed_29a = 0
+        failed_29b = 0
+        failed_29d = 0
 
         for state in states_to_check:
             terminal_cost = (state - self.X_mid).T @ self.P_f @ (state - self.X_mid)
             in_terminal_set = terminal_cost < self.gamma**2
 
             if in_terminal_set:
-                stabilizing_input = self.K_f @ (state - self.X_mid)
                 num_states_inside_set += 1
                 failed = False
 
-                if np.any(stabilizing_input < self.input_constraint.lower_bounds) or np.any(stabilizing_input > self.input_constraint.upper_bounds):
-                    failed_inputs += 1
+                # Testing condition 29a
+                stable_input = self.K_f @ (state - self.x_r) + self.u_r
+                next_state = np.squeeze(self.disc_f(state-self.X_mid, stable_input-self.U_mid, np.zeros((self.q, 1))).toarray())
+                stage_cost = (state.T - self.X_mid) @ self.Q @ (state - self.X_mid)
+                next_terminal_cost = (next_state - self.X_mid).T @ self.P_f @ (next_state - self.X_mid)
+
+                if next_terminal_cost / (terminal_cost - stage_cost) > 1.01:
+                    failed_29a += 1
                     failed = True
-                if np.any(state < self.state_constraint.lower_bounds) or np.any(state > self.state_constraint.upper_bounds):
-                    failed_states += 1
-                    failed = True
+
+                # Testing condition 29b
+                num_disturbances = 100
+                disturbances = self.randsphere(num_disturbances, self.n, self.max_w).T
+                for w in range(num_disturbances):
+                    disturbed_state = next_state + disturbances[:, w]
+                    terminal_cost = (disturbed_state - self.X_mid).T @ self.P_f @ (disturbed_state - self.X_mid)
+                    in_terminal_set = terminal_cost < self.gamma**2
+
+                    if not in_terminal_set:
+                        failed_29b += 1
+                        failed = True
+                        break
+
+                # Testing condition 29d
+                for j in range(self.p):
+                    constraint_satisfaction = self.L_x[j, :] @ (state-self.X_mid) + self.L_u[j, :] @ (stable_input-self.U_mid) - self.l[j] + self.c_js[j]*self.s_bar_f <= 0
+                    if not constraint_satisfaction:
+                        failed_29d += 1
+                        failed = True
+                        break
 
                 if failed:
                     failed_checks += 1
@@ -606,8 +645,9 @@ class NL_MPSC(MPSC):
         print(f'Number of states checked: {len(states_to_check)}')
         print(f'Number of states inside terminal set: {num_states_inside_set}')
         print(f'Number of checks failed: {failed_checks}')
-        print(f'Number of states failed: {failed_states}')
-        print(f'Number of inputs failed: {failed_inputs}')
+        print(f'Number of checks failed due to 29a: {failed_29a}')
+        print(f'Number of checks failed due to 29b: {failed_29b}')
+        print(f'Number of checks failed due to 29d: {failed_29d}')
 
     def load(self,
              path,
@@ -618,15 +658,11 @@ class NL_MPSC(MPSC):
             path (str): Path to the required file.
         '''
 
-        self.L_x = cs.MX(self.L_x)
-        self.L_u = cs.MX(self.L_u)
-        self.l = cs.MX(self.l)
-
         with open(path, 'rb') as f:
             parameters = pickle.load(f)
 
         self.rho = parameters['rho']
-        self.s_bar = parameters['s_bar']
+        self.s_bar_f = parameters['s_bar_f']
         self.w_bar = parameters['w_bar']
         self.max_w = parameters['max_w']
         self.w_func = lambda x, u, s: self.max_w
@@ -634,6 +670,10 @@ class NL_MPSC(MPSC):
         self.gamma = parameters['gamma']
         self.P_f = parameters['P_f']
         self.K_f = parameters['K_f']
+
+        self.L_x = cs.MX(self.L_x)
+        self.L_u = cs.MX(self.L_u)
+        self.l = cs.MX(self.l)
 
         self.setup_optimizer()
 
@@ -646,7 +686,7 @@ class NL_MPSC(MPSC):
 
         parameters = {}
         parameters['rho'] = self.rho
-        parameters['s_bar'] = self.s_bar
+        parameters['s_bar_f'] = self.s_bar_f
         parameters['w_bar'] = self.w_bar
         parameters['max_w'] = self.max_w
         parameters['c_js'] = self.c_js
@@ -692,7 +732,7 @@ class NL_MPSC(MPSC):
 
             # Lyapunov size increase
             s_var[:, i+1] = self.rho*s_var[:, i] + w_var[:, i]
-            opti.subject_to(s_var[:, i] <= self.s_bar)
+            opti.subject_to(s_var[:, i] <= self.s_bar_f)
             opti.subject_to(w_var[:, i] <= self.w_bar)
             opti.subject_to(w_var[:, i] >= self.w_func(z_var[:,i], v_var[:,i], s_var[:,i]))
 

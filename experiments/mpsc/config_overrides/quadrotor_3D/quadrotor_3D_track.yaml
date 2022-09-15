@@ -104,30 +104,30 @@ task_config:
       constrained_variable: state
       upper_bounds:
         - 2
-        - 0.9
+        - 1
         - 2
-        - 0.9
+        - 1
         - 2
-        - 0.9
+        - 1
         - 0.2
         - 0.2
         - 0.2
-        - 0.5
-        - 0.5
-        - 0.5
+        - 1
+        - 1
+        - 1
       lower_bounds:
         - -2
-        - -0.9
+        - -1
         - -2
-        - -0.9
+        - -1
         - 0
-        - -0.9
+        - -1
         - -0.2
         - -0.2
         - -0.2
-        - -0.5
-        - -0.5
-        - -0.5
+        - -1
+        - -1
+        - -1
     - constraint_form: default_constraint
       constrained_variable: input
   done_on_out_of_bound: True

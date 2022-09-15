@@ -4,10 +4,10 @@ sf_config:
   r_lin:
     - 0.1
   q_lin:
-    - 0.01
-    - 0.1
-    - 0.1
-    - 0.1
+    - 0.02
+    - 0.001
+    - 10
+    - 0.5
 
   # MPC Parameters
   horizon: 20
