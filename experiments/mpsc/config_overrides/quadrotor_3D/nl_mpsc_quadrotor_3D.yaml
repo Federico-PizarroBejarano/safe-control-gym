@@ -2,14 +2,14 @@ safety_filter: nl_mpsc
 sf_config:
   # LQR controller parameters
   r_lin:
-    - 5
+    - 100
   q_lin:
     - 0.001
     - 0.06
     - 0.001
     - 0.06
     - 0.00025
-    - 2
+    - 100
     - 0.00001
     - 0.00001
     - 0.75

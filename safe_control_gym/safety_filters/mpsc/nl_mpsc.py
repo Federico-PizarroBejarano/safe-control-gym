@@ -196,13 +196,13 @@ class NL_MPSC(MPSC):
         lamb_ub = None
 
         lamb = 0.008 # lambda lower bound
-        rho_c = 0.192  # tuning parameter determines how fast the lyapunov function contracts
+        self.rho_c = 0.192  # tuning parameter determines how fast the lyapunov function contracts
 
-        Theta = [self.state_constraint.lower_bounds[-2], 0, self.state_constraint.upper_bounds[-2]]
+        self.Theta = [self.state_constraint.lower_bounds[-2], 0, self.state_constraint.upper_bounds[-2]]
 
         while lamb < 100:
             lamb = lamb * 2
-            [X, Y, cost, constraints] = self.setup_tube_optimization(Theta, rho_c, lamb)
+            [X, Y, cost, constraints] = self.setup_tube_optimization(lamb)
             prob = cp.Problem(cp.Minimize(cost), constraints)
             try:
                 print(f'Attempting with lambda={lamb}.')
@@ -230,7 +230,7 @@ class NL_MPSC(MPSC):
 
         for i in range(num_candidates):
             lambda_candidate = lambda_candidates[i]
-            [X, Y, cost, constraints] = self.setup_tube_optimization(Theta, rho_c, lambda_candidate)
+            [X, Y, cost, constraints] = self.setup_tube_optimization(lambda_candidate)
             prob = cp.Problem(cp.Minimize(cost), constraints)
             try:
                 cost = prob.solve(solver=cp.MOSEK, verbose=True)
@@ -243,40 +243,46 @@ class NL_MPSC(MPSC):
 
         best_index = cost_values.index(min(cost_values))
         best_lamb = lambda_candidates[best_index]
-        [X, Y, cost, constraints] = self.setup_tube_optimization(Theta, rho_c, best_lamb)
+        [X, Y, cost, constraints] = self.setup_tube_optimization(best_lamb)
         prob = cp.Problem(cp.Minimize(cost), constraints)
         cost = prob.solve(solver=cp.MOSEK, verbose=True)
         if prob.status != 'optimal' or cost == float('inf'):
             raise cp.SolverError
 
         # Resulting continuous-time parameters
-        X = X.value
-        self.P = np.linalg.pinv(X)
-        K = Y.value @ self.P
+        self.X = X.value
+        self.P = np.linalg.pinv(self.X)
+        self.K = Y.value @ self.P
 
         self.c_js = np.zeros(self.p)
 
         for j in range(self.p):
-            self.c_js[j] = np.linalg.norm((self.L_x[j, :] + self.L_u[j, :] @ K) @ sqrtm(X))
+            self.c_js[j] = np.linalg.norm((self.L_x[j, :] + self.L_u[j, :] @ self.K) @ sqrtm(self.X))
 
         c_max = max(self.c_js)
         w_bar_c = np.sqrt(np.max(np.linalg.eig(self.E.T @ self.P @ self.E)[0]))
-        self.delta_loc = 0.6  # Tuning parameter determines how far from the origin you can be and still be nominal
-
-        self.check_decay_rate(X, K, Theta, rho_c)
-        self.check_lyapunov_func(K, rho_c)
 
         ## Get Discrete-time system values
-        self.rho = np.exp(-rho_c * self.dt)
-        self.w_bar = w_bar_c * (1 - self.rho) / rho_c  # even using rho_c from the paper yields different w_bar
+        self.rho = np.exp(-self.rho_c * self.dt)
+        self.w_bar = w_bar_c * (1 - self.rho) / self.rho_c  # even using rho_c from the paper yields different w_bar
         horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
         self.s_bar_f = horizon_multiplier * self.w_bar
         assert self.w_bar > self.max_w, f'[ERROR] w_bar ({self.w_bar}) is too small compared to max_w ({self.max_w}).'
-        assert self.s_bar_f <= self.delta_loc**0.5, f'[ERROR], s_bar_f ({self.s_bar_f}) is larger than the square root of delta_loc ({self.delta_loc}).'
         assert self.s_bar_f > self.max_w * horizon_multiplier + self.tolerance, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
         assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
         self.s_bar_f = self.max_w * horizon_multiplier + self.tolerance
         self.gamma = 1 / c_max - self.s_bar_f
+
+        self.delta_loc = (horizon_multiplier * self.w_bar)**2
+
+        print(f'rho: {self.rho}')
+        print(f'w_bar: {self.w_bar}')
+        print(f'Original s_bar_f: {self.w_bar * horizon_multiplier}')
+        print(f's_bar_f: {self.s_bar_f}')
+        print(f'gamma: {self.gamma}')
+
+        self.check_decay_rate()
+        self.check_lyapunov_func()
 
     def get_terminal_ingredients(self):
         '''Calculate the terminal ingredients of the MPC optimization. '''
@@ -332,12 +338,10 @@ class NL_MPSC(MPSC):
 
         return Z_mid, np.array(L), np.array(l)
 
-    def setup_tube_optimization(self, Theta, rho_c, lamb):
+    def setup_tube_optimization(self, lamb):
         '''Sets up the optimization to find the lyapunov function.
 
         Args:
-            Theta (list): The angles for which to test.
-            rho_c (float): A tuning parameter determining how fast the lyapunov function contracts.
             lamb (float): The S-procedure constant.
 
         Returns:
@@ -358,7 +362,7 @@ class NL_MPSC(MPSC):
         u_test = self.U_EQ
         w_test = np.zeros((self.q, 1))
 
-        for angle in Theta:
+        for angle in self.Theta:
             if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
                 x_test[-2] = angle
             else:
@@ -370,7 +374,7 @@ class NL_MPSC(MPSC):
 
             AXBY = A_theta @ X + B_theta @ Y
 
-            constraint_1 = AXBY + AXBY.T + 2 * rho_c * X
+            constraint_1 = AXBY + AXBY.T + 2 * self.rho_c * X
             constraint_2 = cp.bmat([[AXBY + AXBY.T + lamb * X, self.E], [self.E.T, -lamb * np.eye(self.q)]])
 
             Constraints += [constraint_1 << 0]
@@ -411,23 +415,16 @@ class NL_MPSC(MPSC):
 
         return np.vstack(vectors)
 
-    def check_decay_rate(self, X, K, Theta, rho_c):
-        '''Check the decay rate.
-
-        Args:
-            X (ndarray): The X matrix.
-            K (ndarray): The gain matrix.
-            Theta (list): The angles for which to test.
-            rho_c (float): A tuning parameter determining how fast the lyapunov function contracts.
-        '''
+    def check_decay_rate(self):
+        '''Check the decay rate. '''
 
         x_test = np.zeros((self.n, 1))
         u_test = self.U_EQ
         w_test = np.zeros((self.q, 1))
 
-        X_sqrt = sqrtm(X)
+        X_sqrt = sqrtm(self.X)
         P_sqrt = sqrtm(self.P)
-        for angle in Theta:
+        for angle in self.Theta:
             if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
                 x_test[-2] = angle
             else:
@@ -436,16 +433,11 @@ class NL_MPSC(MPSC):
                 x_test[-6] = angle
             A_theta = self.Ac(x_test, u_test - self.U_mid, w_test).toarray()
             B_theta = self.Bc(x_test, u_test - self.U_mid, w_test).toarray()
-            left_side = max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ K) @ X_sqrt)[0]) + 2*rho_c
+            left_side = max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ self.K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ self.K) @ X_sqrt)[0]) + 2*self.rho_c
             assert left_side <= self.tolerance, f'[ERROR] The solution {left_side} is not within the tolerance {self.tolerance}'
 
-    def check_lyapunov_func(self, K, rho_c):
-        '''Check the incremental Lyapunov function.
-
-        Args:
-            K (ndarray): The gain matrix.
-            rho_c (float): A tuning parameter determining how fast the lyapunov function contracts.
-        '''
+    def check_lyapunov_func(self):
+        '''Check the incremental Lyapunov function. '''
 
         # select the number of random vectors to check
         num_random_vectors = 10000
@@ -471,8 +463,8 @@ class NL_MPSC(MPSC):
             x_i = dx_transform[:, i]
 
             # set up control inputs (u_r is required to get f_kappa(0, 0) = 0)
-            u_x = K @ x_i + v + self.u_r
-            u_z = K @ self.x_r + v + self.u_r
+            u_x = self.K @ x_i + v + self.u_r
+            u_z = self.K @ self.x_r + v + self.u_r
 
             # get dynamics
             w_none = np.zeros((self.q, 1))
@@ -484,7 +476,7 @@ class NL_MPSC(MPSC):
             dVdt = (x_i - self.x_r).T @ self.P @ (x_dot - z_dot)
 
             # Check incremental Lypaunov function condition
-            if dVdt <= -rho_c * V_d:
+            if dVdt <= -self.rho_c * V_d:
                 num_valid += 1
 
             # check if states are inside V_d(x_i, z) <= delta_loc
@@ -555,7 +547,7 @@ class NL_MPSC(MPSC):
         print('INSIDE SET:', inside_set / num_random_vectors)
 
     def check_terminal_constraints(self,
-                                   num_points: int=None,
+                                   num_points: int=40,
                                    ):
         '''
         Check if the provided terminal set is only contains valid states using a gridded approach.
@@ -568,10 +560,7 @@ class NL_MPSC(MPSC):
             infeasible_states (list): List of all states for which the QP is infeasible.
         '''
 
-        if num_points is None:
-            num_points = 200 // self.n
-
-        # Determine if terminal set inside constraints
+        # Determine if terminal set inside state constraints
         terminal_max = np.sqrt(np.diag(np.linalg.inv(self.P_f/self.gamma**2)))
         terminal_min = -np.sqrt(np.diag(np.linalg.inv(self.P_f/self.gamma**2)))
 
@@ -586,12 +575,31 @@ class NL_MPSC(MPSC):
         if np.any(terminal_max > max_bounds) or np.any(terminal_min < min_bounds):
             raise ValueError('Terminal set is not constrained within the constraint set.')
 
+        # Determine if the maximum input is within input constraints
+        x = cp.Variable((self.n, 1))
+        C = np.linalg.cholesky(self.P_f).T
+        cost = cp.Maximize(self.K_f[0, :] @ x)
+        constraint = [cp.norm(C @ x) <= self.gamma]
+        prob = cp.Problem(cost, constraint)
+        max_input = prob.solve(solver=cp.MOSEK)
+
+        max_bounds = np.zeros((self.m))
+        min_bounds = np.zeros((self.m))
+        for i in range(self.m):
+            tighten_by_max = self.c_js[self.n*2 + i*2]*self.s_bar_f
+            tighten_by_min = self.c_js[self.n*2 + i*2+1]*self.s_bar_f
+            max_bounds[i] = 1.0/self.L_u[self.n*2 + i*2, i] * (self.l[self.n*2 + i*2] - tighten_by_max)
+            min_bounds[i] = 1.0/self.L_u[self.n*2 + i*2+1, i] * (self.l[self.n*2 + i*2+1] - tighten_by_min)
+
+        if np.any(max_input + self.u_r > max_bounds + self.U_mid) or np.any(-max_input + self.u_r < min_bounds + self.U_mid):
+            raise ValueError(f'Terminal controller causes inputs (max_input: {-max_input+self.u_r[0]}/{max_input+self.u_r[0]}) outside of input constraints (constraints: {min_bounds[0] + self.U_mid[0]}/{max_bounds[0] + self.U_mid[0]}).')
+
         # Make sure that every vertex is checked
         num_points = max(2 * self.n, num_points + num_points % (2 * self.n))
         num_points_per_dim = num_points // self.n
 
         # Create the lists of states to check
-        states_to_sample = [np.linspace(min_bounds[i], max_bounds[i], num_points_per_dim) for i in range(self.n)]
+        states_to_sample = [np.linspace(self.X_mid[i], terminal_max[i]+self.X_mid[i], num_points_per_dim) for i in range(self.n)]
         states_to_check = cartesian_product(*states_to_sample)
 
         num_states_inside_set = 0
@@ -614,7 +622,7 @@ class NL_MPSC(MPSC):
                 stage_cost = (state.T - self.X_mid) @ self.Q @ (state - self.X_mid)
                 next_terminal_cost = (next_state - self.X_mid).T @ self.P_f @ (next_state - self.X_mid)
 
-                if next_terminal_cost / (terminal_cost - stage_cost) > 1.01:
+                if terminal_cost - stage_cost != 0 and next_terminal_cost / (terminal_cost - stage_cost) > 1.01:
                     failed_29a += 1
                     failed = True
 
@@ -661,6 +669,14 @@ class NL_MPSC(MPSC):
         with open(path, 'rb') as f:
             parameters = pickle.load(f)
 
+        print(parameters)
+
+        self.rho_c = parameters['rho_c']
+        self.Theta = parameters['Theta']
+        self.X = parameters['X']
+        self.K = parameters['K']
+        self.P = parameters['P']
+        self.delta_loc = parameters['delta_loc']
         self.rho = parameters['rho']
         self.s_bar_f = parameters['s_bar_f']
         self.w_bar = parameters['w_bar']
@@ -685,6 +701,12 @@ class NL_MPSC(MPSC):
         '''
 
         parameters = {}
+        parameters['rho_c'] = self.rho_c
+        parameters['Theta'] = self.Theta
+        parameters['X'] = self.X
+        parameters['K'] = self.K
+        parameters['P'] = self.P
+        parameters['delta_loc'] = self.delta_loc
         parameters['rho'] = self.rho
         parameters['s_bar_f'] = self.s_bar_f
         parameters['w_bar'] = self.w_bar

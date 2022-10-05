@@ -64,6 +64,8 @@ class MPSC(BaseSafetyFilter, ABC):
 
         super().__init__(env_func, **kwargs)
 
+        np.random.seed(self.seed)
+
         # Setup the Environments.
         self.env = env_func(normalized_rl_action_space=False)
         self.training_env = env_func(randomized_init=True,
