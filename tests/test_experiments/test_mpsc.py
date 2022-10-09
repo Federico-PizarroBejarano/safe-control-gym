@@ -1,6 +1,8 @@
 import sys
 import pytest
 
+import numpy as np
+
 from experiments.mpsc.mpsc_experiment import run
 
 @pytest.mark.parametrize('SYS',             ['cartpole', 'quadrotor_2D', 'quadrotor_3D'])
@@ -24,7 +26,10 @@ def test_mpsc(SYS, TASK, ALGO, SAFETY_FILTER, MPSC_COST):
             f'./experiments/mpsc/config_overrides/{SYS}/{SAFETY_FILTER}_{SYS}.yaml',
         '--kv_overrides', f'sf_config.cost_function={MPSC_COST}'
         ]
-    cert_metrics, feasible_iterations = run(plot=False, training=False, n_episodes=None, n_steps=2, curr_path='./experiments/mpsc')
+    _, _, cert_results, cert_metrics = run(plot=False, training=False, n_episodes=None, n_steps=2, curr_path='./experiments/mpsc')
+
+    mpsc_results = cert_results['safety_filter_data'][0]
+    feasible_iterations = np.sum(mpsc_results['feasible'][0])
 
     assert cert_metrics['average_constraint_violation'] == 0
     assert cert_metrics['average_length'] == feasible_iterations

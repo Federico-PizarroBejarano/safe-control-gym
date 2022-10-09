@@ -26,8 +26,8 @@ task_config:
       high: 0.1
     init_theta:
       distrib: 'uniform'
-      low: -0.2
-      high: 0.2
+      low: -0.16
+      high: 0.16
     init_theta_dot:
       distrib: 'uniform'
       low: -0.1

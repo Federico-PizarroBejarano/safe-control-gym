@@ -195,7 +195,8 @@ class Experiment:
             trajs_data = self.train_env.data
         return dict(trajs_data)
 
-    def compute_metrics(self, trajs_data):
+    @staticmethod
+    def compute_metrics(trajs_data):
         '''Compute all standard metrics on the given trajectory data.
 
         Args:
