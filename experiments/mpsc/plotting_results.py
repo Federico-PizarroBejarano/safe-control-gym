@@ -88,6 +88,7 @@ def plot_experiment(system, task, data_extractor):
     one_step_data = []
     lqr_data = []
     precomputed_data = []
+    learned_data = []
     labels = []
 
     for algo in ordered_algos:
@@ -98,25 +99,29 @@ def plot_experiment(system, task, data_extractor):
         one_step_cost = all_results[algo]['one_step_cost']
         lqr_cost = all_results[algo]['lqr_cost']
         precomputed_cost = all_results[algo]['precomputed_cost']
+        learned_cost = all_results[algo]['learned_cost']
 
         if show_uncertified:
             uncertified_data.append(data_extractor(one_step_cost, certified=False))
         one_step_data.append(data_extractor(one_step_cost))
         lqr_data.append(data_extractor(lqr_cost))
         precomputed_data.append(data_extractor(precomputed_cost))
+        learned_data.append(data_extractor(learned_cost))
 
-    width = 1/(4+show_uncertified)
+    width = 1/(5+show_uncertified)
     x = np.arange(len(labels))
 
     if show_uncertified:
-        uncertified = ax.bar(x - 3*width/2, uncertified_data, width, label='Uncertified', color='plum')
-        one_step = ax.bar(x - width/2, one_step_data, width, label='One Step Cost', color='cornflowerblue')
-        lqr = ax.bar(x + width/2, lqr_data, width, label='LQR Cost', color='tomato')
-        precomputed = ax.bar(x + 3*width/2, precomputed_data, width, label='Precomputed Cost', color='limegreen')
-    else:
+        uncertified = ax.bar(x - 2*width, uncertified_data, width, label='Uncertified', color='plum')
         one_step = ax.bar(x - width, one_step_data, width, label='One Step Cost', color='cornflowerblue')
         lqr = ax.bar(x, lqr_data, width, label='LQR Cost', color='tomato')
         precomputed = ax.bar(x + width, precomputed_data, width, label='Precomputed Cost', color='limegreen')
+        learned = ax.bar(x + 2*width, learned_data, width, label='Learned Cost', color='yellow')
+    else:
+        one_step = ax.bar(x - 3*width/2, one_step_data, width, label='One Step Cost', color='cornflowerblue')
+        lqr = ax.bar(x - width/2, lqr_data, width, label='LQR Cost', color='tomato')
+        precomputed = ax.bar(x + width/2, precomputed_data, width, label='Precomputed Cost', color='limegreen')
+        learned = ax.bar(x + 3*width/2, learned_data, width, label='Learned Cost', color='yellow')
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
     ax.set_ylabel(ylabel, weight='bold', fontsize=25, labelpad=10)
@@ -129,6 +134,7 @@ def plot_experiment(system, task, data_extractor):
     ax.bar_label(one_step, labels=np.round(one_step_data, 1), padding=3, fontsize=20)
     ax.bar_label(lqr, labels=np.round(lqr_data, 1), padding=3, fontsize=20)
     ax.bar_label(precomputed, labels=np.round(precomputed_data, 1), padding=3, fontsize=20)
+    ax.bar_label(learned, labels=np.round(learned_data, 1), padding=3, fontsize=20)
 
     fig.tight_layout()
 

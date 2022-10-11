@@ -452,7 +452,7 @@ def determine_feasible_starting_points(num_points=100):
         mpsc_results = cert_results['safety_filter_data'][0]
 
         if np.all(mpsc_results['feasible']) \
-                and uncert_metrics['average_constraint_violation'] > 0 \
+                and uncert_metrics['average_constraint_violation'] > 5 \
                 and uncert_metrics['average_length'] ==  config.task_config.ctrl_freq * config.task_config.episode_len_sec \
                 and cert_metrics['average_constraint_violation'] == 0:
             starting_points.append(cert_results['state'][0][0])
