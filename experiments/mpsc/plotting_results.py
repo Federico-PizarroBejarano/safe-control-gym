@@ -2,13 +2,19 @@
 
 import pickle
 from inspect import signature
+from collections import defaultdict
 
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, fftfreq
 
 
+plot = True
+save_figs = False
 ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
+ordered_costs = ['one_step', 'lqr', 'precomputed', 'learned']
+
+cost_colors = {'one_step':'cornflowerblue', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
 
 
 def load_one_experiment(system, task, algo):
@@ -23,22 +29,11 @@ def load_one_experiment(system, task, algo):
         all_results (dict): A dictionary containing all the results.
     '''
 
-    with open(f'./results/{system}/{task}/results_{system}_{task}_{algo}_one_step_cost.pkl', 'rb') as f:
-        one_step_cost_results = pickle.load(f)
+    all_results = {}
 
-    with open(f'./results/{system}/{task}/results_{system}_{task}_{algo}_lqr_cost.pkl', 'rb') as f:
-        lqr_cost_results = pickle.load(f)
-
-    with open(f'./results/{system}/{task}/results_{system}_{task}_{algo}_precomputed_cost.pkl', 'rb') as f:
-        precomputed_cost_results = pickle.load(f)
-
-    with open(f'./results/{system}/{task}/results_{system}_{task}_{algo}_learned_cost.pkl', 'rb') as f:
-        learned_cost_results = pickle.load(f)
-
-    all_results = {'one_step_cost': one_step_cost_results,
-                   'lqr_cost': lqr_cost_results,
-                   'precomputed_cost': precomputed_cost_results,
-                   'learned_cost': learned_cost_results}
+    for cost in ordered_costs:
+        with open(f'./results/{system}/{task}/results_{system}_{task}_{algo}_{cost}_cost.pkl', 'rb') as f:
+            all_results[cost] = pickle.load(f)
 
     return all_results
 
@@ -85,65 +80,60 @@ def plot_experiment(system, task, data_extractor):
     ax = fig.add_subplot(111)
 
     uncertified_data = []
-    one_step_data = []
-    lqr_data = []
-    precomputed_data = []
-    learned_data = []
+    cert_data = defaultdict(list)
     labels = []
 
     for algo in ordered_algos:
-        if algo not in all_results.keys():
+        if algo not in all_results:
             continue
         labels.append(algo.upper())
 
-        one_step_cost = all_results[algo]['one_step_cost']
-        lqr_cost = all_results[algo]['lqr_cost']
-        precomputed_cost = all_results[algo]['precomputed_cost']
-        learned_cost = all_results[algo]['learned_cost']
+        for cost in ordered_costs:
+            raw_data = all_results[algo][cost]
+            cert_data[cost].append(data_extractor(raw_data))
+            if show_uncertified and cost == 'one_step':
+                uncertified_data.append(data_extractor(raw_data, certified=False))
 
-        if show_uncertified:
-            uncertified_data.append(data_extractor(one_step_cost, certified=False))
-        one_step_data.append(data_extractor(one_step_cost))
-        lqr_data.append(data_extractor(lqr_cost))
-        precomputed_data.append(data_extractor(precomputed_cost))
-        learned_data.append(data_extractor(learned_cost))
-
-    width = 1/(5+show_uncertified)
+    num_bars = len(ordered_costs)+show_uncertified
+    width = 1/(num_bars+1)
     x = np.arange(len(labels))
 
+    bars = {}
+
     if show_uncertified:
-        uncertified = ax.bar(x - 2*width, uncertified_data, width, label='Uncertified', color='plum')
-        one_step = ax.bar(x - width, one_step_data, width, label='One Step Cost', color='cornflowerblue')
-        lqr = ax.bar(x, lqr_data, width, label='LQR Cost', color='tomato')
-        precomputed = ax.bar(x + width, precomputed_data, width, label='Precomputed Cost', color='limegreen')
-        learned = ax.bar(x + 2*width, learned_data, width, label='Learned Cost', color='yellow')
-    else:
-        one_step = ax.bar(x - 3*width/2, one_step_data, width, label='One Step Cost', color='cornflowerblue')
-        lqr = ax.bar(x - width/2, lqr_data, width, label='LQR Cost', color='tomato')
-        precomputed = ax.bar(x + width/2, precomputed_data, width, label='Precomputed Cost', color='limegreen')
-        learned = ax.bar(x + 3*width/2, learned_data, width, label='Learned Cost', color='yellow')
+        bars['uncertified'] = ax.bar(x - (num_bars-1)/2.0*width, uncertified_data, width, label='Uncertified', color='plum')
+
+    for idx, cost in enumerate(ordered_costs):
+        cost_name = cost.replace('_', ' ').title()
+        if cost_name == 'Lqr':
+            cost_name = 'LQR'
+        position = ((num_bars-1)/2.0 - idx - show_uncertified)*width
+        bars[cost] = ax.bar(x - position, cert_data[cost], width, label=f'{cost_name} Cost', color=cost_colors[cost])
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
+    if ylabel == 'Rmse':
+        ylabel = 'RMSE'
     ax.set_ylabel(ylabel, weight='bold', fontsize=25, labelpad=10)
 
     ax.set_xticks(x, labels, weight='bold', fontsize=25)
     ax.legend(fontsize=25)
 
     if show_uncertified:
-        ax.bar_label(uncertified, labels=np.round(uncertified_data, 1), padding=3, fontsize=20)
-    ax.bar_label(one_step, labels=np.round(one_step_data, 1), padding=3, fontsize=20)
-    ax.bar_label(lqr, labels=np.round(lqr_data, 1), padding=3, fontsize=20)
-    ax.bar_label(precomputed, labels=np.round(precomputed_data, 1), padding=3, fontsize=20)
-    ax.bar_label(learned, labels=np.round(learned_data, 1), padding=3, fontsize=20)
+        ax.bar_label(bars['uncertified'], labels=np.round(uncertified_data, 1), padding=3, fontsize=20)
+
+    for cost in ordered_costs:
+        ax.bar_label(bars[cost], labels=np.round(cert_data[cost], 1), padding=3, fontsize=20)
 
     fig.tight_layout()
 
     ax.set_ylim(ymin=0)
     ax.yaxis.grid(True)
-    # plt.show()
+    if plot is True:
+        plt.show()
 
     image_suffix = data_extractor.__name__.replace('extract_', '')
-    fig.savefig(f'./results/{system}/{task}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+    if save_figs:
+        fig.savefig(f'./results/{system}/{task}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
 
 
 def plot_violations(system, task):
@@ -163,11 +153,11 @@ def plot_violations(system, task):
     data = []
 
     for algo in ordered_algos:
-        if algo not in all_results.keys():
+        if algo not in all_results:
             continue
         labels.append(algo.upper())
 
-        one_step_cost = all_results[algo]['one_step_cost']
+        one_step_cost = all_results[algo]['one_step']
         data.append(one_step_cost['uncert_metrics']['average_constraint_violation'])
 
     ax.set_ylabel('Number of Constraint Violations', weight='bold', fontsize=25, labelpad=10)
@@ -184,9 +174,11 @@ def plot_violations(system, task):
 
     ax.set_ylim(ymin=0)
     ax.yaxis.grid(True)
-    # plt.show()
 
-    fig.savefig(f'./results/{system}/{task}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
+    if plot is True:
+        plt.show()
+    if save_figs:
+        fig.savefig(f'./results/{system}/{task}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
 
 
 def extract_magnitude_of_correction(results_data):
@@ -274,12 +266,12 @@ def extract_high_frequency_content(results_data, certified=True):
 
 
 if __name__ == '__main__':
-    system = 'cartpole'
-    task = 'track'
-    plot_violations(system=system, task=task)
-    plot_experiment(system=system, task=task, data_extractor=extract_magnitude_of_correction)
-    plot_experiment(system=system, task=task, data_extractor=extract_max_correction)
-    plot_experiment(system=system, task=task, data_extractor=extract_high_frequency_content)
-    plot_experiment(system=system, task=task, data_extractor=extract_simulation_time)
-    plot_experiment(system=system, task=task, data_extractor=extract_rmse)
-    plot_experiment(system=system, task=task, data_extractor=extract_number_of_corrections)
+    system_name = 'cartpole'
+    task_name = 'track'
+    plot_violations(system=system_name, task=task_name)
+    plot_experiment(system=system_name, task=task_name, data_extractor=extract_magnitude_of_correction)
+    plot_experiment(system=system_name, task=task_name, data_extractor=extract_max_correction)
+    plot_experiment(system=system_name, task=task_name, data_extractor=extract_high_frequency_content)
+    plot_experiment(system=system_name, task=task_name, data_extractor=extract_simulation_time)
+    plot_experiment(system=system_name, task=task_name, data_extractor=extract_rmse)
+    plot_experiment(system=system_name, task=task_name, data_extractor=extract_number_of_corrections)

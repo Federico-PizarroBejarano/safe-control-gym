@@ -16,6 +16,7 @@ class Cost_Function(str, Enum):
     '''MPSC Cost functions enumeration class. '''
 
     ONE_STEP_COST = 'one_step_cost'         # Default MPSC cost function.
+    CONSTANT_COST = 'constant_cost'         # Naive smooth cost based on constant input assmuption.
     LQR_COST = 'lqr_cost'                   # Smooth cost based on LQR policy assumption
     PRECOMPUTED_COST = 'precomputed_cost'   # Smooth cost based on precomputed future states
     LEARNED_COST = 'learned_cost'           # Smooth cost based on learned policy
