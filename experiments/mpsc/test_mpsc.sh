@@ -7,9 +7,9 @@ SYS='cartpole'
 TASK='stab'
 # TASK='track'
 
-# ALGO='lqr'
+ALGO='lqr'
 # ALGO='pid'
-ALGO='ppo'
+# ALGO='ppo'
 # ALGO='sac'
 
 # SAFETY_FILTER='linear_mpsc'

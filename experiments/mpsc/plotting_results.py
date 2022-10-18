@@ -9,21 +9,22 @@ import matplotlib.pyplot as plt
 from scipy.fftpack import fft, fftfreq
 
 
-plot = True
-save_figs = False
+plot = False
+save_figs = True
 ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
-ordered_costs = ['one_step', 'lqr', 'precomputed', 'learned']
+ordered_costs = ['one_step', 'constant', 'lqr', 'precomputed', 'learned']
 
-cost_colors = {'one_step':'cornflowerblue', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
+cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
 
 
-def load_one_experiment(system, task, algo):
+def load_one_experiment(system, task, algo, mpsc_cost_horizon):
     '''Loads the results of every MPSC cost function for a specific experiment.
 
     Args:
         system (str): The system to be controlled.
         task (str): The task to be completed (either 'stab' or 'track').
         algo (str): The controller being used.
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
 
     Returns:
         all_results (dict): A dictionary containing all the results.
@@ -32,18 +33,19 @@ def load_one_experiment(system, task, algo):
     all_results = {}
 
     for cost in ordered_costs:
-        with open(f'./results/{system}/{task}/results_{system}_{task}_{algo}_{cost}_cost.pkl', 'rb') as f:
+        with open(f'./results/{system}/{task}/m{mpsc_cost_horizon}/results_{system}_{task}_{algo}_{cost}_cost_m{mpsc_cost_horizon}.pkl', 'rb') as f:
             all_results[cost] = pickle.load(f)
 
     return all_results
 
 
-def load_all_algos(system, task):
+def load_all_algos(system, task, mpsc_cost_horizon):
     '''Loads the results of every MPSC cost function for a specific experiment with every algo.
 
     Args:
         system (str): The system to be controlled.
         task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
 
     Returns:
         all_results (dict): A dictionary containing all the results.
@@ -55,21 +57,22 @@ def load_all_algos(system, task):
         if system == 'cartpole' and algo == 'pid':
             continue
 
-        all_results[algo] = load_one_experiment(system, task, algo)
+        all_results[algo] = load_one_experiment(system, task, algo, mpsc_cost_horizon)
 
     return all_results
 
 
-def plot_experiment(system, task, data_extractor):
+def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     '''Plots the results of every MPSC cost function for a specific experiment.
 
     Args:
         system (str): The system to be controlled.
         task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
         data_extractor (lambda): A function that extracts the necessary data from the results.
     '''
 
-    all_results = load_all_algos(system, task)
+    all_results = load_all_algos(system, task, mpsc_cost_horizon)
 
     if len(signature(data_extractor).parameters) > 1:
         show_uncertified = True
@@ -114,6 +117,8 @@ def plot_experiment(system, task, data_extractor):
     if ylabel == 'Rmse':
         ylabel = 'RMSE'
     ax.set_ylabel(ylabel, weight='bold', fontsize=25, labelpad=10)
+    task_title = 'Stabilization' if task == 'stab' else 'Trajectory Tracking'
+    ax.set_title(f'{system.title()} {task_title} {ylabel} with M={mpsc_cost_horizon}', weight='bold', fontsize=25)
 
     ax.set_xticks(x, labels, weight='bold', fontsize=25)
     ax.legend(fontsize=25)
@@ -133,18 +138,19 @@ def plot_experiment(system, task, data_extractor):
 
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
-        fig.savefig(f'./results/{system}/{task}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+        fig.savefig(f'./results/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_{image_suffix}_m{mpsc_cost_horizon}.png', dpi=300)
 
 
-def plot_violations(system, task):
+def plot_violations(system, task, mpsc_cost_horizon):
     '''Plots the constraint violations of every controller for a specific experiment.
 
     Args:
         system (str): The system to be controlled.
         task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
     '''
 
-    all_results = load_all_algos(system, task)
+    all_results = load_all_algos(system, task, mpsc_cost_horizon)
 
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
@@ -161,6 +167,8 @@ def plot_violations(system, task):
         data.append(one_step_cost['uncert_metrics']['average_constraint_violation'])
 
     ax.set_ylabel('Number of Constraint Violations', weight='bold', fontsize=25, labelpad=10)
+    task_title = 'Stabilization' if task == 'stab' else 'Trajectory Tracking'
+    ax.set_title(f'{system.title()} {task_title} Constraint Violations with M={mpsc_cost_horizon}', weight='bold', fontsize=25)
 
     x = np.arange(len(labels))
     ax.set_xticks(x, labels, weight='bold', fontsize=25)
@@ -178,7 +186,7 @@ def plot_violations(system, task):
     if plot is True:
         plt.show()
     if save_figs:
-        fig.savefig(f'./results/{system}/{task}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
+        fig.savefig(f'./results/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
 
 
 def extract_magnitude_of_correction(results_data):
@@ -267,11 +275,12 @@ def extract_high_frequency_content(results_data, certified=True):
 
 if __name__ == '__main__':
     system_name = 'cartpole'
-    task_name = 'track'
-    plot_violations(system=system_name, task=task_name)
-    plot_experiment(system=system_name, task=task_name, data_extractor=extract_magnitude_of_correction)
-    plot_experiment(system=system_name, task=task_name, data_extractor=extract_max_correction)
-    plot_experiment(system=system_name, task=task_name, data_extractor=extract_high_frequency_content)
-    plot_experiment(system=system_name, task=task_name, data_extractor=extract_simulation_time)
-    plot_experiment(system=system_name, task=task_name, data_extractor=extract_rmse)
-    plot_experiment(system=system_name, task=task_name, data_extractor=extract_number_of_corrections)
+    task_name = 'stab'
+    mpsc_cost_horizon_num = '2'
+    plot_violations(system_name, task_name, mpsc_cost_horizon_num)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_correction)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)

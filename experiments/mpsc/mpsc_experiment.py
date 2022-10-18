@@ -112,6 +112,49 @@ reachable_state_randomization = {
         },
 }
 
+regularization_parameters = {
+    'cartpole': {
+        'stab': {
+            'lqr': 0.0,
+            'ppo': 0.0,
+            'sac': 0.0,
+        },
+        'track': {
+            'lqr': 0.0,
+            'ppo': 5.0,
+            'sac': 200.0,
+        },
+    },
+    'quadrotor_2D': {
+        'stab': {
+            'lqr': 0.0,
+            'pid': 10.0,
+            'ppo': 10.0,
+            'sac': 10.0,
+        },
+        'track': {
+            'lqr': 0.0,
+            'pid': 10.0,
+            'ppo': 10.0,
+            'sac': 10.0,
+        },
+    },
+    'quadrotor_3D': {
+        'stab': {
+            'lqr': 0.0,
+            'pid': 10.0,
+            'ppo': 10.0,
+            'sac': 10.0,
+        },
+        'track': {
+            'lqr': 0.0,
+            'pid': 10.0,
+            'ppo': 10.0,
+            'sac': 10.0,
+        },
+    }
+}
+
 
 def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None):
     '''Main function to run MPSC experiments.
@@ -209,8 +252,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
             ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
     elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.cost_function.uncertified_controller = ctrl
-        if config.algo in ['ppo', 'sac']:
-            safety_filter.cost_function.regularization_const = 200.0
+        safety_filter.cost_function.regularization_const = regularization_parameters[system][task][config.algo]
         safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{config.algo}_data_{system}_{task}.pkl')
         safety_filter.setup_optimizer()
 
@@ -461,8 +503,7 @@ def determine_feasible_starting_points(num_points=100):
     cert_experiment.close()
 
     print(starting_points)
-    with open(f'./models/starting_points/starting_points_{system}_{task}_{config.algo}', 'wb') as f:
-        pickle.dump(starting_points, f)
+    np.save(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy', starting_points)
 
 
 def run_multiple(plot=True):
@@ -487,10 +528,10 @@ def run_multiple(plot=True):
     else:
         system = config.task
 
-    with open(f'./models/starting_points/starting_points_{system}_{task}_{config.algo}', 'rb') as f:
-        starting_points = pickle.load(f)
+    starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy')
 
-    for i, init_state in enumerate(starting_points):
+    for i in range(starting_points.shape[0]):
+        init_state = starting_points[i, :]
         uncert_results, _, cert_results, _ = run(plot=plot, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=init_state)
         if i == 0:
             all_uncert_results, all_cert_results = uncert_results, cert_results
@@ -508,7 +549,7 @@ def run_multiple(plot=True):
                    'cert_results': all_cert_results,
                    'cert_metrics': cert_metrics}
 
-    with open(f'./results/{system}/{task}/results_{system}_{task}_{config.algo}_{config.sf_config.cost_function}.pkl', 'wb') as f:
+    with open(f'./results/{system}/{task}/m{config.sf_config.mpsc_cost_horizon}/results_{system}_{task}_{config.algo}_{config.sf_config.cost_function}_m{config.sf_config.mpsc_cost_horizon}.pkl', 'wb') as f:
         pickle.dump(all_results, f)
 
     return all_uncert_results, uncert_metrics, all_cert_results, cert_metrics

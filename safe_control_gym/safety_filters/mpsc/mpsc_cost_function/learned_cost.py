@@ -32,7 +32,7 @@ class LEARNED_COST(MPSC_COST):
 
         self.max_order = 2
         self.power_list = [p for p in product(range(self.max_order+1), repeat=self.model.nx) if sum(p) <= self.max_order]
-        self.regularization_const = 10.0
+        self.regularization_const = 0.0
 
         self.gamma = self.transform_state_errors(np.zeros((self.model.nx)))
         self.prev_actions = np.zeros((1, self.model.nu))
