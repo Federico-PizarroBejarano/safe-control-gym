@@ -8,13 +8,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, fftfreq
 
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import second_order_rate_of_change
 
-plot = False
-save_figs = True
+
+plot = True
+save_figs = False
 ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
-ordered_costs = ['one_step', 'constant', 'lqr', 'precomputed', 'learned']
+ordered_costs = ['one_step', 'regularized', 'lqr', 'precomputed', 'learned']
+# ordered_costs = ['one_step', 'constant', 'regularized', 'lqr', 'precomputed', 'learned']
 
-cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
+cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'regularized': 'pink', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
 
 
 def load_one_experiment(system, task, algo, mpsc_cost_horizon):
@@ -193,6 +196,9 @@ def extract_magnitude_of_correction(results_data):
     '''Extracts the mean correction from an experiment's data.
 
     Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
         magnitude_of_correction (float): The mean magnitude of corrections for all experiments.
     '''
     return np.mean([np.linalg.norm(mpsc_results['correction'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']])
@@ -202,6 +208,9 @@ def extract_max_correction(results_data):
     '''Extracts the max correction from an experiment's data.
 
     Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
         max_correction (float): The mean max correction for all experiments.
     '''
     return np.mean([np.max(np.abs(mpsc_results['correction'][0])) for mpsc_results in results_data['cert_results']['safety_filter_data']])
@@ -211,6 +220,9 @@ def extract_number_of_corrections(results_data):
     '''Extracts the number of corrections from an experiment's data.
 
     Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
         num_corrections (float): The mean number of correction for all experiments.
     '''
     return np.mean([np.sum(mpsc_results['correction'][0] > 1e-4) for mpsc_results in results_data['cert_results']['safety_filter_data']])
@@ -220,7 +232,10 @@ def extract_rmse(results_data, certified=True):
     '''Extracts the number of corrections from an experiment's data.
 
     Args:
-        num_corrections (float): The mean number of correction for all experiments.
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        num_corrections (float): The mean RMSE for all experiments.
     '''
     if certified:
         rmse = results_data['cert_metrics']['average_rmse']
@@ -233,7 +248,10 @@ def extract_simulation_time(results_data, certified=True):
     '''Extracts the simulation time from an experiment's data.
 
     Args:
-        simulation_time (float): The mean number of iterations for all experiments.
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        simulation_time (float): The average simulation time for all experiments.
     '''
     if certified:
         simulation_time = np.mean([timestamp[-1] - timestamp[0] for timestamp in results_data['cert_results']['timestamp']])
@@ -246,6 +264,9 @@ def extract_high_frequency_content(results_data, certified=True):
     '''Extracts the high frequency content (HFC) from the inputs of an experiment's data.
 
     Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
         HFC (float): The mean HFC for all experiments.
     '''
     N = max(results_data['cert_results']['current_physical_action'][0].shape)
@@ -272,15 +293,41 @@ def extract_high_frequency_content(results_data, certified=True):
 
     return HFC/len(all_actions)
 
+def extract_2nd_order_rate_of_change(results_data, certified=True):
+    '''Extracts the 2nd_order_rate_of_change from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        second_order_roc (float): The 2nd order rate of change.
+    '''
+    if certified:
+        actions = results_data['cert_results']['current_physical_action']
+    else:
+        actions = results_data['uncert_results']['current_physical_action']
+
+    n = min(results_data['cert_results']['current_physical_action'][0].shape)
+    if n == 1:
+        second_order_roc = second_order_rate_of_change(np.squeeze(actions))
+    elif n > 1:
+        second_order_roc = 0
+        for i in range(n):
+            second_order_roc += second_order_rate_of_change(np.squeeze(actions[:, i]))
+
+    return second_order_roc
+
 
 if __name__ == '__main__':
     system_name = 'cartpole'
     task_name = 'stab'
-    mpsc_cost_horizon_num = '2'
+    mpsc_cost_horizon_num = 2
+
     plot_violations(system_name, task_name, mpsc_cost_horizon_num)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_correction)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)

@@ -45,9 +45,7 @@ class PRECOMPUTED_COST(MPSC_COST):
         u_L = opti_dict['u_L']
         v_var = opti_dict['v_var']
 
-        nu = self.model.nu
-
-        v_L = opti.parameter(nu, self.mpsc_cost_horizon)
+        v_L = opti.parameter(self.model.nu, self.mpsc_cost_horizon)
 
         opti_dict['v_L'] = v_L
 

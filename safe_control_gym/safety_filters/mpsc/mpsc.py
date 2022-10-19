@@ -17,6 +17,7 @@ from safe_control_gym.safety_filters.base_safety_filter import BaseSafetyFilter
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_trajectory_on_horizon
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.one_step_cost import ONE_STEP_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.constant_cost import CONSTANT_COST
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.regularized_cost import REGULARIZED_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.lqr_cost import LQR_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.precomputed_cost import PRECOMPUTED_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.learned_cost import LEARNED_COST
@@ -88,6 +89,7 @@ class MPSC(BaseSafetyFilter, ABC):
         self.lqr_gain = -compute_lqr_gain(self.model, self.X_EQ, self.U_EQ, self.Q, self.R, discrete_dynamics=True)
 
         self.terminal_set = None
+        self.prev_action = self.U_EQ
 
         if self.additional_constraints is None:
             additional_constraints = []
@@ -99,6 +101,8 @@ class MPSC(BaseSafetyFilter, ABC):
             self.cost_function = ONE_STEP_COST()
         elif cost_function == Cost_Function.CONSTANT_COST:
             self.cost_function = CONSTANT_COST(self.env, mpsc_cost_horizon, decay_factor)
+        elif cost_function == Cost_Function.REGULARIZED_COST:
+            self.cost_function = REGULARIZED_COST(self.env, mpsc_cost_horizon, decay_factor)
         elif cost_function == Cost_Function.LQR_COST:
             self.cost_function = LQR_COST(self.env, mpsc_cost_horizon, decay_factor)
         elif cost_function == Cost_Function.PRECOMPUTED_COST:
@@ -156,6 +160,8 @@ class MPSC(BaseSafetyFilter, ABC):
         clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon)
         opti.set_value(X_GOAL, clipped_X_GOAL)
 
+        if isinstance(self.cost_function, REGULARIZED_COST):
+            opti_dict['prev_u_val'] = self.prev_action
         self.cost_function.prepare_cost_variables(opti_dict, obs, iteration)
 
         # Initial guess for optimization problem.

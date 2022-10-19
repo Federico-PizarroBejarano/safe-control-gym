@@ -12,7 +12,7 @@ from safe_control_gym.experiment import Experiment
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, second_order_rate_of_change
 
 
 reachable_state_randomization = {
@@ -396,6 +396,8 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         print('Number of Certified Violations:', cert_metrics['average_constraint_violation'])
         print('HFC Uncertified:', HFC_uncert)
         print('HFC Certified:', HFC_cert)
+        print('2nd Order RoC Uncert:', second_order_rate_of_change(np.squeeze(uncert_results['current_physical_action'][0])))
+        print('2nd Order RoC Cert:', second_order_rate_of_change(np.squeeze(cert_results['current_physical_action'][0])))
         print('RMSE Uncertified:', uncert_metrics['average_rmse'])
         print('RMSE Certified:', cert_metrics['average_rmse'])
 

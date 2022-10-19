@@ -17,6 +17,7 @@ class Cost_Function(str, Enum):
 
     ONE_STEP_COST = 'one_step_cost'         # Default MPSC cost function.
     CONSTANT_COST = 'constant_cost'         # Naive smooth cost based on constant input assmuption.
+    REGULARIZED_COST = 'regularized_cost'   # Penalizing rate-of-change of MPC input sequence
     LQR_COST = 'lqr_cost'                   # Smooth cost based on LQR policy assumption
     PRECOMPUTED_COST = 'precomputed_cost'   # Smooth cost based on precomputed future states
     LEARNED_COST = 'learned_cost'           # Smooth cost based on learned policy
@@ -144,3 +145,20 @@ def get_trajectory_on_horizon(env, iteration, horizon):
         clipped_X_GOAL = env.X_GOAL
 
     return clipped_X_GOAL
+
+def second_order_rate_of_change(signal):
+    '''Calculates the sum of the absolute 2nd order rate of change of a signal.
+
+    Args:
+        signal (np.ndarray): A 1D array of values.
+
+    Returns:
+        second_order_roc (float): The second order rate-of-change. 
+    '''
+    first_order_roc = []
+    for i in range(1, signal.shape[0]):
+        first_order_roc.append(signal[i] - signal[i-1])
+    second_order_roc = []
+    for i in range(1, signal.shape[0]-1):
+        second_order_roc.append(first_order_roc[i] - first_order_roc[i-1])
+    return np.sum(np.abs(second_order_roc))
