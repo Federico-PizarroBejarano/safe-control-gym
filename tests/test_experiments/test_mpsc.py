@@ -31,5 +31,5 @@ def test_mpsc(SYS, TASK, ALGO, SAFETY_FILTER, MPSC_COST):
     mpsc_results = cert_results['safety_filter_data'][0]
     feasible_iterations = np.sum(mpsc_results['feasible'][0])
 
-    assert cert_metrics['average_constraint_violation'] == 0
-    assert cert_metrics['average_length'] == feasible_iterations
+    assert cert_metrics['average_constraint_violation'] == 0, '[ERROR] MPSC VIOLATED CONSTRAINTS'
+    assert cert_metrics['average_length'] == feasible_iterations, '[ERROR] INITIAL MPSC STEPS ARE NOT FEASIBLE'
