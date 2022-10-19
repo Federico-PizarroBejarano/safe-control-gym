@@ -253,7 +253,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.cost_function.uncertified_controller = ctrl
         safety_filter.cost_function.regularization_const = regularization_parameters[system][task][config.algo]
-        safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{config.algo}_data_{system}_{task}.pkl')
+        safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl')
         safety_filter.setup_optimizer()
 
     # Run with safety filter
@@ -457,25 +457,8 @@ def determine_feasible_starting_points(num_points=100):
 
     safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
 
-    if config.sf_config.cost_function == Cost_Function.LQR_COST:
-        if config.algo == 'lqr':
-            q_lin = config.algo_config.q_lqr
-            r_lin = config.algo_config.r_lqr
-        else:
-            q_lin = [1]*safety_filter.model.nx
-            r_lin = [0.1]
-        safety_filter.cost_function.set_lqr_matrices(q_lin, r_lin)
-    elif config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
-        safety_filter.cost_function.uncertified_controller = ctrl
-        safety_filter.cost_function.output_dir = '.'
-        if config.algo == 'pid':
-            ctrl.save('./temp-data/saved_controller_prev.npy')
-    elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
-        safety_filter.cost_function.uncertified_controller = ctrl
-        if config.algo in ['ppo', 'sac']:
-            safety_filter.cost_function.regularization_const = 200.0
-        safety_filter.cost_function.learn_policy(path=f'./models/trajectories/{config.algo}_data_{system}_{task}.pkl')
-        safety_filter.setup_optimizer()
+    if config.sf_config.cost_function != Cost_Function.ONE_STEP_COST:
+        raise ValueError('Currently starting point generation should only be done with one_step_cost.')
 
     starting_points = []
 
