@@ -303,19 +303,21 @@ def extract_2nd_order_rate_of_change(results_data, certified=True):
         second_order_roc (float): The 2nd order rate of change.
     '''
     if certified:
-        actions = results_data['cert_results']['current_physical_action']
+        all_actions = results_data['cert_results']['current_physical_action']
     else:
-        actions = results_data['uncert_results']['current_physical_action']
+        all_actions = results_data['uncert_results']['current_physical_action']
 
     n = min(results_data['cert_results']['current_physical_action'][0].shape)
-    if n == 1:
-        second_order_roc = second_order_rate_of_change(np.squeeze(actions))
-    elif n > 1:
-        second_order_roc = 0
-        for i in range(n):
-            second_order_roc += second_order_rate_of_change(np.squeeze(actions[:, i]))
 
-    return second_order_roc
+    second_order_roc = 0
+    for actions in all_actions:
+        if n == 1:
+            second_order_roc += second_order_rate_of_change(np.squeeze(actions))
+        elif n > 1:
+            for i in range(n):
+                second_order_roc += second_order_rate_of_change(np.squeeze(actions[:, i]))
+
+    return second_order_roc/len(all_actions)
 
 
 if __name__ == '__main__':
