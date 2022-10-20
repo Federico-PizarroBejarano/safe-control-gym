@@ -5,14 +5,13 @@ import shutil
 from functools import partial
 
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.fftpack import fft, fftfreq
 
 from safe_control_gym.experiment import Experiment
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, second_order_rate_of_change
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, high_frequency_content, second_order_rate_of_change
+from experiments.mpsc.plotting_results import plot_trajectories
 
 
 reachable_state_randomization = {
@@ -168,6 +167,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         init_state (np.ndarray): Optionally can add a different initial state.
 
     Returns:
+        X_GOAL (np.ndarray): The goal (stabilization or reference trajectory) of the experiment.
         uncert_results (dict): The results of the uncertified experiment.
         uncert_metrics (dict): The metrics of the uncertified experiment.
         cert_results (dict): The results of the certified experiment.
@@ -215,7 +215,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     # Run without safety filter
     experiment = Experiment(env, ctrl)
     uncert_results, uncert_metrics = experiment.run_evaluation(n_episodes=n_episodes, n_steps=n_steps)
-    elapsed_time_uncert = uncert_results['timestamp'][0][-1] - uncert_results['timestamp'][0][0]
     ctrl.reset()
 
     # Setup MPSC.
@@ -260,151 +259,36 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     experiment = Experiment(env, ctrl, safety_filter=safety_filter)
     cert_results, cert_metrics = experiment.run_evaluation(n_episodes=n_episodes, n_steps=n_steps)
     experiment.close()
-    mpsc_results = cert_results['safety_filter_data'][0]
     safety_filter.close()
 
+    elapsed_time_uncert = uncert_results['timestamp'][0][-1] - uncert_results['timestamp'][0][0]
     elapsed_time_cert = cert_results['timestamp'][0][-1] - cert_results['timestamp'][0][0]
 
+    mpsc_results = cert_results['safety_filter_data'][0]
     corrections = mpsc_results['correction'][0] > 1e-4
     corrections = np.append(corrections, False)
 
+    print('Total Uncertified (s):', elapsed_time_uncert)
+    print('Total Certified Time (s):', elapsed_time_cert)
+    print('Number of Corrections:', np.sum(corrections))
+    print('Sum of Corrections:', np.linalg.norm(mpsc_results['correction'][0]))
+    print('Max Correction:', np.max(np.abs(mpsc_results['correction'][0])))
+    print('Number of Feasible Iterations:', np.sum(mpsc_results['feasible'][0]))
+    print('Total Number of Iterations:', uncert_metrics['average_length'])
+    print('Total Number of Certified Iterations:', cert_metrics['average_length'])
+    print('Number of Violations:', uncert_metrics['average_constraint_violation'])
+    print('Number of Certified Violations:', cert_metrics['average_constraint_violation'])
+    print('HFC Uncertified:', high_frequency_content(uncert_results['current_physical_action'][0], config.task_config.ctrl_freq))
+    print('HFC Certified:', high_frequency_content(cert_results['current_physical_action'][0], config.task_config.ctrl_freq))
+    print('2nd Order RoC Uncert:', second_order_rate_of_change(uncert_results['current_physical_action'][0], config.task_config.ctrl_freq))
+    print('2nd Order RoC Cert:', second_order_rate_of_change(cert_results['current_physical_action'][0], config.task_config.ctrl_freq))
+    print('RMSE Uncertified:', uncert_metrics['average_rmse'])
+    print('RMSE Certified:', cert_metrics['average_rmse'])
+
     if plot is True:
-        if system == Environment.CARTPOLE:
-            graph1_1 = 2
-            graph1_2 = 3
-            graph3_1 = 0
-            graph3_2 = 1
-        elif system == 'quadrotor_2D':
-            graph1_1 = 4
-            graph1_2 = 5
-            graph3_1 = 0
-            graph3_2 = 2
-        elif system == 'quadrotor_3D':
-            graph1_1 = 6
-            graph1_2 = 9
-            graph3_1 = 0
-            graph3_2 = 4
+        plot_trajectories(config, safety_filter.env.X_GOAL, uncert_results, cert_results)
 
-        _, ax = plt.subplots()
-        ax.plot(uncert_results['obs'][0][:, graph1_1], uncert_results['obs'][0][:, graph1_2], 'r--', label='Uncertified')
-        ax.plot(cert_results['obs'][0][:,graph1_1], cert_results['obs'][0][:,graph1_2],'.-', label='Certified')
-        ax.plot(cert_results['obs'][0][corrections, graph1_1], cert_results['obs'][0][corrections, graph1_2], 'r.', label='Modified')
-        ax.scatter(uncert_results['obs'][0][0, graph1_1], uncert_results['obs'][0][0, graph1_2], color='g', marker='o', s=100, label='Initial State')
-        theta_constraint = config.task_config['constraints'][0].upper_bounds[graph1_1]
-        ax.axvline(x=-theta_constraint, color='k', lw=2, label='Limit')
-        ax.axvline(x=theta_constraint, color='k', lw=2)
-        ax.set_xlabel(r'$\theta$')
-        ax.set_ylabel(r'$\dot{\theta}$')
-        ax.set_box_aspect(0.5)
-        ax.legend(loc='upper right')
-
-        if config.task_config.task == Task.TRAJ_TRACKING and config.task == Environment.CARTPOLE:
-            _, ax2 = plt.subplots()
-            ax2.plot(np.linspace(0, 20, cert_results['obs'][0].shape[0])[1:], safety_filter.env.X_GOAL[:,0],'g--', label='Reference')
-            ax2.plot(np.linspace(0, 20, uncert_results['obs'][0].shape[0]), uncert_results['obs'][0][:,0],'r--', label='Uncertified')
-            ax2.plot(np.linspace(0, 20, cert_results['obs'][0].shape[0]), cert_results['obs'][0][:,0],'.-', label='Certified')
-            ax2.plot(np.linspace(0, 20, cert_results['obs'][0].shape[0])[corrections], cert_results['obs'][0][corrections, 0], 'r.', label='Modified')
-            ax2.set_xlabel(r'Time')
-            ax2.set_ylabel(r'X')
-            ax2.set_box_aspect(0.5)
-            ax2.legend(loc='upper right')
-        elif config.task == Environment.QUADROTOR:
-            _, ax2 = plt.subplots()
-            ax2.plot(uncert_results['obs'][0][:,graph3_1+1], uncert_results['obs'][0][:,graph3_2+1],'r--', label='Uncertified')
-            ax2.plot(cert_results['obs'][0][:,graph3_1+1], cert_results['obs'][0][:,graph3_2+1],'.-', label='Certified')
-            ax2.plot(cert_results['obs'][0][corrections, graph3_1+1], cert_results['obs'][0][corrections, graph3_2+1], 'r.', label='Modified')
-            ax2.set_xlabel(r'x_dot')
-            ax2.set_ylabel(r'z_dot')
-            ax2.set_box_aspect(0.5)
-            ax2.legend(loc='upper right')
-
-        _, ax3 = plt.subplots()
-        ax3.plot(uncert_results['obs'][0][:,graph3_1], uncert_results['obs'][0][:,graph3_2],'r--', label='Uncertified')
-        ax3.plot(cert_results['obs'][0][:,graph3_1], cert_results['obs'][0][:,graph3_2],'.-', label='Certified')
-        if config.task_config.task == Task.TRAJ_TRACKING and config.task == Environment.QUADROTOR:
-            ax3.plot(safety_filter.env.X_GOAL[:,graph3_1], safety_filter.env.X_GOAL[:,graph3_2],'g--', label='Reference')
-        ax3.plot(cert_results['obs'][0][corrections, graph3_1], cert_results['obs'][0][corrections, graph3_2], 'r.', label='Modified')
-        ax3.scatter(uncert_results['obs'][0][0, graph3_1], uncert_results['obs'][0][0, graph3_2], color='g', marker='o', s=100, label='Initial State')
-        ax3.set_xlabel(r'X')
-        if config.task == Environment.CARTPOLE:
-            ax3.set_ylabel(r'Vel')
-        elif config.task == Environment.QUADROTOR:
-            ax3.set_ylabel(r'Z')
-        ax3.set_box_aspect(0.5)
-        ax3.legend(loc='upper right')
-
-        _, ax_act = plt.subplots()
-        if config.task == Environment.CARTPOLE:
-            ax_act.plot(cert_results['current_physical_action'][0][:], 'b-', label='Certified Input')
-            ax_act.plot(mpsc_results['uncertified_action'][0][:], 'r--', label='Attempted Input')
-            ax_act.plot(uncert_results['current_physical_action'][0][:], 'g--', label='Uncertified Input')
-        else:
-            ax_act.plot(cert_results['current_physical_action'][0][:, 0], 'b-', label='Certified Input 1')
-            ax_act.plot(cert_results['current_physical_action'][0][:, 1], 'b--', label='Certified Input 2')
-            ax_act.plot(mpsc_results['uncertified_action'][0][:, 0], 'r-', label='Attempted Input 1')
-            ax_act.plot(mpsc_results['uncertified_action'][0][:, 1], 'r--', label='Attempted Input 2')
-            ax_act.plot(uncert_results['current_physical_action'][0][:, 0], 'g-', label='Uncertified Input 1')
-            ax_act.plot(uncert_results['current_physical_action'][0][:, 1], 'g--', label='Uncertified Input 2')
-        ax_act.legend()
-        ax_act.set_title('Input comparison')
-        ax_act.set_xlabel('Step')
-        ax_act.set_ylabel('Input')
-        ax_act.set_box_aspect(0.5)
-
-        _, ax_fft = plt.subplots()
-        N_cert = max(cert_results['current_physical_action'][0].shape)
-        N_uncert = max(uncert_results['current_physical_action'][0].shape)
-        if config.task == Environment.CARTPOLE:
-            spectrum_cert = fft(np.squeeze(cert_results['current_physical_action'][0]))
-            spectrum_uncert = fft(np.squeeze(uncert_results['current_physical_action'][0]))
-            freq_cert = fftfreq(len(spectrum_cert), 1/config.task_config['ctrl_freq'])[:N_cert//2]
-            freq_uncert = fftfreq(len(spectrum_uncert), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
-            ax_fft.plot(freq_cert, 2.0/N_cert * np.abs(spectrum_cert[0:N_cert//2]), 'b-', label='Certified')
-            ax_fft.plot(freq_uncert, 2.0/N_uncert * np.abs(spectrum_uncert[0:N_uncert//2]), 'r--', label='Uncertified')
-            HFC_uncert = freq_uncert.T @ (2.0/N_uncert * np.abs(spectrum_uncert[0:N_uncert//2]))
-            HFC_cert = freq_cert.T @ (2.0/N_cert * np.abs(spectrum_cert[0:N_cert//2]))
-        else:
-            spectrum_cert1 = fft(np.squeeze(cert_results['current_physical_action'][0][:, 0]))
-            spectrum_cert2 = fft(np.squeeze(cert_results['current_physical_action'][0][:, 1]))
-            spectrum_uncert1 = fft(np.squeeze(uncert_results['current_physical_action'][0][:, 0]))
-            spectrum_uncert2 = fft(np.squeeze(uncert_results['current_physical_action'][0][:, 1]))
-            freq_cert1 = fftfreq(len(spectrum_cert1), 1/config.task_config['ctrl_freq'])[:N_cert//2]
-            freq_cert2 = fftfreq(len(spectrum_cert2), 1/config.task_config['ctrl_freq'])[:N_cert//2]
-            freq_uncert1 = fftfreq(len(spectrum_uncert1), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
-            freq_uncert2 = fftfreq(len(spectrum_uncert2), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
-            ax_fft.plot(freq_cert1, 2.0/N_cert * np.abs(spectrum_cert1[0:N_cert//2]), 'b-', label='Certified 1')
-            ax_fft.plot(freq_cert2, 2.0/N_cert * np.abs(spectrum_cert2[0:N_cert//2]), 'b-', label='Certified 2')
-            ax_fft.plot(freq_uncert1, 2.0/N_uncert * np.abs(spectrum_uncert1[0:N_uncert//2]), 'r--', label='Uncertified 1')
-            ax_fft.plot(freq_uncert2, 2.0/N_uncert * np.abs(spectrum_uncert2[0:N_uncert//2]), 'r--', label='Uncertified 2')
-            HFC_uncert = freq_uncert1.T @ (2.0/N_uncert * np.abs(spectrum_uncert1[0:N_uncert//2])) + freq_uncert2.T @ (2.0/N_uncert * np.abs(spectrum_uncert2[0:N_uncert//2]))
-            HFC_cert = freq_cert1.T @ (2.0/N_cert * np.abs(spectrum_cert1[0:N_cert//2])) + freq_cert2.T @ (2.0/N_cert * np.abs(spectrum_cert2[0:N_cert//2]))
-
-        ax_fft.legend()
-        ax_fft.set_title('Fourier Analysis of Inputs')
-        ax_fft.set_xlabel('Frequency')
-        ax_fft.set_ylabel('Magnitude')
-
-        print('Total Uncertified (s):', elapsed_time_uncert)
-        print('Total Certified Time (s):', elapsed_time_cert)
-        print('Number of Corrections:', np.sum(corrections))
-        print('Sum of Corrections:', np.linalg.norm(mpsc_results['correction'][0]))
-        print('Max Correction:', np.max(np.abs(mpsc_results['correction'][0])))
-        print('Number of Feasible Iterations:', np.sum(mpsc_results['feasible'][0]))
-        print('Total Number of Iterations:', uncert_metrics['average_length'])
-        print('Total Number of Certified Iterations:', cert_metrics['average_length'])
-        print('Number of Violations:', uncert_metrics['average_constraint_violation'])
-        print('Number of Certified Violations:', cert_metrics['average_constraint_violation'])
-        print('HFC Uncertified:', HFC_uncert)
-        print('HFC Certified:', HFC_cert)
-        print('2nd Order RoC Uncert:', second_order_rate_of_change(np.squeeze(uncert_results['current_physical_action'][0]), config.task_config.ctrl_freq))
-        print('2nd Order RoC Cert:', second_order_rate_of_change(np.squeeze(cert_results['current_physical_action'][0]), config.task_config.ctrl_freq))
-        print('RMSE Uncertified:', uncert_metrics['average_rmse'])
-        print('RMSE Certified:', cert_metrics['average_rmse'])
-
-        plt.tight_layout()
-        plt.show()
-
-    return uncert_results, uncert_metrics, cert_results, cert_metrics
+    return env.X_GOAL, uncert_results, uncert_metrics, cert_results, cert_metrics
 
 
 def determine_feasible_starting_points(num_points=100):
@@ -517,7 +401,7 @@ def run_multiple(plot=True):
 
     for i in range(starting_points.shape[0]):
         init_state = starting_points[i, :]
-        uncert_results, _, cert_results, _ = run(plot=plot, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=init_state)
+        X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=init_state)
         if i == 0:
             all_uncert_results, all_cert_results = uncert_results, cert_results
         else:
@@ -532,7 +416,9 @@ def run_multiple(plot=True):
     all_results = {'uncert_results': all_uncert_results,
                    'uncert_metrics': uncert_metrics,
                    'cert_results': all_cert_results,
-                   'cert_metrics': cert_metrics}
+                   'cert_metrics': cert_metrics,
+                   'config': config,
+                   'X_GOAL': X_GOAL}
 
     with open(f'./results/{system}/{task}/m{config.sf_config.mpsc_cost_horizon}/results_{system}_{task}_{config.algo}_{config.sf_config.cost_function}_m{config.sf_config.mpsc_cost_horizon}.pkl', 'wb') as f:
         pickle.dump(all_results, f)

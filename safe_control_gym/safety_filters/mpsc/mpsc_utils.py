@@ -7,6 +7,7 @@ from functools import partial
 import cvxpy as cp
 import numpy as np
 import pytope as pt
+from scipy.fftpack import fft, fftfreq
 
 from safe_control_gym.envs.constraints import BoundedConstraint, LinearConstraint
 from safe_control_gym.envs.benchmark_env import Task
@@ -146,19 +147,54 @@ def get_trajectory_on_horizon(env, iteration, horizon):
 
     return clipped_X_GOAL
 
+
+def high_frequency_content(signal, ctrl_freq):
+    '''Calculates the high frequency content of a signal.
+
+    Args:
+        signal (np.ndarray): A array of values.
+
+    Returns:
+        HFC (float): The high frequency content.
+    '''
+
+    N = max(signal.shape)
+    n = min(signal.shape)
+
+    if n == 1:
+        spectrum = fft(signal)
+        freq = fftfreq(len(spectrum), 1/ctrl_freq)[:N//2]
+        HFC = freq.T @ (2.0/N * np.abs(spectrum[0:N//2]))
+        return HFC
+    elif n > 1:
+        HFC = 0
+        for i in range(n):
+            HFC += high_frequency_content(signal[:, [i]], ctrl_freq)
+        return HFC
+
+
 def second_order_rate_of_change(signal, ctrl_freq):
     '''Calculates the sum of the absolute 2nd order rate of change of a signal.
 
     Args:
-        signal (np.ndarray): A 1D array of values.
+        signal (np.ndarray): A array of values.
 
     Returns:
-        second_order_roc (float): The second order rate-of-change.
+        avg_second_order_roc (float): The second order rate-of-change.
     '''
-    first_order_roc = []
-    for i in range(1, signal.shape[0]):
-        first_order_roc.append((signal[i] - signal[i-1])*ctrl_freq)
-    second_order_roc = []
-    for i in range(1, signal.shape[0]-1):
-        second_order_roc.append((first_order_roc[i] - first_order_roc[i-1])*ctrl_freq)
-    return np.sum(np.abs(second_order_roc))/signal.shape[0]
+    n = min(signal.shape)
+
+    if n == 1:
+        first_order_roc = []
+        for i in range(1, signal.shape[0]):
+            first_order_roc.append((signal[i] - signal[i-1])*ctrl_freq)
+        second_order_roc = []
+        for i in range(1, signal.shape[0]-1):
+            second_order_roc.append((first_order_roc[i] - first_order_roc[i-1])*ctrl_freq)
+        avg_second_order_roc = np.sum(np.abs(second_order_roc))/signal.shape[0]
+        return avg_second_order_roc
+    elif n > 1:
+        avg_second_order_roc = 0
+        for i in range(n):
+            avg_second_order_roc += second_order_rate_of_change(signal[:, [i]], ctrl_freq)
+        return avg_second_order_roc
