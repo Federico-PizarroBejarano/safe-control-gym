@@ -312,10 +312,12 @@ def extract_2nd_order_rate_of_change(results_data, certified=True):
     second_order_roc = 0
     for actions in all_actions:
         if n == 1:
-            second_order_roc += second_order_rate_of_change(np.squeeze(actions))
+            ctrl_freq = 15
+            second_order_roc += second_order_rate_of_change(np.squeeze(actions), ctrl_freq)
         elif n > 1:
+            ctrl_freq = 50
             for i in range(n):
-                second_order_roc += second_order_rate_of_change(np.squeeze(actions[:, i]))
+                second_order_roc += second_order_rate_of_change(np.squeeze(actions[:, i]), ctrl_freq)
 
     return second_order_roc/len(all_actions)
 

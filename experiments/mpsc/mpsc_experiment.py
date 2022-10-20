@@ -396,8 +396,8 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         print('Number of Certified Violations:', cert_metrics['average_constraint_violation'])
         print('HFC Uncertified:', HFC_uncert)
         print('HFC Certified:', HFC_cert)
-        print('2nd Order RoC Uncert:', second_order_rate_of_change(np.squeeze(uncert_results['current_physical_action'][0])))
-        print('2nd Order RoC Cert:', second_order_rate_of_change(np.squeeze(cert_results['current_physical_action'][0])))
+        print('2nd Order RoC Uncert:', second_order_rate_of_change(np.squeeze(uncert_results['current_physical_action'][0]), config.task_config.ctrl_freq))
+        print('2nd Order RoC Cert:', second_order_rate_of_change(np.squeeze(cert_results['current_physical_action'][0]), config.task_config.ctrl_freq))
         print('RMSE Uncertified:', uncert_metrics['average_rmse'])
         print('RMSE Certified:', cert_metrics['average_rmse'])
 

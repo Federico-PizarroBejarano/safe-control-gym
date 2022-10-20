@@ -146,19 +146,19 @@ def get_trajectory_on_horizon(env, iteration, horizon):
 
     return clipped_X_GOAL
 
-def second_order_rate_of_change(signal):
+def second_order_rate_of_change(signal, ctrl_freq):
     '''Calculates the sum of the absolute 2nd order rate of change of a signal.
 
     Args:
         signal (np.ndarray): A 1D array of values.
 
     Returns:
-        second_order_roc (float): The second order rate-of-change. 
+        second_order_roc (float): The second order rate-of-change.
     '''
     first_order_roc = []
     for i in range(1, signal.shape[0]):
-        first_order_roc.append(signal[i] - signal[i-1])
+        first_order_roc.append((signal[i] - signal[i-1])*ctrl_freq)
     second_order_roc = []
     for i in range(1, signal.shape[0]-1):
-        second_order_roc.append(first_order_roc[i] - first_order_roc[i-1])
-    return np.sum(np.abs(second_order_roc))
+        second_order_roc.append((first_order_roc[i] - first_order_roc[i-1])*ctrl_freq)
+    return np.sum(np.abs(second_order_roc))/signal.shape[0]
