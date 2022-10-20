@@ -265,7 +265,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     elapsed_time_cert = cert_results['timestamp'][0][-1] - cert_results['timestamp'][0][0]
 
     mpsc_results = cert_results['safety_filter_data'][0]
-    corrections = mpsc_results['correction'][0] > 1e-4
+    corrections = mpsc_results['correction'][0] > 1e-1
     corrections = np.append(corrections, False)
 
     print('Total Uncertified (s):', elapsed_time_uncert)

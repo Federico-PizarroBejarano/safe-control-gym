@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, fftfreq
 
+from safe_control_gym.experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_content, second_order_rate_of_change
 
@@ -87,7 +88,9 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     ax = fig.add_subplot(111)
 
     uncertified_data = []
+    uncertified_data_std = []
     cert_data = defaultdict(list)
+    cert_data_std = defaultdict(list)
     labels = []
 
     for algo in ordered_algos:
@@ -97,9 +100,11 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
 
         for cost in ordered_costs:
             raw_data = all_results[algo][cost]
-            cert_data[cost].append(data_extractor(raw_data))
+            cert_data[cost].append(data_extractor(raw_data)[0])
+            cert_data_std[cost].append(data_extractor(raw_data)[1])
             if show_uncertified and cost == 'one_step':
-                uncertified_data.append(data_extractor(raw_data, certified=False))
+                uncertified_data.append(data_extractor(raw_data, certified=False)[0])
+                uncertified_data_std.append(data_extractor(raw_data, certified=False)[1])
 
     num_bars = len(ordered_costs)+show_uncertified
     width = 1/(num_bars+1)
@@ -108,14 +113,14 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     bars = {}
 
     if show_uncertified:
-        bars['uncertified'] = ax.bar(x - (num_bars-1)/2.0*width, uncertified_data, width, label='Uncertified', color='plum')
+        bars['uncertified'] = ax.bar(x - (num_bars-1)/2.0*width, uncertified_data, yerr=uncertified_data_std, width=width, label='Uncertified', color='plum', capsize=10)
 
     for idx, cost in enumerate(ordered_costs):
         cost_name = cost.replace('_', ' ').title()
         if cost_name == 'Lqr':
             cost_name = 'LQR'
         position = ((num_bars-1)/2.0 - idx - show_uncertified)*width
-        bars[cost] = ax.bar(x - position, cert_data[cost], width, label=f'{cost_name} Cost', color=cost_colors[cost])
+        bars[cost] = ax.bar(x - position, cert_data[cost], yerr=cert_data_std[cost], width=width, label=f'{cost_name} Cost', color=cost_colors[cost], capsize=10)
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
     if ylabel == 'Rmse':
@@ -161,6 +166,7 @@ def plot_violations(system, task, mpsc_cost_horizon):
 
     labels = []
     data = []
+    data_std = []
 
     for algo in ordered_algos:
         if algo not in all_results:
@@ -169,6 +175,8 @@ def plot_violations(system, task, mpsc_cost_horizon):
 
         one_step_cost = all_results[algo]['one_step']
         data.append(one_step_cost['uncert_metrics']['average_constraint_violation'])
+        met = MetricExtractor(one_step_cost['uncert_results'])
+        data_std.append(np.asarray(met.get_episode_constraint_violation_steps()).std())
 
     ax.set_ylabel('Number of Constraint Violations', weight='bold', fontsize=25, labelpad=10)
     task_title = 'Stabilization' if task == 'stab' else 'Trajectory Tracking'
@@ -179,7 +187,7 @@ def plot_violations(system, task, mpsc_cost_horizon):
 
     cm = plt.cm.get_cmap('inferno', len(labels)+2)
     colors = [cm(i) for i in range(1, len(labels)+1)]
-    violations = ax.bar(x, data, color=colors[::-1])
+    violations = ax.bar(x, data, yerr=data_std, color=colors[::-1], capsize=10)
     ax.bar_label(violations, labels=data, padding=3, fontsize=20)
 
     fig.tight_layout()
@@ -200,9 +208,11 @@ def extract_magnitude_of_correction(results_data):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        magnitude_of_correction (float): The mean magnitude of corrections for all experiments.
+        mean_magn_of_corrections (float): The mean magnitude of corrections for all experiments.
+        std_magn_of_corrections (float): The standard deviation of the magnitude of corrections for all experiments.
     '''
-    return np.mean([np.linalg.norm(mpsc_results['correction'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']])
+    magn_of_corrections = [np.linalg.norm(mpsc_results['correction'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    return np.mean(magn_of_corrections), np.std(magn_of_corrections)
 
 
 def extract_max_correction(results_data):
@@ -212,9 +222,12 @@ def extract_max_correction(results_data):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        max_correction (float): The mean max correction for all experiments.
+        mean_max_correction (float): The mean max correction for all experiments.
+        std_max_corrections (float): The standard deviation of max corrections for all experiments.
     '''
-    return np.mean([np.max(np.abs(mpsc_results['correction'][0])) for mpsc_results in results_data['cert_results']['safety_filter_data']])
+    max_corrections = [np.max(np.abs(mpsc_results['correction'][0])) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+
+    return np.mean(max_corrections), np.std(max_corrections)
 
 
 def extract_number_of_corrections(results_data):
@@ -224,9 +237,11 @@ def extract_number_of_corrections(results_data):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        num_corrections (float): The mean number of correction for all experiments.
+        mean_num_corrections (float): The mean number of corrections for all experiments.
+        std_num_corrections (float): The standard deviation of the number of corrections for all experiments.
     '''
-    return np.mean([np.sum(mpsc_results['correction'][0] > 1e-4) for mpsc_results in results_data['cert_results']['safety_filter_data']])
+    num_corrections = [np.sum(mpsc_results['correction'][0] > 1e-1) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    return np.mean(num_corrections), np.std(num_corrections)
 
 
 def extract_rmse(results_data, certified=True):
@@ -236,13 +251,16 @@ def extract_rmse(results_data, certified=True):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        num_corrections (float): The mean RMSE for all experiments.
+        mean_rmse (float): The mean RMSE for all experiments.
+        std_rmse (float): The standard deviation of RMSE for all experiments.
     '''
     if certified:
-        rmse = results_data['cert_metrics']['average_rmse']
+        mean_rmse = results_data['cert_metrics']['average_rmse']
+        std_rmse = results_data['cert_metrics']['rmse_std']
     else:
-        rmse = results_data['uncert_metrics']['average_rmse']
-    return rmse
+        mean_rmse = results_data['uncert_metrics']['average_rmse']
+        std_rmse = results_data['uncert_metrics']['rmse_std']
+    return mean_rmse, std_rmse
 
 
 def extract_simulation_time(results_data, certified=True):
@@ -250,15 +268,18 @@ def extract_simulation_time(results_data, certified=True):
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
 
     Returns:
-        simulation_time (float): The average simulation time for all experiments.
+        mean_sim_time (float): The average simulation time for all experiments.
+        std_sim_time (float): The standard deviation of the simulation time for all experiments.
     '''
     if certified:
-        simulation_time = np.mean([timestamp[-1] - timestamp[0] for timestamp in results_data['cert_results']['timestamp']])
+        sim_time = [timestamp[-1] - timestamp[0] for timestamp in results_data['cert_results']['timestamp']]
     else:
-        simulation_time = np.mean([timestamp[-1] - timestamp[0] for timestamp in results_data['uncert_results']['timestamp']])
-    return simulation_time
+        sim_time = [timestamp[-1] - timestamp[0] for timestamp in results_data['uncert_results']['timestamp']]
+
+    return np.mean(sim_time), np.std(sim_time)
 
 
 def extract_high_frequency_content(results_data, certified=True):
@@ -266,9 +287,11 @@ def extract_high_frequency_content(results_data, certified=True):
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
 
     Returns:
-        HFC (float): The mean HFC for all experiments.
+        mean_HFC (float): The mean HFC for all experiments.
+        std_HFC (float): The standard deviation of the HFC for all experiments.
     '''
     n = min(results_data['cert_results']['current_physical_action'][0].shape)
 
@@ -277,24 +300,26 @@ def extract_high_frequency_content(results_data, certified=True):
     else:
         all_actions = results_data['uncert_results']['current_physical_action']
 
-    HFC = 0
+    HFC = []
     for actions in all_actions:
         if n == 1:
             ctrl_freq = 15
         elif n > 1:
             ctrl_freq = 50
-        HFC += high_frequency_content(actions, ctrl_freq)
+        HFC.append(high_frequency_content(actions, ctrl_freq))
 
-    return HFC/len(all_actions)
+    return np.mean(HFC), np.std(HFC)
 
 def extract_2nd_order_rate_of_change(results_data, certified=True):
     '''Extracts the 2nd_order_rate_of_change from an experiment's data.
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
 
     Returns:
-        second_order_roc (float): The 2nd order rate of change.
+        mean_second_order_roc (float): The mean 2nd order rate of change.
+        std_second_order_roc (float): The standard deviation of the 2nd order rates of change.
     '''
     n = min(results_data['cert_results']['current_physical_action'][0].shape)
 
@@ -303,15 +328,34 @@ def extract_2nd_order_rate_of_change(results_data, certified=True):
     else:
         all_actions = results_data['uncert_results']['current_physical_action']
 
-    second_order_roc = 0
+    second_order_roc = []
     for actions in all_actions:
         if n == 1:
             ctrl_freq = 15
         elif n > 1:
             ctrl_freq = 50
-        second_order_roc += second_order_rate_of_change(actions, ctrl_freq)
+        second_order_roc.append(second_order_rate_of_change(actions, ctrl_freq))
 
-    return second_order_roc/len(all_actions)
+    return np.mean(second_order_roc), np.std(second_order_roc)
+
+
+def extract_num_correction_intervals(results_data):
+    '''Extracts the frequency the safety filter turns on or off from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        mean_num_correction_intervals (float): The mean number of times the filter starts correcting.
+        std_num_correction_intervals (float): The standard deviation of the number of times the filter starts correcting.
+    '''
+    all_corrections = [mpsc_results['correction'][0] > 1e-1 for mpsc_results in results_data['cert_results']['safety_filter_data']]
+
+    correction_frequency = []
+    for corrections in all_corrections:
+        correction_frequency.append((np.diff(corrections)!=0).sum())
+
+    return np.mean(correction_frequency), np.std(correction_frequency)
 
 
 def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
@@ -326,7 +370,7 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
 
     for exp in range(len(uncert_results['obs'])):
         mpsc_results = cert_results['safety_filter_data'][exp]
-        corrections = mpsc_results['correction'][0] > 1e-4
+        corrections = mpsc_results['correction'][0] > 1e-1
         corrections = np.append(corrections, False)
 
         if config.task == Environment.QUADROTOR:
@@ -454,15 +498,16 @@ if __name__ == '__main__':
     plot_violations(system_name, task_name, mpsc_cost_horizon_num)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_num_correction_intervals)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_correction)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)
 
-    # Plotting a single experiment
-    algo_name = 'lqr'
-    mpsc_cost_name = 'one_step'
-    one_result = load_one_experiment(system=system_name, task=task_name, algo=algo_name, mpsc_cost_horizon=mpsc_cost_horizon_num)
-    results = one_result[mpsc_cost_name]
-    plot_trajectories(results['config'], results['X_GOAL'], results['uncert_results'], results['cert_results'])
+    # # Plotting a single experiment
+    # algo_name = 'lqr'
+    # mpsc_cost_name = 'one_step'
+    # one_result = load_one_experiment(system=system_name, task=task_name, algo=algo_name, mpsc_cost_horizon=mpsc_cost_horizon_num)
+    # results = one_result[mpsc_cost_name]
+    # plot_trajectories(results['config'], results['X_GOAL'], results['uncert_results'], results['cert_results'])
