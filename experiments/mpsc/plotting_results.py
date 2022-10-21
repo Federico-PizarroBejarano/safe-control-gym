@@ -21,6 +21,11 @@ ordered_costs = ['one_step', 'regularized', 'lqr', 'precomputed', 'learned']
 
 cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'regularized': 'pink', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
 
+U_EQs = {
+    'cartpole': 0,
+    'quadrotor_2D': 0.1323,
+    'quadrotor_3D': 0.06615
+}
 
 def load_one_experiment(system, task, algo, mpsc_cost_horizon):
     '''Loads the results of every MPSC cost function for a specific experiment.
@@ -240,7 +245,7 @@ def extract_number_of_corrections(results_data):
         mean_num_corrections (float): The mean number of corrections for all experiments.
         std_num_corrections (float): The standard deviation of the number of corrections for all experiments.
     '''
-    num_corrections = [np.sum(mpsc_results['correction'][0] > 1e-1) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    num_corrections = [np.sum(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_physical_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
     return np.mean(num_corrections), np.std(num_corrections)
 
 
@@ -349,7 +354,7 @@ def extract_num_correction_intervals(results_data):
         mean_num_correction_intervals (float): The mean number of times the filter starts correcting.
         std_num_correction_intervals (float): The standard deviation of the number of times the filter starts correcting.
     '''
-    all_corrections = [mpsc_results['correction'][0] > 1e-1 for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    all_corrections = [(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_physical_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
 
     correction_frequency = []
     for corrections in all_corrections:
@@ -367,16 +372,18 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
         uncert_results (dict): The results of the uncertified experiment.
         cert_results (dict): The results of the certified experiment.
     '''
+    met = MetricExtractor(cert_results)
+    print('Total Certified Violations:', np.asarray(met.get_episode_constraint_violation_steps()).sum())
+
+    if config.task == Environment.QUADROTOR:
+        system = f'quadrotor_{str(config.task_config.quad_type)}D'
+    else:
+        system = config.task
 
     for exp in range(len(uncert_results['obs'])):
         mpsc_results = cert_results['safety_filter_data'][exp]
-        corrections = mpsc_results['correction'][0] > 1e-1
+        corrections = mpsc_results['correction'][0]*10.0 > np.linalg.norm(cert_results['current_physical_action'][exp] - U_EQs[system], axis=1)
         corrections = np.append(corrections, False)
-
-        if config.task == Environment.QUADROTOR:
-            system = f'quadrotor_{str(config.task_config.quad_type)}D'
-        else:
-            system = config.task
 
         if system == Environment.CARTPOLE:
             graph1_1 = 2
