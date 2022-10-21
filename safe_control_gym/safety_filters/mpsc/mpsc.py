@@ -210,7 +210,7 @@ class MPSC(BaseSafetyFilter, ABC):
             certified_action (ndarray): The certified action
             success (bool): Whether the safety filtering was successful or not.
         '''
-
+        uncertified_action = np.clip(uncertified_action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
         self.results_dict['uncertified_action'].append(uncertified_action)
         success = True
 

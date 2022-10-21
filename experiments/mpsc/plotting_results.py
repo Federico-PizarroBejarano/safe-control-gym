@@ -16,8 +16,6 @@ from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_conte
 plot = True
 save_figs = False
 ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
-ordered_costs = ['one_step', 'regularized', 'lqr', 'precomputed', 'learned']
-# ordered_costs = ['one_step', 'constant', 'regularized', 'lqr', 'precomputed', 'learned']
 
 cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'regularized': 'pink', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
 
@@ -138,10 +136,27 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     ax.legend(fontsize=25)
 
     if show_uncertified:
-        ax.bar_label(bars['uncertified'], labels=np.round(uncertified_data, 1), padding=3, fontsize=20)
+        rounded_labels = []
+        for l in uncertified_data:
+            if l > 100:
+                rounded_labels.append(int(l))
+            elif l > 1:
+                rounded_labels.append(round(l, 1))
+            else:
+                rounded_labels.append(round(l, 2))
+
+        ax.bar_label(bars['uncertified'], labels=rounded_labels, padding=3, fontsize=20)
 
     for cost in ordered_costs:
-        ax.bar_label(bars[cost], labels=np.round(cert_data[cost], 1), padding=3, fontsize=20)
+        rounded_labels = []
+        for l in cert_data[cost]:
+            if l > 100:
+                rounded_labels.append(int(l))
+            elif l > 1:
+                rounded_labels.append(round(l, 1))
+            else:
+                rounded_labels.append(round(l, 2))
+        ax.bar_label(bars[cost], labels=rounded_labels, padding=3, fontsize=20)
 
     fig.tight_layout()
 
@@ -287,6 +302,29 @@ def extract_simulation_time(results_data, certified=True):
     return np.mean(sim_time), np.std(sim_time)
 
 
+def extract_constraint_violations(results_data, certified=True):
+    '''Extracts the simulation time from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
+
+    Returns:
+        num_violations_mean (float): The average number of constraint violations for all experiments.
+        num_violations_std (float): The standard deviation of the number of constraint violations for all experiments.
+    '''
+    if certified:
+        num_violations_mean = results_data['cert_metrics']['average_constraint_violation']
+        met = MetricExtractor(results_data['cert_results'])
+        num_violations_std = np.asarray(met.get_episode_constraint_violation_steps()).std()
+    else:
+        num_violations_mean = results_data['uncert_metrics']['average_constraint_violation']
+        met = MetricExtractor(results_data['uncert_results'])
+        num_violations_std = np.asarray(met.get_episode_constraint_violation_steps()).std()
+
+    return num_violations_mean, num_violations_std
+
+
 def extract_high_frequency_content(results_data, certified=True):
     '''Extracts the high frequency content (HFC) from the inputs of an experiment's data.
 
@@ -311,7 +349,7 @@ def extract_high_frequency_content(results_data, certified=True):
             ctrl_freq = 15
         elif n > 1:
             ctrl_freq = 50
-        HFC.append(high_frequency_content(actions, ctrl_freq))
+        HFC.append(high_frequency_content(actions - U_EQs[system_name], ctrl_freq))
 
     return np.mean(HFC), np.std(HFC)
 
@@ -339,7 +377,7 @@ def extract_2nd_order_rate_of_change(results_data, certified=True):
             ctrl_freq = 15
         elif n > 1:
             ctrl_freq = 50
-        second_order_roc.append(second_order_rate_of_change(actions, ctrl_freq))
+        second_order_roc.append(second_order_rate_of_change(actions - U_EQs[system_name], ctrl_freq))
 
     return np.mean(second_order_roc), np.std(second_order_roc)
 
@@ -502,6 +540,11 @@ if __name__ == '__main__':
     task_name = 'stab'
     mpsc_cost_horizon_num = 2
 
+    if mpsc_cost_horizon_num == 2:
+        ordered_costs = ['one_step', 'constant', 'regularized', 'lqr', 'precomputed', 'learned']
+    else:
+        ordered_costs = ['one_step', 'regularized', 'lqr', 'precomputed', 'learned']
+
     plot_violations(system_name, task_name, mpsc_cost_horizon_num)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change)
@@ -511,6 +554,7 @@ if __name__ == '__main__':
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
     plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)
+    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_constraint_violations)
 
     # # Plotting a single experiment
     # algo_name = 'lqr'

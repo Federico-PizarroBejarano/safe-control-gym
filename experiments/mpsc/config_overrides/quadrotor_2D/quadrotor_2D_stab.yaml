@@ -81,10 +81,10 @@ task_config:
     - constraint_form: default_constraint
       constrained_variable: input
       upper_bounds:
-        - 0.3
-        - 0.3
+        - 0.29
+        - 0.29
       lower_bounds:
-        - 0
-        - 0
+        - 0.06
+        - 0.06
   done_on_out_of_bound: True
   done_on_violation: False

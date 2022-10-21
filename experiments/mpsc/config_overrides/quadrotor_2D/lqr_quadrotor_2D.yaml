@@ -4,12 +4,12 @@ algo_config:
   r_lqr:
     - 0.1
   q_lqr:
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
-    - 1
+    - 5
+    - 0.1
+    - 5
+    - 0.1
+    - 0.1
+    - 0.1
 
   # Model arguments
   discrete_dynamics: True
