@@ -260,7 +260,7 @@ def extract_number_of_corrections(results_data):
         mean_num_corrections (float): The mean number of corrections for all experiments.
         std_num_corrections (float): The standard deviation of the number of corrections for all experiments.
     '''
-    num_corrections = [np.sum(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_physical_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
+    num_corrections = [np.sum(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
     return np.mean(num_corrections), np.std(num_corrections)
 
 
@@ -336,12 +336,12 @@ def extract_high_frequency_content(results_data, certified=True):
         mean_HFC (float): The mean HFC for all experiments.
         std_HFC (float): The standard deviation of the HFC for all experiments.
     '''
-    n = min(results_data['cert_results']['current_physical_action'][0].shape)
+    n = min(results_data['cert_results']['current_clipped_action'][0].shape)
 
     if certified:
-        all_actions = results_data['cert_results']['current_physical_action']
+        all_actions = results_data['cert_results']['current_clipped_action']
     else:
-        all_actions = results_data['uncert_results']['current_physical_action']
+        all_actions = results_data['uncert_results']['current_clipped_action']
 
     HFC = []
     for actions in all_actions:
@@ -364,12 +364,12 @@ def extract_2nd_order_rate_of_change(results_data, certified=True):
         mean_second_order_roc (float): The mean 2nd order rate of change.
         std_second_order_roc (float): The standard deviation of the 2nd order rates of change.
     '''
-    n = min(results_data['cert_results']['current_physical_action'][0].shape)
+    n = min(results_data['cert_results']['current_clipped_action'][0].shape)
 
     if certified:
-        all_actions = results_data['cert_results']['current_physical_action']
+        all_actions = results_data['cert_results']['current_clipped_action']
     else:
-        all_actions = results_data['uncert_results']['current_physical_action']
+        all_actions = results_data['uncert_results']['current_clipped_action']
 
     second_order_roc = []
     for actions in all_actions:
@@ -392,7 +392,7 @@ def extract_num_correction_intervals(results_data):
         mean_num_correction_intervals (float): The mean number of times the filter starts correcting.
         std_num_correction_intervals (float): The standard deviation of the number of times the filter starts correcting.
     '''
-    all_corrections = [(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_physical_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
+    all_corrections = [(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
 
     correction_frequency = []
     for corrections in all_corrections:
@@ -419,8 +419,11 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
         system = config.task
 
     for exp in range(len(uncert_results['obs'])):
+        specific_results = {key:[cert_results[key][exp]] for key in cert_results.keys()}
+        met = MetricExtractor(specific_results)
+        print(f'Total Certified Violations ({exp}):', np.asarray(met.get_episode_constraint_violation_steps()).sum())
         mpsc_results = cert_results['safety_filter_data'][exp]
-        corrections = mpsc_results['correction'][0]*10.0 > np.linalg.norm(cert_results['current_physical_action'][exp] - U_EQs[system], axis=1)
+        corrections = mpsc_results['correction'][0]*10.0 > np.linalg.norm(cert_results['current_clipped_action'][exp] - U_EQs[system], axis=1)
         corrections = np.append(corrections, False)
 
         if system == Environment.CARTPOLE:
@@ -489,13 +492,13 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
 
         _, ax_act = plt.subplots()
         if config.task == Environment.CARTPOLE:
-            ax_act.plot(cert_results['current_physical_action'][exp][:], 'b-', label='Certified Input')
+            ax_act.plot(cert_results['current_clipped_action'][exp][:], 'b-', label='Certified Input')
             ax_act.plot(mpsc_results['uncertified_action'][0][:], 'r--', label='Attempted Input')
-            ax_act.plot(uncert_results['current_physical_action'][exp][:], 'g--', label='Uncertified Input')
+            ax_act.plot(uncert_results['current_clipped_action'][exp][:], 'g--', label='Uncertified Input')
         else:
-            ax_act.plot(cert_results['current_physical_action'][exp][:, 0], 'b-', label='Certified Input 1')
+            ax_act.plot(cert_results['current_clipped_action'][exp][:, 0], 'b-', label='Certified Input 1')
             ax_act.plot(mpsc_results['uncertified_action'][0][:, 0], 'r-', label='Attempted Input 1')
-            ax_act.plot(uncert_results['current_physical_action'][exp][:, 0], 'g-', label='Uncertified Input 1')
+            ax_act.plot(uncert_results['current_clipped_action'][exp][:, 0], 'g-', label='Uncertified Input 1')
         ax_act.legend()
         ax_act.set_title('Input comparison')
         ax_act.set_xlabel('Step')
@@ -503,20 +506,20 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
         ax_act.set_box_aspect(0.5)
 
         _, ax_fft = plt.subplots()
-        N_cert = max(cert_results['current_physical_action'][exp].shape)
-        N_uncert = max(uncert_results['current_physical_action'][exp].shape)
+        N_cert = max(cert_results['current_clipped_action'][exp].shape)
+        N_uncert = max(uncert_results['current_clipped_action'][exp].shape)
         if config.task == Environment.CARTPOLE:
-            spectrum_cert = fft(np.squeeze(cert_results['current_physical_action'][exp]))
-            spectrum_uncert = fft(np.squeeze(uncert_results['current_physical_action'][exp]))
+            spectrum_cert = fft(np.squeeze(cert_results['current_clipped_action'][exp]))
+            spectrum_uncert = fft(np.squeeze(uncert_results['current_clipped_action'][exp]))
             freq_cert = fftfreq(len(spectrum_cert), 1/config.task_config['ctrl_freq'])[:N_cert//2]
             freq_uncert = fftfreq(len(spectrum_uncert), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
             ax_fft.plot(freq_cert, 2.0/N_cert * np.abs(spectrum_cert[0:N_cert//2]), 'b-', label='Certified')
             ax_fft.plot(freq_uncert, 2.0/N_uncert * np.abs(spectrum_uncert[0:N_uncert//2]), 'r--', label='Uncertified')
         else:
-            spectrum_cert1 = fft(np.squeeze(cert_results['current_physical_action'][exp][:, 0]))
-            spectrum_cert2 = fft(np.squeeze(cert_results['current_physical_action'][exp][:, 1]))
-            spectrum_uncert1 = fft(np.squeeze(uncert_results['current_physical_action'][exp][:, 0]))
-            spectrum_uncert2 = fft(np.squeeze(uncert_results['current_physical_action'][exp][:, 1]))
+            spectrum_cert1 = fft(np.squeeze(cert_results['current_clipped_action'][exp][:, 0]))
+            spectrum_cert2 = fft(np.squeeze(cert_results['current_clipped_action'][exp][:, 1]))
+            spectrum_uncert1 = fft(np.squeeze(uncert_results['current_clipped_action'][exp][:, 0]))
+            spectrum_uncert2 = fft(np.squeeze(uncert_results['current_clipped_action'][exp][:, 1]))
             freq_cert1 = fftfreq(len(spectrum_cert1), 1/config.task_config['ctrl_freq'])[:N_cert//2]
             freq_cert2 = fftfreq(len(spectrum_cert2), 1/config.task_config['ctrl_freq'])[:N_cert//2]
             freq_uncert1 = fftfreq(len(spectrum_uncert1), 1/config.task_config['ctrl_freq'])[:N_uncert//2]

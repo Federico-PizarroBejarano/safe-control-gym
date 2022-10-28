@@ -356,13 +356,14 @@ def determine_feasible_starting_points(num_points=100):
 
         _, uncert_metrics = uncert_experiment.run_evaluation(n_episodes=1)
         uncert_experiment.reset()
-        cert_results, cert_metrics = cert_experiment.run_evaluation(n_steps=2)
+        cert_results, cert_metrics = cert_experiment.run_evaluation(n_steps=10)
         cert_experiment.reset()
         test_env.close()
 
         mpsc_results = cert_results['safety_filter_data'][0]
 
-        if np.all(mpsc_results['feasible']) \
+        if  cert_metrics['average_length'] == 10 \
+                and np.all(mpsc_results['feasible']) \
                 and uncert_metrics['average_constraint_violation'] > 5 \
                 and uncert_metrics['average_length'] ==  config.task_config.ctrl_freq * config.task_config.episode_len_sec \
                 and cert_metrics['average_constraint_violation'] == 0:
