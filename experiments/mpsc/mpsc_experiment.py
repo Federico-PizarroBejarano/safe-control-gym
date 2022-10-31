@@ -318,7 +318,16 @@ def determine_feasible_starting_points(num_points=100):
     env_func = partial(make,
                        config.task,
                        **config.task_config)
-    generator_env = env_func(init_state=None, randomized_init=True, init_state_randomization_info=reachable_state_randomization[system])
+    state_randomization = reachable_state_randomization[system]
+    if system == 'quadrotor_3D':
+        for state in state_randomization.keys():
+            if 'x' not in  state and 'y' not in state and 'z' not in state:
+                state_randomization[state]['low'] = 0.1*state_randomization[state]['low']
+                state_randomization[state]['high'] = 0.1*state_randomization[state]['high']
+            else:
+                state_randomization[state]['low'] = 0.5*state_randomization[state]['low']
+                state_randomization[state]['high'] = 0.5*state_randomization[state]['high']
+    generator_env = env_func(init_state=None, randomized_init=True, init_state_randomization_info=state_randomization)
 
     # Setup controller.
     ctrl = make(config.algo,
