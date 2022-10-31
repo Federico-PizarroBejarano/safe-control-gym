@@ -8,11 +8,11 @@ task_config:
   normalized_rl_action_space: True
 
   init_state:
-    init_x: 0.5
+    init_x: 0.4
     init_x_dot: 0
-    init_y: 0.5
+    init_y: 0.4
     init_y_dot: 0
-    init_z: 1.5
+    init_z: 1.4
     init_z_dot: 0
     init_phi: 0
     init_theta: 0

@@ -150,9 +150,9 @@ class NL_MPSC(MPSC):
         self.synthesize_lyapunov()
         self.get_terminal_ingredients()
 
-        self.L_x = cs.MX(self.L_x)
-        self.L_u = cs.MX(self.L_u)
-        self.l = cs.MX(self.l)
+        self.L_x_sym = cs.MX(self.L_x)
+        self.L_u_sym = cs.MX(self.L_u)
+        self.l_sym = cs.MX(self.l)
         self.setup_optimizer()
 
     def get_error_function(self, env):
@@ -687,9 +687,9 @@ class NL_MPSC(MPSC):
         self.P_f = parameters['P_f']
         self.K_f = parameters['K_f']
 
-        self.L_x = cs.MX(self.L_x)
-        self.L_u = cs.MX(self.L_u)
-        self.l = cs.MX(self.l)
+        self.L_x_sym = cs.MX(self.L_x)
+        self.L_u_sym = cs.MX(self.L_u)
+        self.l_sym = cs.MX(self.l)
 
         self.setup_optimizer()
 
@@ -761,7 +761,7 @@ class NL_MPSC(MPSC):
             # Constraints
             for j in range(self.p):
                 tighten_by = self.c_js[j]*s_var[:, i+1]
-                opti.subject_to(self.L_x[j, :] @ (z_var[:, i+1]-self.X_mid) + self.L_u[j, :] @ (v_var[:, i]-self.U_mid) - self.l[j] + tighten_by <= 0)
+                opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i+1]-self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i]-self.U_mid) - self.l_sym[j] + tighten_by <= 0)
 
         # Final state constraints
         if self.use_terminal_set:
