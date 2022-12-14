@@ -6,7 +6,7 @@ from functools import partial
 
 import numpy as np
 
-from safe_control_gym.experiment import Experiment
+from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
@@ -213,7 +213,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
 
     # Run without safety filter
-    experiment = Experiment(env, ctrl)
+    experiment = BaseExperiment(env, ctrl)
     uncert_results, uncert_metrics = experiment.run_evaluation(n_episodes=n_episodes, n_steps=n_steps)
     ctrl.reset()
 
@@ -256,7 +256,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         safety_filter.setup_optimizer()
 
     # Run with safety filter
-    experiment = Experiment(env, ctrl, safety_filter=safety_filter)
+    experiment = BaseExperiment(env, ctrl, safety_filter=safety_filter)
     cert_results, cert_metrics = experiment.run_evaluation(n_episodes=n_episodes, n_steps=n_steps)
     experiment.close()
     safety_filter.close()
@@ -360,8 +360,8 @@ def determine_feasible_starting_points(num_points=100):
         init_state = generator_env.state
         test_env = env_func(init_state=init_state, randomized_init=False)
 
-        uncert_experiment = Experiment(test_env, ctrl)
-        cert_experiment = Experiment(test_env, ctrl, safety_filter=safety_filter)
+        uncert_experiment = BaseExperiment(test_env, ctrl)
+        cert_experiment = BaseExperiment(test_env, ctrl, safety_filter=safety_filter)
 
         _, uncert_metrics = uncert_experiment.run_evaluation(n_episodes=1)
         uncert_experiment.reset()
@@ -420,8 +420,8 @@ def run_multiple(plot=True):
                     all_uncert_results[key].append(uncert_results[key][0])
                 all_cert_results[key].append(cert_results[key][0])
 
-    uncert_metrics = Experiment.compute_metrics(all_uncert_results)
-    cert_metrics = Experiment.compute_metrics(all_cert_results)
+    uncert_metrics = BaseExperiment.compute_metrics(all_uncert_results)
+    cert_metrics = BaseExperiment.compute_metrics(all_cert_results)
 
     all_results = {'uncert_results': all_uncert_results,
                    'uncert_metrics': uncert_metrics,

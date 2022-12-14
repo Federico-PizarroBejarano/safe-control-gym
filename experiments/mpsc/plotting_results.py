@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, fftfreq
 
-from safe_control_gym.experiment import MetricExtractor
+from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_content, second_order_rate_of_change
 
