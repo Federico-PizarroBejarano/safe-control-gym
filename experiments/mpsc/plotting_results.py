@@ -41,7 +41,7 @@ def load_one_experiment(system, task, algo, mpsc_cost_horizon):
     all_results = {}
 
     for cost in ordered_costs:
-        with open(f'./results/{system}/{task}/m{mpsc_cost_horizon}/results_{system}_{task}_{algo}_{cost}_cost_m{mpsc_cost_horizon}.pkl', 'rb') as f:
+        with open(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/results_{system}_{task}_{algo}_{cost}_cost_m{mpsc_cost_horizon}.pkl', 'rb') as f:
             all_results[cost] = pickle.load(f)
 
     return all_results
@@ -167,7 +167,7 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
 
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
-        fig.savefig(f'./results/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_{image_suffix}_m{mpsc_cost_horizon}.png', dpi=300)
+        fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_{image_suffix}_m{mpsc_cost_horizon}.png', dpi=300)
 
 
 def plot_violations(system, task, mpsc_cost_horizon):
@@ -218,7 +218,7 @@ def plot_violations(system, task, mpsc_cost_horizon):
     if plot is True:
         plt.show()
     if save_figs:
-        fig.savefig(f'./results/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
+        fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
 
 
 def extract_magnitude_of_correction(results_data):

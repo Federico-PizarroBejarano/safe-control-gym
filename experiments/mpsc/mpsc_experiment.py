@@ -429,7 +429,7 @@ def run_multiple(plot=True):
                    'config': config,
                    'X_GOAL': X_GOAL}
 
-    with open(f'./results/{system}/{task}/m{config.sf_config.mpsc_cost_horizon}/results_{system}_{task}_{config.algo}_{config.sf_config.cost_function}_m{config.sf_config.mpsc_cost_horizon}.pkl', 'wb') as f:
+    with open(f'./results_mpsc/{system}/{task}/m{config.sf_config.mpsc_cost_horizon}/results_{system}_{task}_{config.algo}_{config.sf_config.cost_function}_m{config.sf_config.mpsc_cost_horizon}.pkl', 'wb') as f:
         pickle.dump(all_results, f)
 
     return all_uncert_results, uncert_metrics, all_cert_results, cert_metrics
