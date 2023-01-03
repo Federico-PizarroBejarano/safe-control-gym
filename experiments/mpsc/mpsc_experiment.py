@@ -10,7 +10,7 @@ from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, high_frequency_content, second_order_rate_of_change
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, high_frequency_content, second_order_rate_of_change, approximate_LQR_gain
 from experiments.mpsc.plotting_results import plot_trajectories
 
 
@@ -223,6 +223,21 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                 **config.sf_config)
     safety_filter.reset()
 
+    if config.sf_config.cost_function == Cost_Function.LQR_COST:
+        if config.algo == 'lqr':
+            safety_filter.cost_function.gain = ctrl.gain
+        else:
+            safety_filter.cost_function.gain = approximate_LQR_gain(env, ctrl, config, curr_path)
+    elif config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
+        safety_filter.cost_function.uncertified_controller = ctrl
+        safety_filter.cost_function.output_dir = curr_path
+        if config.algo == 'pid':
+            ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
+    elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
+        safety_filter.cost_function.uncertified_controller = ctrl
+        safety_filter.cost_function.regularization_const = regularization_parameters[system][task][config.algo]
+        safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl')
+
     if training is True:
         train_env = env_func(randomized_init=True,
                              init_state_randomization_info=reachable_state_randomization[system],
@@ -236,23 +251,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     else:
         safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
 
-    if config.sf_config.cost_function == Cost_Function.LQR_COST:
-        if config.algo == 'lqr':
-            q_lin = config.algo_config.q_lqr
-            r_lin = config.algo_config.r_lqr
-        else:
-            q_lin = [1]*safety_filter.model.nx
-            r_lin = [0.1]
-        safety_filter.cost_function.set_lqr_matrices(q_lin, r_lin)
-    elif config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
-        safety_filter.cost_function.uncertified_controller = ctrl
-        safety_filter.cost_function.output_dir = curr_path
-        if config.algo == 'pid':
-            ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
-    elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
-        safety_filter.cost_function.uncertified_controller = ctrl
-        safety_filter.cost_function.regularization_const = regularization_parameters[system][task][config.algo]
-        safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl')
+    if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.setup_optimizer()
 
     # Run with safety filter
@@ -436,7 +435,64 @@ def run_multiple(plot=True):
     return all_uncert_results, uncert_metrics, all_cert_results, cert_metrics
 
 
+def run_uncertified_trajectory(n_episodes=10):
+    '''Runs and saves several initializations of the uncertified trajectories.
+
+    Args:
+        n_episodes (int): The number of episodes to execute.
+    '''
+
+    # Define arguments.
+    fac = ConfigFactory()
+    config = fac.merge()
+    config.algo_config['training'] = False
+    config.task_config['randomized_init'] = False
+    if config.algo in ['ppo', 'sac']:
+        config.task_config['cost'] = Cost.RL_REWARD
+        config.task_config['normalized_rl_action_space'] = True
+    else:
+        config.task_config['cost'] = Cost.QUADRATIC
+        config.task_config['normalized_rl_action_space'] = False
+
+    task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
+    if config.task == Environment.QUADROTOR:
+        system = f'quadrotor_{str(config.task_config.quad_type)}D'
+    else:
+        system = config.task
+
+    env_func = partial(make,
+                       config.task,
+                       **config.task_config)
+    env = env_func()
+
+    # Setup controller.
+    ctrl = make(config.algo,
+                    env_func,
+                    **config.algo_config,
+                    output_dir='./temp')
+
+    if config.algo in ['ppo', 'sac']:
+        # Load state_dict from trained.
+        ctrl.load(f'./models/rl_models/{config.algo}_model_{system}_{task}.pt')
+
+        # Remove temporary files and directories
+        shutil.rmtree('./temp', ignore_errors=True)
+
+    # Run without safety filter
+    experiment = BaseExperiment(env, ctrl)
+    uncert_results, _ = experiment.run_evaluation(n_episodes=n_episodes)
+    experiment.close()
+
+    if len(np.unique([len(uncert_results['state'][i]) for i in range(n_episodes)])) > 1:
+        print('[ERROR] - One or more experiments failed. Lengths are: ')
+        print([len(uncert_results['state'][i]) for i in range(n_episodes)])
+        raise Exception()
+
+    with open(f'./models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl', 'wb') as f:
+        pickle.dump(uncert_results, f)
+
 if __name__ == '__main__':
     run()
+    # run_uncertified_trajectory()
     # determine_feasible_starting_points(num_points=10)
     # run_multiple(plot=False)
