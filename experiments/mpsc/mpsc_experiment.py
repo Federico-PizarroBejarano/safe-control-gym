@@ -115,41 +115,41 @@ regularization_parameters = {
     'cartpole': {
         'stab': {
             'lqr': 0.0,
-            'ppo': 0.0,
-            'sac': 0.0,
+            'ppo': 0.125,
+            'sac': 0.07,
         },
         'track': {
             'lqr': 0.0,
-            'ppo': 5.0,
-            'sac': 200.0,
+            'ppo': 0.01,
+            'sac': 1000.0,
         },
     },
     'quadrotor_2D': {
         'stab': {
             'lqr': 0.0,
-            'pid': 10.0,
-            'ppo': 10.0,
-            'sac': 10.0,
+            'pid': 2.5,
+            'ppo': 1.0,
+            'sac': 1.0,
         },
         'track': {
             'lqr': 0.0,
-            'pid': 10.0,
-            'ppo': 10.0,
-            'sac': 10.0,
+            'pid': 10000.0,
+            'ppo': 10000.0,
+            'sac': 100.0,
         },
     },
     'quadrotor_3D': {
         'stab': {
-            'lqr': 0.0,
-            'pid': 10.0,
-            'ppo': 10.0,
-            'sac': 10.0,
+            'lqr': 15.0,
+            'pid': 10000.0,
+            'ppo': 100.0,
+            'sac': 100.0,
         },
         'track': {
-            'lqr': 0.0,
-            'pid': 10.0,
-            'ppo': 10.0,
-            'sac': 10.0,
+            'lqr': 1000000.0,
+            'pid': 10000.0,
+            'ppo': 100.0,
+            'sac': 100.0,
         },
     }
 }

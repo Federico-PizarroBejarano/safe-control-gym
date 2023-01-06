@@ -9,7 +9,7 @@ MPSC_COST_HORIZON=2
 for TASK in stab track; do
     for ALGO in lqr pid ppo sac; do
         for SAFETY_FILTER in nl_mpsc; do
-            for MPSC_COST in one_step_cost constant_cost lqr_cost precomputed_cost; do
+            for MPSC_COST in one_step_cost constant_cost regularized_cost lqr_cost precomputed_cost learned_cost; do
                 echo STARTING TEST $SYS $TASK $ALGO $SAFETY_FILTER $MPSC_COST
 
                 if [ "$SYS" == 'cartpole' ] && [ "$ALGO" == 'pid' ]; then
