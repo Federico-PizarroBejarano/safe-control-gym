@@ -364,8 +364,8 @@ def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
         mode (string): Either 'input' or 'correction', denoting which signal to use.
 
     Returns:
-        mean_second_order_roc (float): The mean 2nd order rate of change.
-        std_second_order_roc (float): The standard deviation of the 2nd order rates of change.
+        mean_roc (float): The mean rate of change.
+        std_roc (float): The standard deviation of the rates of change.
     '''
     n = min(results_data['cert_results']['current_clipped_action'][0].shape)
 

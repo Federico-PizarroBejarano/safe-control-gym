@@ -10,7 +10,7 @@ from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, high_frequency_content, second_order_rate_of_change, approximate_LQR_gain
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, high_frequency_content, get_discrete_derivative, approximate_LQR_gain
 from experiments.mpsc.plotting_results import plot_trajectories
 
 
@@ -279,8 +279,14 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     print('Number of Certified Violations:', cert_metrics['average_constraint_violation'])
     print('HFC Uncertified:', high_frequency_content(uncert_results['current_physical_action'][0], config.task_config.ctrl_freq))
     print('HFC Certified:', high_frequency_content(cert_results['current_physical_action'][0], config.task_config.ctrl_freq))
-    print('2nd Order RoC Uncert:', second_order_rate_of_change(uncert_results['current_physical_action'][0], config.task_config.ctrl_freq))
-    print('2nd Order RoC Cert:', second_order_rate_of_change(cert_results['current_physical_action'][0], config.task_config.ctrl_freq))
+    derivative = get_discrete_derivative(uncert_results['current_physical_action'][0] - safety_filter.U_EQ[0], config.task_config.ctrl_freq)
+    derivative = get_discrete_derivative(derivative, config.task_config.ctrl_freq)
+    total_derivatives = np.linalg.norm(derivative, 'fro')/len(uncert_results['current_physical_action'][0])
+    print('2nd Order RoC Uncert:', total_derivatives)
+    derivative = get_discrete_derivative(cert_results['current_physical_action'][0] - safety_filter.U_EQ[0], config.task_config.ctrl_freq)
+    derivative = get_discrete_derivative(derivative, config.task_config.ctrl_freq)
+    total_derivatives = np.linalg.norm(derivative, 'fro')/len(uncert_results['current_physical_action'][0])
+    print('2nd Order RoC Cert:', total_derivatives)
     print('RMSE Uncertified:', uncert_metrics['average_rmse'])
     print('RMSE Certified:', cert_metrics['average_rmse'])
 
