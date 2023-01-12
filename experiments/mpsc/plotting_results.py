@@ -388,7 +388,7 @@ def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
         derivative = get_discrete_derivative(signal, ctrl_freq)
         if order == 2:
             derivative = get_discrete_derivative(derivative, ctrl_freq)
-        total_derivatives.append(np.linalg.norm(derivative, 'fro')/len(signal))
+        total_derivatives.append(np.linalg.norm(derivative, 'fro'))
 
     return np.mean(total_derivatives), np.std(total_derivatives)
 
