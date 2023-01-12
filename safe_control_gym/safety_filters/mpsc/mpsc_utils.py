@@ -176,31 +176,17 @@ def high_frequency_content(signal, ctrl_freq):
         return HFC
 
 
-def second_order_rate_of_change(signal, ctrl_freq):
-    '''Calculates the sum of the absolute 2nd order rate of change of a signal.
+def get_discrete_derivative(signal, ctrl_freq):
+    '''Calculates the discrete derivative of a signal.
 
     Args:
         signal (np.ndarray): A array of values.
 
     Returns:
-        avg_second_order_roc (float): The second order rate-of-change.
+        discrete_derivative (float): The discrete_derivative of the signal.
     '''
-    n = min(signal.shape)
-
-    if n == 1:
-        first_order_roc = []
-        for i in range(1, signal.shape[0]):
-            first_order_roc.append((signal[i] - signal[i-1])*ctrl_freq)
-        second_order_roc = []
-        for i in range(1, signal.shape[0]-1):
-            second_order_roc.append((first_order_roc[i] - first_order_roc[i-1])*ctrl_freq)
-        avg_second_order_roc = np.sum(np.abs(second_order_roc))/signal.shape[0]
-        return avg_second_order_roc
-    elif n > 1:
-        avg_second_order_roc = 0
-        for i in range(n):
-            avg_second_order_roc += second_order_rate_of_change(signal[:, [i]], ctrl_freq)
-        return avg_second_order_roc
+    discrete_derivative = (signal[1:, :] - signal[:-1, :])*ctrl_freq
+    return discrete_derivative
 
 
 def approximate_LQR_gain(env, ctrl, config, curr_path='.'):

@@ -10,7 +10,7 @@ from scipy.fftpack import fft, fftfreq
 
 from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_content, second_order_rate_of_change
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_content, get_discrete_derivative
 
 
 plot = True
@@ -353,12 +353,15 @@ def extract_high_frequency_content(results_data, certified=True):
 
     return np.mean(HFC), np.std(HFC)
 
-def extract_2nd_order_rate_of_change(results_data, certified=True):
-    '''Extracts the 2nd_order_rate_of_change from an experiment's data.
+
+def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
+    '''Extracts the rate of change of a signal from an experiment's data.
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
         certified (bool): Whether to extract the certified data or uncertified data.
+        order (int): Either 1 or 2, denoting the order of the derivative.
+        mode (string): Either 'input' or 'correction', denoting which signal to use.
 
     Returns:
         mean_second_order_roc (float): The mean 2nd order rate of change.
@@ -366,23 +369,31 @@ def extract_2nd_order_rate_of_change(results_data, certified=True):
     '''
     n = min(results_data['cert_results']['current_clipped_action'][0].shape)
 
-    if certified:
-        all_actions = results_data['cert_results']['current_clipped_action']
-    else:
-        all_actions = results_data['uncert_results']['current_clipped_action']
+    if mode == 'input':
+        if certified:
+            all_signals = [actions - U_EQs[system_name] for actions in results_data['cert_results']['current_clipped_action']]
+        else:
+            all_signals = [actions - U_EQs[system_name] for actions in results_data['uncert_results']['current_clipped_action']]
+    elif mode == 'correction':
+        all_signals = [np.squeeze(mpsc_results['uncertified_action'][0]) - np.squeeze(mpsc_results['certified_action'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']]
 
-    second_order_roc = []
-    for actions in all_actions:
+    total_derivatives = []
+    for signal in all_signals:
         if n == 1:
             ctrl_freq = 15
+            if mode=='correction':
+                signal = np.atleast_2d(signal).T
         elif n > 1:
             ctrl_freq = 50
-        second_order_roc.append(second_order_rate_of_change(actions - U_EQs[system_name], ctrl_freq))
+        derivative = get_discrete_derivative(signal, ctrl_freq)
+        if order == 2:
+            derivative = get_discrete_derivative(derivative, ctrl_freq)
+        total_derivatives.append(np.linalg.norm(derivative, 'fro')/len(signal))
 
-    return np.mean(second_order_roc), np.std(second_order_roc)
+    return np.mean(total_derivatives), np.std(total_derivatives)
 
 
-def extract_num_correction_intervals(results_data):
+def extract_number_of_correction_intervals(results_data):
     '''Extracts the frequency the safety filter turns on or off from an experiment's data.
 
     Args:
@@ -539,8 +550,6 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
 
 
 if __name__ == '__main__':
-    system_name = 'cartpole'
-    task_name = 'stab'
     mpsc_cost_horizon_num = 2
 
     if mpsc_cost_horizon_num == 2:
@@ -548,16 +557,32 @@ if __name__ == '__main__':
     else:
         ordered_costs = ['one_step', 'regularized', 'lqr', 'precomputed', 'learned']
 
-    plot_violations(system_name, task_name, mpsc_cost_horizon_num)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_num_correction_intervals)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_correction)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)
-    plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_constraint_violations)
+    def extract_1st_order_rate_of_change(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=1, mode='input')
+    def extract_2nd_order_rate_of_change(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=2, mode='input')
+    def extract_1st_order_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=1, mode='correction')
+    def extract_2nd_order_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=2, mode='correction')
+
+    for system_name in ['cartpole', 'quadrotor_2D', 'quadrotor_3D']:
+        for task_name in ['stab', 'track']:
+            plot_violations(system_name, task_name, mpsc_cost_horizon_num)
+
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_1st_order_rate_of_change)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_1st_order_rate_of_change_of_corrections)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change_of_corrections)
+
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
+
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_correction)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
+
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
+
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_correction_intervals)
+
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_constraint_violations)
 
     # # Plotting a single experiment
     # algo_name = 'lqr'
