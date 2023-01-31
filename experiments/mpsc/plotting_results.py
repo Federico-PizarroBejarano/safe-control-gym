@@ -533,19 +533,15 @@ if __name__ == '__main__':
     else:
         ordered_costs = ['one_step', 'regularized', 'lqr', 'precomputed', 'learned']
 
-    def extract_1st_order_rate_of_change_of_inputs(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=1, mode='input')
-    def extract_2nd_order_rate_of_change_of_inputs(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=2, mode='input')
-    def extract_1st_order_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=1, mode='correction')
-    def extract_2nd_order_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=2, mode='correction')
+    def extract_rate_of_change_of_inputs(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=1, mode='input')
+    def extract_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=1, mode='correction')
 
     for system_name in ['cartpole', 'quadrotor_2D', 'quadrotor_3D']:
         for task_name in ['stab', 'track']:
             plot_violations(system_name, task_name, mpsc_cost_horizon_num)
 
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_1st_order_rate_of_change_of_inputs)
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change_of_inputs)
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_1st_order_rate_of_change_of_corrections)
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_2nd_order_rate_of_change_of_corrections)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_inputs)
+            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_corrections)
 
             plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
 
