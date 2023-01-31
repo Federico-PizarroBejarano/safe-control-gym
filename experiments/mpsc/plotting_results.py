@@ -91,9 +91,7 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     ax = fig.add_subplot(111)
 
     uncertified_data = []
-    uncertified_data_std = []
     cert_data = defaultdict(list)
-    cert_data_std = defaultdict(list)
     labels = []
 
     for algo in ordered_algos:
@@ -103,27 +101,35 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
 
         for cost in ordered_costs:
             raw_data = all_results[algo][cost]
-            cert_data[cost].append(data_extractor(raw_data)[0])
-            cert_data_std[cost].append(data_extractor(raw_data)[1])
+            cert_data[cost].append(data_extractor(raw_data))
             if show_uncertified and cost == 'one_step':
-                uncertified_data.append(data_extractor(raw_data, certified=False)[0])
-                uncertified_data_std.append(data_extractor(raw_data, certified=False)[1])
+                uncertified_data.append(data_extractor(raw_data, certified=False))
 
-    num_bars = len(ordered_costs)+show_uncertified
+    num_bars = len(ordered_costs) + show_uncertified
     width = 1/(num_bars+1)
-    x = np.arange(len(labels))
+    widths = [width]*len(labels)
+    x = np.arange(1, len(labels)+1)
 
-    bars = {}
+    box_plots = {}
+    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
 
+    cost_names = []
     if show_uncertified:
-        bars['uncertified'] = ax.bar(x - (num_bars-1)/2.0*width, uncertified_data, yerr=uncertified_data_std, width=width, label='Uncertified', color='plum', capsize=10)
+        cost_names.append('Uncertified')
+        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars-1)/2.0*width, widths=widths, patch_artist=True, medianprops=medianprops)
+        for patch in box_plots['uncertified']['boxes']:
+            patch.set_facecolor('plum')
 
     for idx, cost in enumerate(ordered_costs):
         cost_name = cost.replace('_', ' ').title()
         if cost_name == 'Lqr':
             cost_name = 'LQR'
+        cost_names.append(f'{cost_name} Cost')
         position = ((num_bars-1)/2.0 - idx - show_uncertified)*width
-        bars[cost] = ax.bar(x - position, cert_data[cost], yerr=cert_data_std[cost], width=width, label=f'{cost_name} Cost', color=cost_colors[cost], capsize=10)
+        box_plots[cost] = ax.boxplot(cert_data[cost], positions=x - position, widths=widths, patch_artist=True, medianprops=medianprops)
+
+        for patch in box_plots[cost]['boxes']:
+            patch.set_facecolor(cost_colors[cost])
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
     if ylabel == 'Rmse':
@@ -133,30 +139,10 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     ax.set_title(f'{system.title()} {task_title} {ylabel} with M={mpsc_cost_horizon}', weight='bold', fontsize=25)
 
     ax.set_xticks(x, labels, weight='bold', fontsize=25)
-    ax.legend(fontsize=25)
-
+    first_boxes = [box_plots[cost]['boxes'][0] for cost in ordered_costs]
     if show_uncertified:
-        rounded_labels = []
-        for l in uncertified_data:
-            if l > 100:
-                rounded_labels.append(int(l))
-            elif l > 1:
-                rounded_labels.append(round(l, 1))
-            else:
-                rounded_labels.append(round(l, 2))
-
-        ax.bar_label(bars['uncertified'], labels=rounded_labels, padding=3, fontsize=20)
-
-    for cost in ordered_costs:
-        rounded_labels = []
-        for l in cert_data[cost]:
-            if l > 100:
-                rounded_labels.append(int(l))
-            elif l > 1:
-                rounded_labels.append(round(l, 1))
-            else:
-                rounded_labels.append(round(l, 2))
-        ax.bar_label(bars[cost], labels=rounded_labels, padding=3, fontsize=20)
+        first_boxes = [box_plots['uncertified']['boxes'][0]] + first_boxes
+    ax.legend(first_boxes, cost_names, loc='upper right', fontsize=25)
 
     fig.tight_layout()
 
@@ -186,7 +172,6 @@ def plot_violations(system, task, mpsc_cost_horizon):
 
     labels = []
     data = []
-    data_std = []
 
     for algo in ordered_algos:
         if algo not in all_results:
@@ -194,21 +179,22 @@ def plot_violations(system, task, mpsc_cost_horizon):
         labels.append(algo.upper())
 
         one_step_cost = all_results[algo]['one_step']
-        data.append(one_step_cost['uncert_metrics']['average_constraint_violation'])
-        met = MetricExtractor(one_step_cost['uncert_results'])
-        data_std.append(np.asarray(met.get_episode_constraint_violation_steps()).std())
+        data.append(extract_constraint_violations(one_step_cost, certified=False))
 
     ax.set_ylabel('Number of Constraint Violations', weight='bold', fontsize=25, labelpad=10)
     task_title = 'Stabilization' if task == 'stab' else 'Trajectory Tracking'
     ax.set_title(f'{system.title()} {task_title} Constraint Violations with M={mpsc_cost_horizon}', weight='bold', fontsize=25)
 
-    x = np.arange(len(labels))
+    x = np.arange(1, len(labels)+1)
     ax.set_xticks(x, labels, weight='bold', fontsize=25)
+
+    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
+    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75]*len(labels))
 
     cm = plt.cm.get_cmap('inferno', len(labels)+2)
     colors = [cm(i) for i in range(1, len(labels)+1)]
-    violations = ax.bar(x, data, yerr=data_std, color=colors[::-1], capsize=10)
-    ax.bar_label(violations, labels=data, padding=3, fontsize=20)
+    for patch, color in zip(bplot['boxes'], colors):
+        patch.set_facecolor(color)
 
     fig.tight_layout()
 
@@ -228,11 +214,11 @@ def extract_magnitude_of_correction(results_data):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        mean_magn_of_corrections (float): The mean magnitude of corrections for all experiments.
-        std_magn_of_corrections (float): The standard deviation of the magnitude of corrections for all experiments.
+        magn_of_corrections (list): The list of magnitude of corrections for all experiments.
     '''
+
     magn_of_corrections = [np.linalg.norm(mpsc_results['correction'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    return np.mean(magn_of_corrections), np.std(magn_of_corrections)
+    return magn_of_corrections
 
 
 def extract_max_correction(results_data):
@@ -242,12 +228,11 @@ def extract_max_correction(results_data):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        mean_max_correction (float): The mean max correction for all experiments.
-        std_max_corrections (float): The standard deviation of max corrections for all experiments.
+        max_corrections (list): The list of max corrections for all experiments.
     '''
     max_corrections = [np.max(np.abs(mpsc_results['correction'][0])) for mpsc_results in results_data['cert_results']['safety_filter_data']]
 
-    return np.mean(max_corrections), np.std(max_corrections)
+    return max_corrections
 
 
 def extract_number_of_corrections(results_data):
@@ -257,11 +242,10 @@ def extract_number_of_corrections(results_data):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        mean_num_corrections (float): The mean number of corrections for all experiments.
-        std_num_corrections (float): The standard deviation of the number of corrections for all experiments.
+        num_corrections (list): The list of the number of corrections for all experiments.
     '''
     num_corrections = [np.sum(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
-    return np.mean(num_corrections), np.std(num_corrections)
+    return num_corrections
 
 
 def extract_rmse(results_data, certified=True):
@@ -271,16 +255,15 @@ def extract_rmse(results_data, certified=True):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        mean_rmse (float): The mean RMSE for all experiments.
-        std_rmse (float): The standard deviation of RMSE for all experiments.
+        rmse (list): The list of RMSEs for all experiments.
     '''
     if certified:
-        mean_rmse = results_data['cert_metrics']['average_rmse']
-        std_rmse = results_data['cert_metrics']['rmse_std']
+        met = MetricExtractor(results_data['cert_results'])
+        rmse = np.asarray(met.get_episode_rmse())
     else:
-        mean_rmse = results_data['uncert_metrics']['average_rmse']
-        std_rmse = results_data['uncert_metrics']['rmse_std']
-    return mean_rmse, std_rmse
+        met = MetricExtractor(results_data['uncert_results'])
+        rmse = np.asarray(met.get_episode_rmse())
+    return rmse
 
 
 def extract_simulation_time(results_data, certified=True):
@@ -291,15 +274,14 @@ def extract_simulation_time(results_data, certified=True):
         certified (bool): Whether to extract the certified data or uncertified data.
 
     Returns:
-        mean_sim_time (float): The average simulation time for all experiments.
-        std_sim_time (float): The standard deviation of the simulation time for all experiments.
+        sim_time (list): The list of simulation times for all experiments.
     '''
     if certified:
         sim_time = [timestamp[-1] - timestamp[0] for timestamp in results_data['cert_results']['timestamp']]
     else:
         sim_time = [timestamp[-1] - timestamp[0] for timestamp in results_data['uncert_results']['timestamp']]
 
-    return np.mean(sim_time), np.std(sim_time)
+    return sim_time
 
 
 def extract_constraint_violations(results_data, certified=True):
@@ -310,19 +292,16 @@ def extract_constraint_violations(results_data, certified=True):
         certified (bool): Whether to extract the certified data or uncertified data.
 
     Returns:
-        num_violations_mean (float): The average number of constraint violations for all experiments.
-        num_violations_std (float): The standard deviation of the number of constraint violations for all experiments.
+        num_violations (list): The list of number of constraint violations for all experiments.
     '''
     if certified:
-        num_violations_mean = results_data['cert_metrics']['average_constraint_violation']
         met = MetricExtractor(results_data['cert_results'])
-        num_violations_std = np.asarray(met.get_episode_constraint_violation_steps()).std()
+        num_violations = np.asarray(met.get_episode_constraint_violation_steps())
     else:
-        num_violations_mean = results_data['uncert_metrics']['average_constraint_violation']
         met = MetricExtractor(results_data['uncert_results'])
-        num_violations_std = np.asarray(met.get_episode_constraint_violation_steps()).std()
+        num_violations = np.asarray(met.get_episode_constraint_violation_steps())
 
-    return num_violations_mean, num_violations_std
+    return num_violations
 
 
 def extract_high_frequency_content(results_data, certified=True):
@@ -333,8 +312,7 @@ def extract_high_frequency_content(results_data, certified=True):
         certified (bool): Whether to extract the certified data or uncertified data.
 
     Returns:
-        mean_HFC (float): The mean HFC for all experiments.
-        std_HFC (float): The standard deviation of the HFC for all experiments.
+        HFC (list): The list of HFCs for all experiments.
     '''
     n = min(results_data['cert_results']['current_clipped_action'][0].shape)
 
@@ -351,7 +329,7 @@ def extract_high_frequency_content(results_data, certified=True):
             ctrl_freq = 50
         HFC.append(high_frequency_content(actions - U_EQs[system_name], ctrl_freq))
 
-    return np.mean(HFC), np.std(HFC)
+    return np.squeeze(HFC)
 
 
 def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
@@ -364,8 +342,7 @@ def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
         mode (string): Either 'input' or 'correction', denoting which signal to use.
 
     Returns:
-        mean_roc (float): The mean rate of change.
-        std_roc (float): The standard deviation of the rates of change.
+        roc (list): The list of rate of changes.
     '''
     n = min(results_data['cert_results']['current_clipped_action'][0].shape)
 
@@ -390,7 +367,7 @@ def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
             derivative = get_discrete_derivative(derivative, ctrl_freq)
         total_derivatives.append(np.linalg.norm(derivative, 'fro'))
 
-    return np.mean(total_derivatives), np.std(total_derivatives)
+    return total_derivatives
 
 
 def extract_number_of_correction_intervals(results_data):
@@ -400,8 +377,7 @@ def extract_number_of_correction_intervals(results_data):
         results_data (dict): A dictionary containing all the data from the desired experiment.
 
     Returns:
-        mean_num_correction_intervals (float): The mean number of times the filter starts correcting.
-        std_num_correction_intervals (float): The standard deviation of the number of times the filter starts correcting.
+        num_correction_intervals (list): The list of number of times the filter starts correcting.
     '''
     all_corrections = [(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
 
@@ -409,7 +385,7 @@ def extract_number_of_correction_intervals(results_data):
     for corrections in all_corrections:
         correction_frequency.append((np.diff(corrections)!=0).sum())
 
-    return np.mean(correction_frequency), np.std(correction_frequency)
+    return correction_frequency
 
 
 def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
