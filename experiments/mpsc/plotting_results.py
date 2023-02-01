@@ -105,7 +105,7 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
             if show_uncertified and cost == 'one_step':
                 uncertified_data.append(data_extractor(raw_data, certified=False))
 
-    num_bars = len(ordered_costs) + show_uncertified
+    num_bars = len(ordered_costs) + show_uncertified + 1
     width = 1/(num_bars+1)
     widths = [width]*len(labels)
     x = np.arange(1, len(labels)+1)
