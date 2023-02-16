@@ -198,7 +198,10 @@ class NL_MPSC(MPSC):
         lamb = 0.008 # lambda lower bound
         self.rho_c = 0.192  # tuning parameter determines how fast the lyapunov function contracts
 
-        self.Theta = [self.state_constraint.lower_bounds[-2], 0, self.state_constraint.upper_bounds[-2]]
+        if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
+            self.Theta = [self.state_constraint.lower_bounds[-2], 0, self.state_constraint.upper_bounds[-2]]
+        else:
+            self.Theta = [self.state_constraint.lower_bounds[6], 0, self.state_constraint.upper_bounds[6]]
 
         while lamb < 100:
             lamb = lamb * 2
@@ -206,7 +209,7 @@ class NL_MPSC(MPSC):
             prob = cp.Problem(cp.Minimize(cost), constraints)
             try:
                 print(f'Attempting with lambda={lamb}.')
-                cost = prob.solve(solver=cp.MOSEK, verbose=True)
+                cost = prob.solve(solver=cp.MOSEK, verbose=False)
                 if prob.status == 'optimal' and cost != float('inf'):
                     print(f'Succeeded with cost={cost}.')
                     if lamb_lb is None:
@@ -233,7 +236,7 @@ class NL_MPSC(MPSC):
             [X, Y, cost, constraints] = self.setup_tube_optimization(lambda_candidate)
             prob = cp.Problem(cp.Minimize(cost), constraints)
             try:
-                cost = prob.solve(solver=cp.MOSEK, verbose=True)
+                cost = prob.solve(solver=cp.MOSEK, verbose=False)
                 if prob.status != 'optimal' or cost == float('inf'):
                     raise cp.SolverError
             except Exception as e:
@@ -245,7 +248,7 @@ class NL_MPSC(MPSC):
         best_lamb = lambda_candidates[best_index]
         [X, Y, cost, constraints] = self.setup_tube_optimization(best_lamb)
         prob = cp.Problem(cp.Minimize(cost), constraints)
-        cost = prob.solve(solver=cp.MOSEK, verbose=True)
+        cost = prob.solve(solver=cp.MOSEK, verbose=False)
         if prob.status != 'optimal' or cost == float('inf'):
             raise cp.SolverError
 
