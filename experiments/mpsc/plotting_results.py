@@ -5,8 +5,15 @@ from inspect import signature
 from collections import defaultdict
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.fftpack import fft, fftfreq
+import tikzplotlib
+
+from matplotlib.lines import Line2D
+from matplotlib.legend import Legend
+Line2D._us_dashSeq    = property(lambda self: self._dash_pattern[1])
+Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
+Legend._ncol = property(lambda self: self._ncols)
 
 from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
@@ -15,9 +22,11 @@ from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_conte
 
 plot = True
 save_figs = False
-ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
+ordered_algos = ['lqr', 'ppo', 'sac']
+# ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
 
-cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'regularized': 'pink', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
+# cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'regularized': 'pink', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
+cost_colors = {'one_step':'cornflowerblue', 'regularized': 'pink', 'precomputed M=2':'limegreen', 'precomputed M=5':'forestgreen', 'precomputed M=10':'darkgreen'}
 
 U_EQs = {
     'cartpole': 0,
@@ -207,8 +216,8 @@ def plot_violations(system, task, mpsc_cost_horizon):
         fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
 
 
-def extract_magnitude_of_correction(results_data):
-    '''Extracts the mean correction from an experiment's data.
+def extract_magnitude_of_corrections(results_data):
+    '''Extracts the magnitude of corrections from an experiment's data.
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
@@ -492,71 +501,202 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
         ax_act.set_ylabel('Input')
         ax_act.set_box_aspect(0.5)
 
-        _, ax_fft = plt.subplots()
-        N_cert = max(cert_results['current_clipped_action'][exp].shape)
-        N_uncert = max(uncert_results['current_clipped_action'][exp].shape)
-        if config.task == Environment.CARTPOLE:
-            spectrum_cert = fft(np.squeeze(cert_results['current_clipped_action'][exp]))
-            spectrum_uncert = fft(np.squeeze(uncert_results['current_clipped_action'][exp]))
-            freq_cert = fftfreq(len(spectrum_cert), 1/config.task_config['ctrl_freq'])[:N_cert//2]
-            freq_uncert = fftfreq(len(spectrum_uncert), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
-            ax_fft.plot(freq_cert, 2.0/N_cert * np.abs(spectrum_cert[0:N_cert//2]), 'b-', label='Certified')
-            ax_fft.plot(freq_uncert, 2.0/N_uncert * np.abs(spectrum_uncert[0:N_uncert//2]), 'r--', label='Uncertified')
-        else:
-            spectrum_cert1 = fft(np.squeeze(cert_results['current_clipped_action'][exp][:, 0]))
-            spectrum_cert2 = fft(np.squeeze(cert_results['current_clipped_action'][exp][:, 1]))
-            spectrum_uncert1 = fft(np.squeeze(uncert_results['current_clipped_action'][exp][:, 0]))
-            spectrum_uncert2 = fft(np.squeeze(uncert_results['current_clipped_action'][exp][:, 1]))
-            freq_cert1 = fftfreq(len(spectrum_cert1), 1/config.task_config['ctrl_freq'])[:N_cert//2]
-            freq_cert2 = fftfreq(len(spectrum_cert2), 1/config.task_config['ctrl_freq'])[:N_cert//2]
-            freq_uncert1 = fftfreq(len(spectrum_uncert1), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
-            freq_uncert2 = fftfreq(len(spectrum_uncert2), 1/config.task_config['ctrl_freq'])[:N_uncert//2]
-            ax_fft.plot(freq_cert1, 2.0/N_cert * np.abs(spectrum_cert1[0:N_cert//2]), 'b-', label='Certified 1')
-            ax_fft.plot(freq_cert2, 2.0/N_cert * np.abs(spectrum_cert2[0:N_cert//2]), 'b-', label='Certified 2')
-            ax_fft.plot(freq_uncert1, 2.0/N_uncert * np.abs(spectrum_uncert1[0:N_uncert//2]), 'r--', label='Uncertified 1')
-            ax_fft.plot(freq_uncert2, 2.0/N_uncert * np.abs(spectrum_uncert2[0:N_uncert//2]), 'r--', label='Uncertified 2')
-
-        ax_fft.legend()
-        ax_fft.set_title('Fourier Analysis of Inputs')
-        ax_fft.set_xlabel('Frequency')
-        ax_fft.set_ylabel('Magnitude')
-
         plt.tight_layout()
         plt.show()
 
 
-if __name__ == '__main__':
-    mpsc_cost_horizon_num = 2
+def generate_dataframe():
+    '''Generates a dataframe with all the data from all the experiments.'''
+    dataframe = {}
 
-    if mpsc_cost_horizon_num == 2:
-        ordered_costs = ['one_step', 'constant', 'regularized', 'lqr', 'precomputed', 'learned']
+    for mpsc_cost_horizon in [2, 5, 10]:
+        dataframe[mpsc_cost_horizon] = {}
+        for system in ['cartpole', 'quadrotor_2D', 'quadrotor_3D']:
+            global system_name
+            system_name = system
+            dataframe[mpsc_cost_horizon][system_name] = {}
+            for task in ['stab', 'track']:
+                dataframe[mpsc_cost_horizon][system_name][task] = {}
+
+                all_results = load_all_algos(system_name, task, mpsc_cost_horizon)
+                for algo in ordered_algos:
+                    if algo not in all_results:
+                        continue
+                    dataframe[mpsc_cost_horizon][system_name][task][algo] = {}
+                    for cost in ['one_step', 'regularized', 'precomputed']:
+                        raw_data = all_results[algo][cost]
+                        dataframe[mpsc_cost_horizon][system_name][task][algo][cost] = extract_main_results(raw_data)
+
+    return pd.DataFrame(dataframe)
+
+
+def extract_main_results(raw_data):
+    '''Extracts the important metrics into a form to be put into the dataframe.
+
+    Args:
+        raw_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        metrics (dict): The main results of the experiment.
+    '''
+    metrics = {}
+
+    metrics['magnitude_of_corrections'] = np.median(extract_magnitude_of_corrections(raw_data))
+    metrics['max_correction'] = np.median(extract_max_correction(raw_data))
+    metrics['rate_of_change_of_inputs'] = np.median(extract_rate_of_change_of_inputs(raw_data))
+    metrics['rate_of_change_of_corrections'] = np.median(extract_rate_of_change_of_corrections(raw_data))
+    metrics['number_of_corrections'] = np.median(extract_number_of_corrections(raw_data))
+
+    return metrics
+
+
+def create_table(dataframe, system):
+    '''Takes in a dictionary of all the results and creates the appropriate dataframe.
+
+    Args:
+        dataframe (dict): The dictionary of all the results.
+        system (str): The system to be graphed.
+
+    Returns:
+        df (pd.DataFrame): The dataframe containing the data.
+    '''
+    all_dfs = {}
+    for M in [2, 5, 10]:
+        data = {(outerKey, innerKey): {key: values['precomputed'][key]/values['regularized'][key] for key in values['precomputed'].keys()} for outerKey, innerDict in dataframe[M][system].items() for innerKey, values in innerDict.items()}
+        all_dfs[M] = pd.DataFrame(data)
+    df = pd.concat(all_dfs.values(), axis=0, keys=all_dfs.keys())
+    print(df)
+    return df
+
+
+def create_paper_plot(system, task, data_extractor):
+    '''Plots the results of every paper MPSC cost function for a specific experiment.
+
+    Args:
+        system (str): The system to be controlled.
+        task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+        data_extractor (lambda): A function that extracts the necessary data from the results.
+    '''
+
+    if len(signature(data_extractor).parameters) > 1:
+        show_uncertified = True
     else:
-        ordered_costs = ['one_step', 'regularized', 'lqr', 'precomputed', 'learned']
+        show_uncertified = False
+
+    fig = plt.figure(figsize=(16.0, 10.0))
+    ax = fig.add_subplot(111)
+
+    uncertified_data = []
+    cert_data = defaultdict(list)
+
+    labels = [algo.upper() for algo in ordered_algos]
+
+    ordered_cost_ids = ['one_step', 'regularized', 'precomputed M=2', 'precomputed M=5', 'precomputed M=10']
+    for cost_name in ordered_cost_ids:
+        if cost_name in ['one_step', 'regularized']:
+            all_results = load_all_algos(system, task, 10)
+            cost = cost_name
+        else:
+            M = int(cost_name.split('=')[1])
+            all_results = load_all_algos(system, task, M)
+            cost = 'precomputed'
+
+        for algo in ordered_algos:
+            raw_data = all_results[algo][cost]
+            cert_data[cost_name].append(data_extractor(raw_data))
+            if show_uncertified and cost == 'one_step':
+                uncertified_data.append(data_extractor(raw_data, certified=False))
+
+    num_bars = len(ordered_cost_ids) + show_uncertified
+    width = 1/(num_bars+1)
+    widths = [width]*len(labels)
+    x = np.arange(1, len(labels)+1)
+
+    box_plots = {}
+    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
+    flierprops={'marker': 'o', 'markersize': 3}
+
+    cost_names = []
+    if show_uncertified:
+        cost_names.append('Uncertified')
+        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars-1)/2.0*width, widths=widths, patch_artist=True, medianprops=medianprops, flierprops=flierprops)
+        for patch in box_plots['uncertified']['boxes']:
+            patch.set_facecolor('plum')
+
+    for idx, cost_id in enumerate(ordered_cost_ids):
+        cost = cost_id.split(' ')[0]
+        cost_name = cost_id.title()
+        if cost_name == 'Lqr':
+            cost_name = 'LQR'
+        cost_names.append(f'{cost_name} Cost')
+        position = ((num_bars-1)/2.0 - idx - show_uncertified)*width
+        box_plots[cost_id] = ax.boxplot(cert_data[cost_id], positions=x - position, widths=widths, patch_artist=True, medianprops=medianprops)
+
+        for patch in box_plots[cost_id]['boxes']:
+            patch.set_facecolor(cost_colors[cost_id])
+
+    ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
+    if ylabel == 'Rmse':
+        ylabel = 'RMSE'
+    ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
+
+    ax.set_xticks(x, labels, weight='bold', fontsize=45)
+    ax.set_xlim([0.5, len(labels)+0.5])
+
+    fig.tight_layout()
+
+    ax.set_ylim(ymin=0)
+    ax.yaxis.grid(True)
+    if plot is True:
+        plt.show()
+
+    image_suffix = data_extractor.__name__.replace('extract_', '')
+    if save_figs:
+        fig.savefig(f'./results_mpsc/{system}_{task}_{image_suffix}.png', dpi=300)
+        tikzplotlib.save(f'./results_mpsc/{system}_{task}_{image_suffix}.tex', axis_height='2.2in', axis_width='2.75in')
+
+
+if __name__ == '__main__':
+    ordered_costs = ['one_step', 'regularized', 'precomputed']
 
     def extract_rate_of_change_of_inputs(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=1, mode='input')
     def extract_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=1, mode='correction')
 
-    for system_name in ['cartpole', 'quadrotor_2D', 'quadrotor_3D']:
-        for task_name in ['stab', 'track']:
-            plot_violations(system_name, task_name, mpsc_cost_horizon_num)
+    system_name = 'cartpole'
+    task_name = 'track'
+    create_paper_plot(system_name, task_name, extract_magnitude_of_corrections)
+    create_paper_plot(system_name, task_name, extract_max_correction)
+    create_paper_plot(system_name, task_name, extract_rate_of_change_of_inputs)
 
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_inputs)
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_corrections)
+    # mpsc_cost_horizon_num = 2
 
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
+    # dataframe = generate_dataframe()
+    # create_table(dataframe, 'cartpole')
+    # create_table(dataframe, 'quadrotor_2D')
+    # create_table(dataframe, 'quadrotor_3D')
 
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_correction)
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
+    # for system_name in ['cartpole', 'quadrotor_2D', 'quadrotor_3D']:
+    #     for task_name in ['stab', 'track']:
+    #         plot_violations(system_name, task_name, mpsc_cost_horizon_num)
 
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_inputs)
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_corrections)
 
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_correction_intervals)
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
 
-            plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_constraint_violations)
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_corrections)
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
 
-    # # Plotting a single experiment
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
+
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_correction_intervals)
+
+    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_constraint_violations)
+
+    ## Plotting a single experiment
     # algo_name = 'lqr'
     # mpsc_cost_name = 'one_step'
     # one_result = load_one_experiment(system=system_name, task=task_name, algo=algo_name, mpsc_cost_horizon=mpsc_cost_horizon_num)
