@@ -7,13 +7,6 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import tikzplotlib
-
-from matplotlib.lines import Line2D
-from matplotlib.legend import Legend
-Line2D._us_dashSeq    = property(lambda self: self._dash_pattern[1])
-Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
-Legend._ncol = property(lambda self: self._ncols)
 
 from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
@@ -654,7 +647,6 @@ def create_paper_plot(system, task, data_extractor):
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
         fig.savefig(f'./results_mpsc/{system}_{task}_{image_suffix}.png', dpi=300)
-        tikzplotlib.save(f'./results_mpsc/{system}_{task}_{image_suffix}.tex', axis_height='2.2in', axis_width='2.75in')
 
 
 if __name__ == '__main__':
