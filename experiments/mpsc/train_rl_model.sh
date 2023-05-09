@@ -20,8 +20,17 @@ fi
 rm -r -f ./unsafe_rl_temp_data/
 
 # Train the unsafe controller/agent.
-python3 ../main.py --algo ${ALGO} --task ${SYS_NAME} --overrides ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml ./config_overrides/${SYS}/${SYS}_${TASK}.yaml --output_dir ./ \
-                    --tag unsafe_rl_temp_data/ --seed 2 --kv_overrides task_config.init_state=None
+python3 ../../safe_control_gym/experiments/execute_rl_controller.py \
+    --algo ${ALGO} \
+    --task ${SYS_NAME} \
+    --overrides \
+        ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
+        ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
+    --output_dir ./ \
+    --tag unsafe_rl_temp_data/ \
+    --seed 2 \
+    --kv_overrides \
+        task_config.init_state=None
 
 # Move the newly trained unsafe model.
 mv ./unsafe_rl_temp_data/seed2_*/model_latest.pt ./models/rl_models/${ALGO}_model_${SYS}_${TASK}.pt
