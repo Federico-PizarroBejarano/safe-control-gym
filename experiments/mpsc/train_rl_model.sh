@@ -20,7 +20,7 @@ fi
 rm -r -f ./unsafe_rl_temp_data/
 
 # Train the unsafe controller/agent.
-python3 ../../safe_control_gym/experiments/execute_rl_controller.py \
+python3 ../../safe_control_gym/experiments/train_rl_controller.py \
     --algo ${ALGO} \
     --task ${SYS_NAME} \
     --overrides \
