@@ -1,4 +1,4 @@
-'''Utility functions for Model Predictive Safety Certification. '''
+'''Utility functions for Model Predictive Safety Certification.'''
 
 import pickle
 from enum import Enum
@@ -17,7 +17,7 @@ from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain
 
 
 class Cost_Function(str, Enum):
-    '''MPSC Cost functions enumeration class. '''
+    '''MPSC Cost functions enumeration class.'''
 
     ONE_STEP_COST = 'one_step_cost'         # Default MPSC cost function.
     CONSTANT_COST = 'constant_cost'         # Naive smooth cost based on constant input assmuption.
@@ -25,6 +25,7 @@ class Cost_Function(str, Enum):
     LQR_COST = 'lqr_cost'                   # Smooth cost based on LQR policy assumption
     PRECOMPUTED_COST = 'precomputed_cost'   # Smooth cost based on precomputed future states
     LEARNED_COST = 'learned_cost'           # Smooth cost based on learned policy
+
 
 def compute_RPI_set(Acl,
                     w,
@@ -52,7 +53,7 @@ def compute_RPI_set(Acl,
     constraints = []
     for i in range(n_samples):
         w_i = w[:, i, None]
-        con_11 = Acl.T @ P @ Acl - tau*P
+        con_11 = Acl.T @ P @ Acl - tau * P
         con_12 = Acl.T @ P @ w_i
         con_21 = w_i.T @ P @ Acl
         con_22 = w_i.T @ P @ w_i + tau - 1
@@ -82,8 +83,8 @@ def ellipse_bounding_box(P):
     c = np.eye(P.shape[0])
     extremes = []
     for i in range(P.shape[0]):
-        extremes.append((np.sqrt(c[:,i, None].T @ np.linalg.inv(P) @ c[:,i, None])[0,0],
-                        -np.sqrt(c[:,i, None].T @ np.linalg.inv(P) @ c[:,i, None])[0,0]))
+        extremes.append((np.sqrt(c[:, i, None].T @ np.linalg.inv(P) @ c[:, i, None])[0, 0],
+                        -np.sqrt(c[:, i, None].T @ np.linalg.inv(P) @ c[:, i, None])[0, 0]))
     vertices = list(product(*extremes))
     return np.vstack(vertices)
 
@@ -118,14 +119,15 @@ def pontryagin_difference_AABB(verts1,
     else:
         # If 1D data. Only handles closed compact sets.
         vert2_range = np.ptp(verts2)
-        vert_min = np.min(verts1) + vert2_range/2
-        vert_max = np.max(verts1) - vert2_range/2
+        vert_min = np.min(verts1) + vert2_range / 2
+        vert_max = np.max(verts1) - vert2_range / 2
         const_func = partial(BoundedConstraint, lower_bounds=vert_min, upper_bounds=vert_max)
         if vert_max > vert_min:
             return np.vstack((vert_min, vert_max)), const_func
         else:
             print('Warning: Tightend set is the Zero set.')
-            return np.array([[0,0]]).T, const_func
+            return np.array([[0, 0]]).T, const_func
+
 
 def get_trajectory_on_horizon(env, iteration, horizon):
     '''Gets the trajectory segment for the next horizon steps.
@@ -141,7 +143,7 @@ def get_trajectory_on_horizon(env, iteration, horizon):
 
     if env.TASK == Task.TRAJ_TRACKING:
         wp_idx = [
-            min(iteration + i, env.X_GOAL.shape[0]-1)
+            min(iteration + i, env.X_GOAL.shape[0] - 1)
             for i in range(horizon)
         ]
         clipped_X_GOAL = env.X_GOAL[wp_idx]
@@ -166,8 +168,8 @@ def high_frequency_content(signal, ctrl_freq):
 
     if n == 1:
         spectrum = fft(signal)
-        freq = fftfreq(len(spectrum), 1/ctrl_freq)[:N//2]
-        HFC = freq.T @ (2.0/N * np.abs(spectrum[0:N//2]))
+        freq = fftfreq(len(spectrum), 1 / ctrl_freq)[:N // 2]
+        HFC = freq.T @ (2.0 / N * np.abs(spectrum[0:N // 2]))
         return HFC
     elif n > 1:
         HFC = 0
@@ -185,7 +187,7 @@ def get_discrete_derivative(signal, ctrl_freq):
     Returns:
         discrete_derivative (float): The discrete_derivative of the signal.
     '''
-    discrete_derivative = (signal[1:, :] - signal[:-1, :])*ctrl_freq
+    discrete_derivative = (signal[1:, :] - signal[:-1, :]) * ctrl_freq
     return discrete_derivative
 
 
@@ -230,6 +232,7 @@ def approximate_LQR_gain(env, ctrl, config, curr_path='.'):
     best_K = pattern * best_K
 
     return best_K
+
 
 def lqr_action_mismatch(K, actions, state_errors, U_EQ, pattern):
     '''A dummy function used in approximate_LQR_gain to measure how incorrect the

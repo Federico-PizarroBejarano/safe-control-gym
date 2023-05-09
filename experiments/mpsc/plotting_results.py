@@ -1,4 +1,4 @@
-'''This script analyzes and plots the results from MPSC experiments. '''
+'''This script analyzes and plots the results from MPSC experiments.'''
 
 import pickle
 from inspect import signature
@@ -19,13 +19,14 @@ ordered_algos = ['lqr', 'ppo', 'sac']
 # ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
 
 # cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'regularized': 'pink', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
-cost_colors = {'one_step':'cornflowerblue', 'regularized': 'pink', 'precomputed M=2':'limegreen', 'precomputed M=5':'forestgreen', 'precomputed M=10':'darkgreen'}
+cost_colors = {'one_step': 'cornflowerblue', 'regularized': 'pink', 'precomputed M=2': 'limegreen', 'precomputed M=5': 'forestgreen', 'precomputed M=10': 'darkgreen'}
 
 U_EQs = {
     'cartpole': 0,
     'quadrotor_2D': 0.1323,
     'quadrotor_3D': 0.06615
 }
+
 
 def load_one_experiment(system, task, algo, mpsc_cost_horizon):
     '''Loads the results of every MPSC cost function for a specific experiment.
@@ -108,9 +109,9 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
                 uncertified_data.append(data_extractor(raw_data, certified=False))
 
     num_bars = len(ordered_costs) + show_uncertified + 1
-    width = 1/(num_bars+1)
-    widths = [width]*len(labels)
-    x = np.arange(1, len(labels)+1)
+    width = 1 / (num_bars + 1)
+    widths = [width] * len(labels)
+    x = np.arange(1, len(labels) + 1)
 
     box_plots = {}
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
@@ -118,7 +119,7 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     cost_names = []
     if show_uncertified:
         cost_names.append('Uncertified')
-        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars-1)/2.0*width, widths=widths, patch_artist=True, medianprops=medianprops)
+        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars - 1) / 2.0 * width, widths=widths, patch_artist=True, medianprops=medianprops)
         for patch in box_plots['uncertified']['boxes']:
             patch.set_facecolor('plum')
 
@@ -127,7 +128,7 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
         if cost_name == 'Lqr':
             cost_name = 'LQR'
         cost_names.append(f'{cost_name} Cost')
-        position = ((num_bars-1)/2.0 - idx - show_uncertified)*width
+        position = ((num_bars - 1) / 2.0 - idx - show_uncertified) * width
         box_plots[cost] = ax.boxplot(cert_data[cost], positions=x - position, widths=widths, patch_artist=True, medianprops=medianprops)
 
         for patch in box_plots[cost]['boxes']:
@@ -187,14 +188,14 @@ def plot_violations(system, task, mpsc_cost_horizon):
     task_title = 'Stabilization' if task == 'stab' else 'Trajectory Tracking'
     ax.set_title(f'{system.title()} {task_title} Constraint Violations with M={mpsc_cost_horizon}', weight='bold', fontsize=25)
 
-    x = np.arange(1, len(labels)+1)
+    x = np.arange(1, len(labels) + 1)
     ax.set_xticks(x, labels, weight='bold', fontsize=25)
 
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75]*len(labels))
+    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))
 
-    cm = plt.cm.get_cmap('inferno', len(labels)+2)
-    colors = [cm(i) for i in range(1, len(labels)+1)]
+    cm = plt.cm.get_cmap('inferno', len(labels) + 2)
+    colors = [cm(i) for i in range(1, len(labels) + 1)]
     for patch, color in zip(bplot['boxes'], colors):
         patch.set_facecolor(color)
 
@@ -246,7 +247,7 @@ def extract_number_of_corrections(results_data):
     Returns:
         num_corrections (list): The list of the number of corrections for all experiments.
     '''
-    num_corrections = [np.sum(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
+    num_corrections = [np.sum(mpsc_results['correction'][0] * 10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
     return num_corrections
 
 
@@ -360,7 +361,7 @@ def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
     for signal in all_signals:
         if n == 1:
             ctrl_freq = 15
-            if mode=='correction':
+            if mode == 'correction':
                 signal = np.atleast_2d(signal).T
         elif n > 1:
             ctrl_freq = 50
@@ -381,11 +382,11 @@ def extract_number_of_correction_intervals(results_data):
     Returns:
         num_correction_intervals (list): The list of number of times the filter starts correcting.
     '''
-    all_corrections = [(mpsc_results['correction'][0]*10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
+    all_corrections = [(mpsc_results['correction'][0] * 10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
 
     correction_frequency = []
     for corrections in all_corrections:
-        correction_frequency.append((np.diff(corrections)!=0).sum())
+        correction_frequency.append((np.diff(corrections) != 0).sum())
 
     return correction_frequency
 
@@ -408,11 +409,11 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
         system = config.task
 
     for exp in range(len(uncert_results['obs'])):
-        specific_results = {key:[cert_results[key][exp]] for key in cert_results.keys()}
+        specific_results = {key: [cert_results[key][exp]] for key in cert_results.keys()}
         met = MetricExtractor(specific_results)
         print(f'Total Certified Violations ({exp}):', np.asarray(met.get_episode_constraint_violation_steps()).sum())
         mpsc_results = cert_results['safety_filter_data'][exp]
-        corrections = mpsc_results['correction'][0]*10.0 > np.linalg.norm(cert_results['current_clipped_action'][exp] - U_EQs[system], axis=1)
+        corrections = mpsc_results['correction'][0] * 10.0 > np.linalg.norm(cert_results['current_clipped_action'][exp] - U_EQs[system], axis=1)
         corrections = np.append(corrections, False)
 
         if system == Environment.CARTPOLE:
@@ -433,7 +434,7 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
 
         _, ax = plt.subplots()
         ax.plot(uncert_results['obs'][exp][:, graph1_1], uncert_results['obs'][exp][:, graph1_2], 'r--', label='Uncertified')
-        ax.plot(cert_results['obs'][exp][:,graph1_1], cert_results['obs'][exp][:,graph1_2],'.-', label='Certified')
+        ax.plot(cert_results['obs'][exp][:, graph1_1], cert_results['obs'][exp][:, graph1_2], '.-', label='Certified')
         ax.plot(cert_results['obs'][exp][corrections, graph1_1], cert_results['obs'][exp][corrections, graph1_2], 'r.', label='Modified')
         ax.scatter(uncert_results['obs'][exp][0, graph1_1], uncert_results['obs'][exp][0, graph1_2], color='g', marker='o', s=100, label='Initial State')
         theta_constraint = config.task_config['constraints'][0].upper_bounds[graph1_1]
@@ -446,9 +447,9 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
 
         if config.task_config.task == Task.TRAJ_TRACKING and config.task == Environment.CARTPOLE:
             _, ax2 = plt.subplots()
-            ax2.plot(np.linspace(0, 20, cert_results['obs'][exp].shape[0])[1:], X_GOAL[:,0],'g--', label='Reference')
-            ax2.plot(np.linspace(0, 20, uncert_results['obs'][exp].shape[0]), uncert_results['obs'][exp][:,0],'r--', label='Uncertified')
-            ax2.plot(np.linspace(0, 20, cert_results['obs'][exp].shape[0]), cert_results['obs'][exp][:,0],'.-', label='Certified')
+            ax2.plot(np.linspace(0, 20, cert_results['obs'][exp].shape[0])[1:], X_GOAL[:, 0], 'g--', label='Reference')
+            ax2.plot(np.linspace(0, 20, uncert_results['obs'][exp].shape[0]), uncert_results['obs'][exp][:, 0], 'r--', label='Uncertified')
+            ax2.plot(np.linspace(0, 20, cert_results['obs'][exp].shape[0]), cert_results['obs'][exp][:, 0], '.-', label='Certified')
             ax2.plot(np.linspace(0, 20, cert_results['obs'][exp].shape[0])[corrections], cert_results['obs'][exp][corrections, 0], 'r.', label='Modified')
             ax2.set_xlabel(r'Time')
             ax2.set_ylabel(r'X')
@@ -456,19 +457,19 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
             ax2.legend(loc='upper right')
         elif config.task == Environment.QUADROTOR:
             _, ax2 = plt.subplots()
-            ax2.plot(uncert_results['obs'][exp][:,graph3_1+1], uncert_results['obs'][exp][:,graph3_2+1],'r--', label='Uncertified')
-            ax2.plot(cert_results['obs'][exp][:,graph3_1+1], cert_results['obs'][exp][:,graph3_2+1],'.-', label='Certified')
-            ax2.plot(cert_results['obs'][exp][corrections, graph3_1+1], cert_results['obs'][exp][corrections, graph3_2+1], 'r.', label='Modified')
+            ax2.plot(uncert_results['obs'][exp][:, graph3_1 + 1], uncert_results['obs'][exp][:, graph3_2 + 1], 'r--', label='Uncertified')
+            ax2.plot(cert_results['obs'][exp][:, graph3_1 + 1], cert_results['obs'][exp][:, graph3_2 + 1], '.-', label='Certified')
+            ax2.plot(cert_results['obs'][exp][corrections, graph3_1 + 1], cert_results['obs'][exp][corrections, graph3_2 + 1], 'r.', label='Modified')
             ax2.set_xlabel(r'x_dot')
             ax2.set_ylabel(r'z_dot')
             ax2.set_box_aspect(0.5)
             ax2.legend(loc='upper right')
 
         _, ax3 = plt.subplots()
-        ax3.plot(uncert_results['obs'][exp][:,graph3_1], uncert_results['obs'][exp][:,graph3_2],'r--', label='Uncertified')
-        ax3.plot(cert_results['obs'][exp][:,graph3_1], cert_results['obs'][exp][:,graph3_2],'.-', label='Certified')
+        ax3.plot(uncert_results['obs'][exp][:, graph3_1], uncert_results['obs'][exp][:, graph3_2], 'r--', label='Uncertified')
+        ax3.plot(cert_results['obs'][exp][:, graph3_1], cert_results['obs'][exp][:, graph3_2], '.-', label='Certified')
         if config.task_config.task == Task.TRAJ_TRACKING and config.task == Environment.QUADROTOR:
-            ax3.plot(X_GOAL[:,graph3_1], X_GOAL[:,graph3_2],'g--', label='Reference')
+            ax3.plot(X_GOAL[:, graph3_1], X_GOAL[:, graph3_2], 'g--', label='Reference')
         ax3.plot(cert_results['obs'][exp][corrections, graph3_1], cert_results['obs'][exp][corrections, graph3_2], 'r.', label='Modified')
         ax3.scatter(uncert_results['obs'][exp][0, graph3_1], uncert_results['obs'][exp][0, graph3_2], color='g', marker='o', s=100, label='Initial State')
         ax3.set_xlabel(r'X')
@@ -555,7 +556,7 @@ def create_table(dataframe, system):
     '''
     all_dfs = {}
     for M in [2, 5, 10]:
-        data = {(outerKey, innerKey): {key: values['precomputed'][key]/values['regularized'][key] for key in values['precomputed'].keys()} for outerKey, innerDict in dataframe[M][system].items() for innerKey, values in innerDict.items()}
+        data = {(outerKey, innerKey): {key: values['precomputed'][key] / values['regularized'][key] for key in values['precomputed'].keys()} for outerKey, innerDict in dataframe[M][system].items() for innerKey, values in innerDict.items()}
         all_dfs[M] = pd.DataFrame(data)
     df = pd.concat(all_dfs.values(), axis=0, keys=all_dfs.keys())
     print(df)
@@ -602,18 +603,18 @@ def create_paper_plot(system, task, data_extractor):
                 uncertified_data.append(data_extractor(raw_data, certified=False))
 
     num_bars = len(ordered_cost_ids) + show_uncertified
-    width = 1/(num_bars+1)
-    widths = [width]*len(labels)
-    x = np.arange(1, len(labels)+1)
+    width = 1 / (num_bars + 1)
+    widths = [width] * len(labels)
+    x = np.arange(1, len(labels) + 1)
 
     box_plots = {}
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-    flierprops={'marker': 'o', 'markersize': 3}
+    flierprops = {'marker': 'o', 'markersize': 3}
 
     cost_names = []
     if show_uncertified:
         cost_names.append('Uncertified')
-        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars-1)/2.0*width, widths=widths, patch_artist=True, medianprops=medianprops, flierprops=flierprops)
+        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars - 1) / 2.0 * width, widths=widths, patch_artist=True, medianprops=medianprops, flierprops=flierprops)
         for patch in box_plots['uncertified']['boxes']:
             patch.set_facecolor('plum')
 
@@ -623,7 +624,7 @@ def create_paper_plot(system, task, data_extractor):
         if cost_name == 'Lqr':
             cost_name = 'LQR'
         cost_names.append(f'{cost_name} Cost')
-        position = ((num_bars-1)/2.0 - idx - show_uncertified)*width
+        position = ((num_bars - 1) / 2.0 - idx - show_uncertified) * width
         box_plots[cost_id] = ax.boxplot(cert_data[cost_id], positions=x - position, widths=widths, patch_artist=True, medianprops=medianprops)
 
         for patch in box_plots[cost_id]['boxes']:
@@ -635,7 +636,7 @@ def create_paper_plot(system, task, data_extractor):
     ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
 
     ax.set_xticks(x, labels, weight='bold', fontsize=45)
-    ax.set_xlim([0.5, len(labels)+0.5])
+    ax.set_xlim([0.5, len(labels) + 0.5])
 
     fig.tight_layout()
 
@@ -688,7 +689,7 @@ if __name__ == '__main__':
 
     #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_constraint_violations)
 
-    ## Plotting a single experiment
+    # Plotting a single experiment
     # algo_name = 'lqr'
     # mpsc_cost_name = 'one_step'
     # one_result = load_one_experiment(system=system_name, task=task_name, algo=algo_name, mpsc_cost_horizon=mpsc_cost_horizon_num)

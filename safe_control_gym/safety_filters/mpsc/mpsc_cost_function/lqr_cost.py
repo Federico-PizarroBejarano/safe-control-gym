@@ -1,4 +1,4 @@
-'''LQR Cost Function for Smooth MPSC. '''
+'''LQR Cost Function for Smooth MPSC.'''
 
 import numpy as np
 import casadi as cs
@@ -8,7 +8,7 @@ from safe_control_gym.envs.benchmark_env import Task
 
 
 class LQR_COST(MPSC_COST):
-    '''LQR MPSC Cost Function. '''
+    '''LQR MPSC Cost Function.'''
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
@@ -39,6 +39,6 @@ class LQR_COST(MPSC_COST):
                 v_L = -self.gain @ (z_var[:, h] - X_GOAL.T + X_EQ) + self.env.symbolic.U_EQ
             elif self.env.TASK == Task.TRAJ_TRACKING:
                 v_L = -self.gain @ (z_var[:, h] - X_GOAL[h, :].T + X_EQ) + self.env.symbolic.U_EQ
-            cost += (self.decay_factor**h)*(v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
+            cost += (self.decay_factor**h) * (v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
 
         return cost

@@ -1,4 +1,4 @@
-'''Abstract class for MPSC Cost Functions. '''
+'''Abstract class for MPSC Cost Functions.'''
 
 from abc import ABC, abstractmethod
 
@@ -6,7 +6,7 @@ from safe_control_gym.envs.benchmark_env import BenchmarkEnv
 
 
 class MPSC_COST(ABC):
-    '''Abstract MPSC Cost Function to be extended for different cost functions. '''
+    '''Abstract MPSC Cost Function to be extended for different cost functions.'''
 
     def __init__(self,
                  env: BenchmarkEnv = None,

@@ -1,4 +1,4 @@
-'''Precomputed Cost Function for Smooth MPSC. '''
+'''Precomputed Cost Function for Smooth MPSC.'''
 
 import numpy as np
 
@@ -8,7 +8,7 @@ from safe_control_gym.envs.benchmark_env import Environment
 
 
 class PRECOMPUTED_COST(MPSC_COST):
-    '''Precomputed future states MPSC Cost Function. '''
+    '''Precomputed future states MPSC Cost Function.'''
 
     def __init__(self,
                  env,
@@ -51,7 +51,7 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         cost = (u_L - next_u).T @ (u_L - next_u)
         for h in range(1, self.mpsc_cost_horizon):
-            cost += (self.decay_factor**h)*(v_L[:, h] - v_var[:, h]).T @ (v_L[:, h] - v_var[:, h])
+            cost += (self.decay_factor**h) * (v_L[:, h] - v_var[:, h]).T @ (v_L[:, h] - v_var[:, h])
 
         return cost
 
@@ -95,9 +95,9 @@ class PRECOMPUTED_COST(MPSC_COST):
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
         for h in range(self.mpsc_cost_horizon):
-            next_step = min(iteration+h, self.env.X_GOAL.shape[0]-1)
+            next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
             # Concatenate goal info (goal state(s)) for RL
-            extended_obs = self.env.extend_obs(obs, next_step+1)
+            extended_obs = self.env.extend_obs(obs, next_step + 1)
 
             action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
 
@@ -113,7 +113,7 @@ class PRECOMPUTED_COST(MPSC_COST):
                 print(f'MISMATCH BETWEEN Unsafe Controller AND MPSC Guess!!!! Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}')
                 raise ValueError()
 
-            v_L[:, h:h+1] = action.reshape((self.model.nu, 1))
+            v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
 
             obs = np.squeeze(self.model.fd_func(x0=obs, p=action)['xf'].toarray())
 

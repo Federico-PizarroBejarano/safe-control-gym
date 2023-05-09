@@ -1,4 +1,4 @@
-'''Learned Cost Function for Smooth MPSC. '''
+'''Learned Cost Function for Smooth MPSC.'''
 
 import pickle
 from itertools import product
@@ -11,7 +11,7 @@ from safe_control_gym.envs.benchmark_env import Task
 
 
 class LEARNED_COST(MPSC_COST):
-    '''Learned future states MPSC Cost Function. '''
+    '''Learned future states MPSC Cost Function.'''
 
     def __init__(self,
                  env,
@@ -31,7 +31,7 @@ class LEARNED_COST(MPSC_COST):
         self.uncertified_controller = None
 
         self.max_order = 2
-        self.power_list = [p for p in product(range(self.max_order+1), repeat=self.model.nx) if sum(p) <= self.max_order]
+        self.power_list = [p for p in product(range(self.max_order + 1), repeat=self.model.nx) if sum(p) <= self.max_order]
         self.regularization_const = 0.0
 
         self.gamma = self.transform_state_errors(np.zeros((self.model.nx)))
@@ -68,7 +68,7 @@ class LEARNED_COST(MPSC_COST):
             elif self.env.TASK == Task.TRAJ_TRACKING:
                 state_error = z_var[:, h] - X_GOAL[h, :].T + X_EQ
             v_L = self.policy(state_error) + self.env.symbolic.U_EQ
-            cost += (self.decay_factor**h)*(v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
+            cost += (self.decay_factor**h) * (v_L - v_var[:, h]).T @ (v_L - v_var[:, h])
 
         return cost
 
@@ -104,7 +104,7 @@ class LEARNED_COST(MPSC_COST):
         else:
             state_error = np.squeeze(obs) - np.squeeze(np.atleast_2d(self.env.X_GOAL)[iteration, :])
 
-        self.prev_actions = np.vstack((self.prev_actions, u_L-self.env.symbolic.U_EQ))
+        self.prev_actions = np.vstack((self.prev_actions, u_L - self.env.symbolic.U_EQ))
         transformed_error = self.transform_state_errors(state_error)
         self.gamma = np.vstack((self.gamma, transformed_error))
 
@@ -130,23 +130,23 @@ class LEARNED_COST(MPSC_COST):
         return np.array([gamma])
 
     def generate_policy(self):
-        '''Generates the symbolic policy based on the current collected data points. '''
+        '''Generates the symbolic policy based on the current collected data points.'''
 
         action = np.zeros((self.model.nu, 1))
         counter = 0
 
-        self.weights = np.linalg.pinv(self.gamma.T @ self.gamma + self.regularization_const*np.eye(self.gamma.shape[1])) @ self.gamma.T @ self.prev_actions
+        self.weights = np.linalg.pinv(self.gamma.T @ self.gamma + self.regularization_const * np.eye(self.gamma.shape[1])) @ self.gamma.T @ self.prev_actions
         state_error = cs.MX.sym('x', self.model.nx, 1)
 
         for powers in self.power_list:
             monomial = 1.0
             for state in range(self.model.nx):
                 monomial *= (state_error[state]**powers[state])
-            action += monomial*self.weights[counter]
+            action += monomial * self.weights[counter]
             counter += 1
 
         self.policy = cs.Function('policy',
-                [state_error],
-                [action],
-                ['state_error'],
-                ['action'])
+                                  [state_error],
+                                  [action],
+                                  ['state_error'],
+                                  ['action'])

@@ -1,4 +1,4 @@
-'''This script tests the MPSC safety filter implementation. '''
+'''This script tests the MPSC safety filter implementation.'''
 
 import pickle
 import shutil
@@ -32,7 +32,7 @@ reachable_state_randomization = {
             'distrib': 'uniform',
             'low': -1,
             'high': 1}
-        },
+    },
     'quadrotor_2D': {
         'init_x': {
             'distrib': 'uniform',
@@ -58,7 +58,7 @@ reachable_state_randomization = {
             'distrib': 'uniform',
             'low': -1.5,
             'high': 1.5}
-        },
+    },
     'quadrotor_3D': {
         'init_x': {
             'distrib': 'uniform',
@@ -108,7 +108,7 @@ reachable_state_randomization = {
             'distrib': 'uniform',
             'low': -1,
             'high': 1}
-        },
+    },
 }
 
 regularization_parameters = {
@@ -220,8 +220,8 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     # Setup MPSC.
     safety_filter = make(config.safety_filter,
-                env_func,
-                **config.sf_config)
+                         env_func,
+                         **config.sf_config)
     safety_filter.reset()
 
     if config.sf_config.cost_function == Cost_Function.LQR_COST:
@@ -265,7 +265,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     elapsed_time_cert = cert_results['timestamp'][0][-1] - cert_results['timestamp'][0][0]
 
     mpsc_results = cert_results['safety_filter_data'][0]
-    corrections = mpsc_results['correction'][0]*10.0 > np.linalg.norm(cert_results['current_physical_action'][0] - safety_filter.U_EQ[0], axis=1)
+    corrections = mpsc_results['correction'][0] * 10.0 > np.linalg.norm(cert_results['current_physical_action'][0] - safety_filter.U_EQ[0], axis=1)
     corrections = np.append(corrections, False)
 
     print('Total Uncertified (s):', elapsed_time_uncert)
@@ -327,19 +327,19 @@ def determine_feasible_starting_points(num_points=100):
     state_randomization = reachable_state_randomization[system]
     if system == 'quadrotor_3D':
         for state in state_randomization.keys():
-            if 'x' not in  state and 'y' not in state and 'z' not in state:
-                state_randomization[state]['low'] = 0.1*state_randomization[state]['low']
-                state_randomization[state]['high'] = 0.1*state_randomization[state]['high']
+            if 'x' not in state and 'y' not in state and 'z' not in state:
+                state_randomization[state]['low'] = 0.1 * state_randomization[state]['low']
+                state_randomization[state]['high'] = 0.1 * state_randomization[state]['high']
             else:
-                state_randomization[state]['low'] = 0.5*state_randomization[state]['low']
-                state_randomization[state]['high'] = 0.5*state_randomization[state]['high']
+                state_randomization[state]['low'] = 0.5 * state_randomization[state]['low']
+                state_randomization[state]['high'] = 0.5 * state_randomization[state]['high']
     generator_env = env_func(init_state=None, randomized_init=True, init_state_randomization_info=state_randomization)
 
     # Setup controller.
     ctrl = make(config.algo,
-                    env_func,
-                    **config.algo_config,
-                    output_dir='./temp')
+                env_func,
+                **config.algo_config,
+                output_dir='./temp')
 
     if config.algo in ['ppo', 'sac']:
         # Load state_dict from trained.
@@ -350,8 +350,8 @@ def determine_feasible_starting_points(num_points=100):
 
     # Setup MPSC.
     safety_filter = make(config.safety_filter,
-                env_func,
-                **config.sf_config)
+                         env_func,
+                         **config.sf_config)
     safety_filter.reset()
 
     safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
@@ -377,10 +377,10 @@ def determine_feasible_starting_points(num_points=100):
 
         mpsc_results = cert_results['safety_filter_data'][0]
 
-        if  cert_metrics['average_length'] == 10 \
+        if cert_metrics['average_length'] == 10 \
                 and np.all(mpsc_results['feasible']) \
                 and uncert_metrics['average_constraint_violation'] > 5 \
-                and uncert_metrics['average_length'] ==  config.task_config.ctrl_freq * config.task_config.episode_len_sec \
+                and uncert_metrics['average_length'] == config.task_config.ctrl_freq * config.task_config.episode_len_sec \
                 and cert_metrics['average_constraint_violation'] == 0:
             starting_points.append(cert_results['state'][0][0])
 
@@ -474,9 +474,9 @@ def run_uncertified_trajectory(n_episodes=10):
 
     # Setup controller.
     ctrl = make(config.algo,
-                    env_func,
-                    **config.algo_config,
-                    output_dir='./temp')
+                env_func,
+                **config.algo_config,
+                output_dir='./temp')
 
     if config.algo in ['ppo', 'sac']:
         # Load state_dict from trained.
@@ -497,6 +497,7 @@ def run_uncertified_trajectory(n_episodes=10):
 
     with open(f'./models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl', 'wb') as f:
         pickle.dump(uncert_results, f)
+
 
 if __name__ == '__main__':
     run()

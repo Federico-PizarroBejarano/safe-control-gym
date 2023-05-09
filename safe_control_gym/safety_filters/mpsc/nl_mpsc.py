@@ -26,8 +26,7 @@ from safe_control_gym.envs.benchmark_env import Task, Environment
 
 
 class NL_MPSC(MPSC):
-    '''Model Predictive Safety Certification Class. '''
-
+    '''Model Predictive Safety Certification Class.'''
 
     def __init__(self,
                  env_func,
@@ -84,19 +83,19 @@ class NL_MPSC(MPSC):
         self.l = np.concatenate([l_x, l_u])
 
     def set_dynamics(self):
-        '''Compute the discrete dynamics. '''
+        '''Compute the discrete dynamics.'''
 
         if self.integration_algo == 'rk4':
             dynamics_func = rk_discrete(self.model.fc_func,
-                                         self.model.nx,
-                                         self.model.nu,
-                                         self.dt)
+                                        self.model.nx,
+                                        self.model.nu,
+                                        self.dt)
         else:
             dynamics_func = cs.integrator('fd', self.integration_algo,
-                                            {'x': self.model.x_sym,
-                                            'p': self.model.u_sym,
-                                            'ode': self.model.x_dot}, {'tf': self.dt}
-                                    )
+                                          {'x': self.model.x_sym,
+                                           'p': self.model.u_sym,
+                                           'ode': self.model.x_dot}, {'tf': self.dt}
+                                          )
 
         self.dynamics_func = dynamics_func
 
@@ -133,13 +132,13 @@ class NL_MPSC(MPSC):
         if self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
             self.E *= 2
 
-        self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym+self.X_mid, u_sym+self.U_mid) + self.E @ w_sym], ['x', 'u', 'w'], ['f'])
+        self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym + self.X_mid, u_sym + self.U_mid) + self.E @ w_sym], ['x', 'u', 'w'], ['f'])
         phi_1 = cs.Function('phi_1', [x_sym, u_sym, w_sym], [self.f(x_sym, u_sym, w_sym)], ['x', 'u', 'w'], ['phi_1'])
         phi_2 = cs.Function('phi_2', [x_sym, u_sym, w_sym], [self.f(x_sym + 0.5 * self.dt * phi_1(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_2'])
         phi_3 = cs.Function('phi_3', [x_sym, u_sym, w_sym], [self.f(x_sym + 0.5 * self.dt * phi_2(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_3'])
         phi_4 = cs.Function('phi_4', [x_sym, u_sym, w_sym], [self.f(x_sym + self.dt * phi_3(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_4'])
         rungeKutta = x_sym + self.dt / 6 * (phi_1(x_sym, u_sym, w_sym) + 2 * phi_2(x_sym, u_sym, w_sym) + 2 * phi_3(x_sym, u_sym, w_sym) + phi_4(x_sym, u_sym, w_sym))
-        self.disc_f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [rungeKutta+self.X_mid], ['x', 'u', 'w'], ['disc_f'])
+        self.disc_f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [rungeKutta + self.X_mid], ['x', 'u', 'w'], ['disc_f'])
 
         self.Ac = cs.Function('Ac', [x_sym, u_sym, w_sym], [cs.jacobian(self.f(x_sym, u_sym, w_sym), x_sym)], ['x', 'u', 'w'], ['Ac'])
         self.Bc = cs.Function('Bc', [x_sym, u_sym, w_sym], [cs.jacobian(self.f(x_sym, u_sym, w_sym), u_sym)], ['x', 'u', 'w'], ['Bc'])
@@ -172,9 +171,9 @@ class NL_MPSC(MPSC):
         for i in range(self.n_samples):
             init_state, _ = env.reset()
             if self.env.NAME == Environment.QUADROTOR:
-                u = np.random.rand(self.model.nu)/20 - 1/40 + self.U_EQ
+                u = np.random.rand(self.model.nu) / 20 - 1 / 40 + self.U_EQ
             else:
-                u = env.action_space.sample() # Will yield a random action within action space.
+                u = env.action_space.sample()  # Will yield a random action within action space.
             x_next_obs, _, _, _ = env.step(u)
             x_next_estimate = np.squeeze(self.dynamics_func(x0=init_state, p=u)['xf'].toarray())
             w[i, :] = x_next_obs - x_next_estimate
@@ -190,12 +189,12 @@ class NL_MPSC(MPSC):
         self.w_func = lambda x, u, s: self.max_w
 
     def synthesize_lyapunov(self):
-        '''Synthesize the appropriate constants related to the lyapunov function of the system. '''
-        ## Incremental Lyapunov function: Find upper bound for S-procedure variable lambda
+        '''Synthesize the appropriate constants related to the lyapunov function of the system.'''
+        # Incremental Lyapunov function: Find upper bound for S-procedure variable lambda
         lamb_lb = None
         lamb_ub = None
 
-        lamb = 0.008 # lambda lower bound
+        lamb = 0.008  # lambda lower bound
         self.rho_c = 0.192  # tuning parameter determines how fast the lyapunov function contracts
 
         if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
@@ -222,9 +221,9 @@ class NL_MPSC(MPSC):
                 if lamb_lb is not None:
                     break
 
-        ## Incremental Lyapunov function: Determine optimal lambda
-        lamb_lb = lamb_lb/2
-        lamb_ub = lamb_ub*2
+        # Incremental Lyapunov function: Determine optimal lambda
+        lamb_lb = lamb_lb / 2
+        lamb_ub = lamb_ub * 2
 
         num_candidates = 50
 
@@ -265,7 +264,7 @@ class NL_MPSC(MPSC):
         c_max = max(self.c_js)
         w_bar_c = np.sqrt(np.max(np.linalg.eig(self.E.T @ self.P @ self.E)[0]))
 
-        ## Get Discrete-time system values
+        # Get Discrete-time system values
         self.rho = np.exp(-self.rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / self.rho_c  # even using rho_c from the paper yields different w_bar
         horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
@@ -288,11 +287,11 @@ class NL_MPSC(MPSC):
         self.check_lyapunov_func()
 
     def get_terminal_ingredients(self):
-        '''Calculate the terminal ingredients of the MPC optimization. '''
-        ## Solve Lyapunov SDP using linearized discrete-time dynamics based on RK4 for terminal ingredients
+        '''Calculate the terminal ingredients of the MPC optimization.'''
+        # Solve Lyapunov SDP using linearized discrete-time dynamics based on RK4 for terminal ingredients
         w_none = np.zeros((self.q, 1))
-        A_lin = self.Ad(self.x_r - self.X_mid, self.u_r  - self.U_mid, w_none).toarray()
-        B_lin = self.Bd(self.x_r - self.X_mid, self.u_r  - self.U_mid, w_none).toarray()
+        A_lin = self.Ad(self.x_r - self.X_mid, self.u_r - self.U_mid, w_none).toarray()
+        B_lin = self.Bd(self.x_r - self.X_mid, self.u_r - self.U_mid, w_none).toarray()
 
         self.P_f = solve_discrete_are(A_lin, B_lin, self.Q, self.R)
         btp = np.dot(B_lin.T, self.P_f)
@@ -314,8 +313,8 @@ class NL_MPSC(MPSC):
         L = []
         l = []
 
-        Z_mid = (constraint.upper_bounds + constraint.lower_bounds)/2.0
-        Z_limits = np.array([[constraint.upper_bounds[i]-Z_mid[i], constraint.lower_bounds[i]-Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
+        Z_mid = (constraint.upper_bounds + constraint.lower_bounds) / 2.0
+        Z_limits = np.array([[constraint.upper_bounds[i] - Z_mid[i], constraint.lower_bounds[i] - Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
 
         dim = Z_limits.shape[0]
         eye_dim = np.eye(dim)
@@ -384,7 +383,7 @@ class NL_MPSC(MPSC):
             Constraints += [constraint_2 << 0]
 
         for j in range(0, self.p):
-            LXLY = self.L_x[j:j+1, :] @ X + self.L_u[j:j+1, :] @ Y
+            LXLY = self.L_x[j:j + 1, :] @ X + self.L_u[j:j + 1, :] @ Y
 
             constraint_3 = cp.bmat([[np.array([[1]]), LXLY], [LXLY.T, X]])
             Constraints += [constraint_3 >> 0]
@@ -410,16 +409,16 @@ class NL_MPSC(MPSC):
         vectors = []
 
         while len(vectors) < num:
-            u = np.random.normal(0,1,dim)  # an array of d normally distributed random variables
-            norm=np.sum(u**2)**(0.5)
-            radius = r * np.random.rand()**(1.0/dim)
-            vec= radius*u/norm
+            u = np.random.normal(0, 1, dim)  # an array of d normally distributed random variables
+            norm = np.sum(u**2)**(0.5)
+            radius = r * np.random.rand()**(1.0 / dim)
+            vec = radius * u / norm
             vectors.append(vec)
 
         return np.vstack(vectors)
 
     def check_decay_rate(self):
-        '''Check the decay rate. '''
+        '''Check the decay rate.'''
 
         x_test = np.zeros((self.n, 1))
         u_test = self.U_EQ
@@ -436,11 +435,11 @@ class NL_MPSC(MPSC):
                 x_test[-6] = angle
             A_theta = self.Ac(x_test, u_test - self.U_mid, w_test).toarray()
             B_theta = self.Bc(x_test, u_test - self.U_mid, w_test).toarray()
-            left_side = max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ self.K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ self.K) @ X_sqrt)[0]) + 2*self.rho_c
+            left_side = max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ self.K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ self.K) @ X_sqrt)[0]) + 2 * self.rho_c
             assert left_side <= self.tolerance, f'[ERROR] The solution {left_side} is not within the tolerance {self.tolerance}'
 
     def check_lyapunov_func(self):
-        '''Check the incremental Lyapunov function. '''
+        '''Check the incremental Lyapunov function.'''
 
         # select the number of random vectors to check
         num_random_vectors = 10000
@@ -454,7 +453,7 @@ class NL_MPSC(MPSC):
         w_dist = self.randsphere(num_random_vectors, self.q, self.max_w).T
 
         # set arbitrary v that satisfies the constraints for testing
-        v = np.array(self.constraints.input_constraints[0].upper_bounds)/10
+        v = np.array(self.constraints.input_constraints[0].upper_bounds) / 10
 
         # initialize counters
         num_valid = 0
@@ -471,8 +470,8 @@ class NL_MPSC(MPSC):
 
             # get dynamics
             w_none = np.zeros((self.q, 1))
-            x_dot = np.squeeze(self.f(x_i-self.X_mid, u_x-self.U_mid, w_none).toarray())
-            z_dot = np.squeeze(self.f(self.x_r-self.X_mid, u_z-self.U_mid, w_none).toarray())
+            x_dot = np.squeeze(self.f(x_i - self.X_mid, u_x - self.U_mid, w_none).toarray())
+            z_dot = np.squeeze(self.f(self.x_r - self.X_mid, u_z - self.U_mid, w_none).toarray())
 
             # evaluate Lyapunov function and its time derivative
             V_d = (x_i - self.x_r).T @ self.P @ (x_i - self.x_r)
@@ -487,7 +486,7 @@ class NL_MPSC(MPSC):
                 inside_set += 1
 
             # get next state
-            x_plus = np.squeeze(self.disc_f(x_i-self.X_mid, u_x-self.U_mid, w_dist[:, i]).toarray())
+            x_plus = np.squeeze(self.disc_f(x_i - self.X_mid, u_x - self.U_mid, w_dist[:, i]).toarray())
             V_d_plus = (x_plus - self.x_r).T @ self.P @ (x_plus - self.x_r)
 
             # check robust control invariance
@@ -499,7 +498,7 @@ class NL_MPSC(MPSC):
         print('IS INVARIANT:', is_invariant / num_random_vectors)
 
     def check_terminal_ingredients(self):
-        '''Check the terminal ingredients. '''
+        '''Check the terminal ingredients.'''
 
         w_none = np.zeros((self.q, 1))
         num_random_vectors = 10000
@@ -527,10 +526,10 @@ class NL_MPSC(MPSC):
             u = self.K_f @ (x_i - self.x_r) + self.u_r
 
             # simulate system using control input
-            x_plus = np.squeeze(self.disc_f(x_i-self.X_mid, u-self.U_mid, w_none).toarray())
+            x_plus = np.squeeze(self.disc_f(x_i - self.X_mid, u - self.U_mid, w_none).toarray())
 
             # disturbed x_plus
-            x_plus_noisy = np.squeeze(self.disc_f(x_i-self.X_mid, u-self.U_mid, w_dist[:, i]).toarray())
+            x_plus_noisy = np.squeeze(self.disc_f(x_i - self.X_mid, u - self.U_mid, w_dist[:, i]).toarray())
 
             # evaluate stage cost and terminal costs
             stage = (x_i - self.x_r).T @ self.Q @ (x_i - self.x_r)
@@ -550,7 +549,7 @@ class NL_MPSC(MPSC):
         print('INSIDE SET:', inside_set / num_random_vectors)
 
     def check_terminal_constraints(self,
-                                   num_points: int=40,
+                                   num_points: int = 40,
                                    ):
         '''
         Check if the provided terminal set is only contains valid states using a gridded approach.
@@ -564,16 +563,16 @@ class NL_MPSC(MPSC):
         '''
 
         # Determine if terminal set inside state constraints
-        terminal_max = np.sqrt(np.diag(np.linalg.inv(self.P_f/self.gamma**2)))
-        terminal_min = -np.sqrt(np.diag(np.linalg.inv(self.P_f/self.gamma**2)))
+        terminal_max = np.sqrt(np.diag(np.linalg.inv(self.P_f / self.gamma**2)))
+        terminal_min = -np.sqrt(np.diag(np.linalg.inv(self.P_f / self.gamma**2)))
 
         max_bounds = np.zeros((self.n))
         min_bounds = np.zeros((self.n))
         for i in range(self.n):
-            tighten_by_max = self.c_js[i*2]*self.s_bar_f
-            tighten_by_min = self.c_js[i*2+1]*self.s_bar_f
-            max_bounds[i] = 1.0/self.L_x[i*2, i] * (self.l[i*2] - tighten_by_max)
-            min_bounds[i] = 1.0/self.L_x[i*2+1, i] * (self.l[i*2+1] - tighten_by_min)
+            tighten_by_max = self.c_js[i * 2] * self.s_bar_f
+            tighten_by_min = self.c_js[i * 2 + 1] * self.s_bar_f
+            max_bounds[i] = 1.0 / self.L_x[i * 2, i] * (self.l[i * 2] - tighten_by_max)
+            min_bounds[i] = 1.0 / self.L_x[i * 2 + 1, i] * (self.l[i * 2 + 1] - tighten_by_min)
 
         if np.any(terminal_max > max_bounds) or np.any(terminal_min < min_bounds):
             raise ValueError('Terminal set is not constrained within the constraint set.')
@@ -589,10 +588,10 @@ class NL_MPSC(MPSC):
         max_bounds = np.zeros((self.m))
         min_bounds = np.zeros((self.m))
         for i in range(self.m):
-            tighten_by_max = self.c_js[self.n*2 + i*2]*self.s_bar_f
-            tighten_by_min = self.c_js[self.n*2 + i*2+1]*self.s_bar_f
-            max_bounds[i] = 1.0/self.L_u[self.n*2 + i*2, i] * (self.l[self.n*2 + i*2] - tighten_by_max)
-            min_bounds[i] = 1.0/self.L_u[self.n*2 + i*2+1, i] * (self.l[self.n*2 + i*2+1] - tighten_by_min)
+            tighten_by_max = self.c_js[self.n * 2 + i * 2] * self.s_bar_f
+            tighten_by_min = self.c_js[self.n * 2 + i * 2 + 1] * self.s_bar_f
+            max_bounds[i] = 1.0 / self.L_u[self.n * 2 + i * 2, i] * (self.l[self.n * 2 + i * 2] - tighten_by_max)
+            min_bounds[i] = 1.0 / self.L_u[self.n * 2 + i * 2 + 1, i] * (self.l[self.n * 2 + i * 2 + 1] - tighten_by_min)
 
         if np.any(max_input + self.u_r > max_bounds + self.U_mid) or np.any(-max_input + self.u_r < min_bounds + self.U_mid):
             raise ValueError(f'Terminal controller causes inputs (max_input: {-max_input+self.u_r[0]}/{max_input+self.u_r[0]}) outside of input constraints (constraints: {min_bounds[0] + self.U_mid[0]}/{max_bounds[0] + self.U_mid[0]}).')
@@ -602,7 +601,7 @@ class NL_MPSC(MPSC):
         num_points_per_dim = num_points // self.n
 
         # Create the lists of states to check
-        states_to_sample = [np.linspace(self.X_mid[i], terminal_max[i]+self.X_mid[i], num_points_per_dim) for i in range(self.n)]
+        states_to_sample = [np.linspace(self.X_mid[i], terminal_max[i] + self.X_mid[i], num_points_per_dim) for i in range(self.n)]
         states_to_check = cartesian_product(*states_to_sample)
 
         num_states_inside_set = 0
@@ -621,7 +620,7 @@ class NL_MPSC(MPSC):
 
                 # Testing condition 29a
                 stable_input = self.K_f @ (state - self.x_r) + self.u_r
-                next_state = np.squeeze(self.disc_f(state-self.X_mid, stable_input-self.U_mid, np.zeros((self.q, 1))).toarray())
+                next_state = np.squeeze(self.disc_f(state - self.X_mid, stable_input - self.U_mid, np.zeros((self.q, 1))).toarray())
                 stage_cost = (state.T - self.X_mid) @ self.Q @ (state - self.X_mid)
                 next_terminal_cost = (next_state - self.X_mid).T @ self.P_f @ (next_state - self.X_mid)
 
@@ -644,7 +643,7 @@ class NL_MPSC(MPSC):
 
                 # Testing condition 29d
                 for j in range(self.p):
-                    constraint_satisfaction = self.L_x[j, :] @ (state-self.X_mid) + self.L_u[j, :] @ (stable_input-self.U_mid) - self.l[j] + self.c_js[j]*self.s_bar_f <= 0
+                    constraint_satisfaction = self.L_x[j, :] @ (state - self.X_mid) + self.L_u[j, :] @ (stable_input - self.U_mid) - self.l[j] + self.c_js[j] * self.s_bar_f <= 0
                     if not constraint_satisfaction:
                         failed_29d += 1
                         failed = True
@@ -723,7 +722,7 @@ class NL_MPSC(MPSC):
             pickle.dump(parameters, f)
 
     def setup_optimizer(self):
-        '''Setup the certifying MPC problem. '''
+        '''Setup the certifying MPC problem.'''
 
         # Horizon parameter.
         horizon = self.horizon
@@ -752,19 +751,19 @@ class NL_MPSC(MPSC):
 
         for i in range(self.horizon):
             # Dynamics constraints
-            next_state = self.dynamics_func(x0=z_var[:,i], p=v_var[:,i])['xf']
-            opti.subject_to(z_var[:, i+1] == next_state)
+            next_state = self.dynamics_func(x0=z_var[:, i], p=v_var[:, i])['xf']
+            opti.subject_to(z_var[:, i + 1] == next_state)
 
             # Lyapunov size increase
-            s_var[:, i+1] = self.rho*s_var[:, i] + w_var[:, i]
+            s_var[:, i + 1] = self.rho * s_var[:, i] + w_var[:, i]
             opti.subject_to(s_var[:, i] <= self.s_bar_f)
             opti.subject_to(w_var[:, i] <= self.w_bar)
-            opti.subject_to(w_var[:, i] >= self.w_func(z_var[:,i], v_var[:,i], s_var[:,i]))
+            opti.subject_to(w_var[:, i] >= self.w_func(z_var[:, i], v_var[:, i], s_var[:, i]))
 
             # Constraints
             for j in range(self.p):
-                tighten_by = self.c_js[j]*s_var[:, i+1]
-                opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i+1]-self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i]-self.U_mid) - self.l_sym[j] + tighten_by <= 0)
+                tighten_by = self.c_js[j] * s_var[:, i + 1]
+                opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= 0)
 
         # Final state constraints
         if self.use_terminal_set:

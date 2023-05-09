@@ -1,10 +1,10 @@
-'''A cost that penalizes rate of change of the MPC input sequence. '''
+'''A cost that penalizes rate of change of the MPC input sequence.'''
 
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 
 
 class REGULARIZED_COST(MPSC_COST):
-    '''Regularized Cost. '''
+    '''Regularized Cost.'''
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
@@ -29,9 +29,9 @@ class REGULARIZED_COST(MPSC_COST):
         cost = (u_L - next_u).T @ (u_L - next_u)
         for h in range(0, self.mpsc_cost_horizon):
             if h == 0:
-                cost += gamma*(v_var[:, 0] - prev_u).T @ (v_var[:, 0] - prev_u)
+                cost += gamma * (v_var[:, 0] - prev_u).T @ (v_var[:, 0] - prev_u)
             else:
-                cost += gamma*(self.decay_factor**h)*(v_var[:, h] - v_var[:, h-1]).T @ (v_var[:, h] - v_var[:, h-1])
+                cost += gamma * (self.decay_factor**h) * (v_var[:, h] - v_var[:, h - 1]).T @ (v_var[:, h] - v_var[:, h - 1])
         return cost
 
     def prepare_cost_variables(self, opti_dict, obs, iteration):
