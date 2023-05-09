@@ -218,7 +218,7 @@ def approximate_LQR_gain(env, ctrl, config, curr_path='.'):
     if task == 'stab':
         state_errors = states - env.X_GOAL
     else:
-        state_errors = states - np.tile(env.X_GOAL, (len(data['action']), 1))
+        state_errors = states - np.tile(env.X_GOAL[:-1, :], (len(data['action']), 1))
 
     Q = np.diag(np.ones((model.nx)))
     R = 0.1 * np.diag(np.ones((model.nu)))

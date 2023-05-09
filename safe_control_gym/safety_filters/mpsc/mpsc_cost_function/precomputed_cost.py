@@ -97,10 +97,7 @@ class PRECOMPUTED_COST(MPSC_COST):
         for h in range(self.mpsc_cost_horizon):
             next_step = min(iteration+h, self.env.X_GOAL.shape[0]-1)
             # Concatenate goal info (goal state(s)) for RL
-            if next_step == 0:
-                extended_obs = self.env.extend_obs(obs, 1)
-            else:
-                extended_obs = self.env.extend_obs(obs, next_step)
+            extended_obs = self.env.extend_obs(obs, next_step+1)
 
             action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
 

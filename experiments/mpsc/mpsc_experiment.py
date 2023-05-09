@@ -174,7 +174,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         cert_metrics (dict): The metrics of the certified experiment.
     '''
 
-    # Define arguments.
+    # Create the configuration dictionary.
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = False
@@ -194,6 +194,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     else:
         system = config.task
 
+    # Create an environment
     env_func = partial(make,
                        config.task,
                        **config.task_config)
@@ -201,9 +202,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     # Setup controller.
     ctrl = make(config.algo,
-                    env_func,
-                    **config.algo_config,
-                    output_dir=curr_path+'/temp')
+                env_func,
+                **config.algo_config,
+                output_dir=curr_path + '/temp')
 
     if config.algo in ['ppo', 'sac']:
         # Load state_dict from trained.
@@ -245,7 +246,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                              cost='quadratic',
                              normalized_rl_action_space=False,
                              disturbance=None,
-                            )
+                             )
         safety_filter.learn(env=train_env)
         safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
     else:
