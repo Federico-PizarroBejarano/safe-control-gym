@@ -21,6 +21,7 @@ class BaseExperiment:
                  ctrl,
                  train_env=None,
                  safety_filter=None,
+                 verbose: bool = False,
                  ):
         '''Creates a generic experiment class to run evaluations and collect standard metrics.
 
@@ -29,8 +30,11 @@ class BaseExperiment:
             ctrl (BaseController): The controller for the task.
             train_env (BenchmarkEnv): The environment used for training.
             safety_filter (BaseSafetyFilter): The safety filter to filter the controller.
+            verbose (bool, optional): If to suppress BaseExperiment print statetments.
         '''
 
+        self.metric_extractor = MetricExtractor()
+        self.verbose = verbose
         self.env = env
         if not is_wrapped(self.env, RecordDataWrapper):
             self.env = RecordDataWrapper(self.env)
@@ -65,19 +69,24 @@ class BaseExperiment:
         # terminal printouts
         if verbose:
             for metric_key, metric_val in metrics.items():
-                print('{}: {:.3f}'.format(colored(metric_key, 'yellow'), metric_val))
+                if isinstance(metric_val, list) or isinstance(metric_val, np.ndarray):
+                    rounded = [f'{elem:.3f}' for elem in metric_val]
+                    print('{}: {}'.format(colored(metric_key, 'yellow'), rounded))
+                else:
+                    print('{}: {:.3f}'.format(colored(metric_key, 'yellow'), metric_val))
             print('Evaluation done.')
         return dict(trajs_data), metrics
 
-    def _execute_evaluations(self, n_episodes=None, n_steps=None, log_freq=None):
+    def _execute_evaluations(self, n_episodes=None, n_steps=None, log_freq=None, seeds=None):
         trajs_data = self._execute_task(ctrl=self.ctrl,
                                         env=self.env,
                                         n_episodes=n_episodes,
                                         n_steps=n_steps,
-                                        log_freq=log_freq)
+                                        log_freq=log_freq,
+                                        seeds=seeds)
         return trajs_data
 
-    def _execute_task(self, ctrl=None, env=None, n_episodes=None, n_steps=None, log_freq=None):
+    def _execute_task(self, ctrl=None, env=None, n_episodes=None, n_steps=None, log_freq=None, seeds=None):
         '''Runs the experiments and collects all the required data.
 
         Args:
@@ -99,14 +108,21 @@ class BaseExperiment:
             ctrl = self.ctrl
         if env is None:
             env = self.env
+        if seeds is not None:
+            assert len(seeds) == n_episodes, "Number of seeds must match the number of episodes"
 
         # initialize
         sim_steps = log_freq // env.CTRL_FREQ if log_freq else 1
         steps, trajs = 0, 0
+        if seeds is not None:
+            seed = seeds[0]
+        else:
+            seed = None
         obs, info = self._evaluation_reset(ctrl=ctrl,
                                            env=env,
                                            ctrl_data=None,
-                                           sf_data=None)
+                                           sf_data=None,
+                                           seed=seed)
         ctrl_data = defaultdict(list)
         sf_data = defaultdict(list)
 
@@ -118,10 +134,16 @@ class BaseExperiment:
                     obs, _, done, info = env.step(action)
                     if done:
                         trajs += 1
-                        obs, info = self._evaluation_reset(ctrl=ctrl,
-                                                           env=env,
-                                                           ctrl_data=ctrl_data,
-                                                           sf_data=sf_data)
+                        if trajs < n_episodes:
+                            if seeds is not None:
+                                seed = seeds[trajs]
+                            else:
+                                seed = None
+                            obs, info = self._evaluation_reset(ctrl=ctrl,
+                                                               env=env,
+                                                               ctrl_data=ctrl_data,
+                                                               sf_data=sf_data,
+                                                               seed=seed)
                         break
         elif n_steps is not None:
             while steps < n_steps:
@@ -179,7 +201,7 @@ class BaseExperiment:
 
         return action
 
-    def _evaluation_reset(self, ctrl, env, ctrl_data, sf_data):
+    def _evaluation_reset(self, ctrl, env, ctrl_data, sf_data, seed=None):
         '''Resets the evaluation between runs.
 
         Args:
@@ -195,9 +217,9 @@ class BaseExperiment:
         if env is None:
             env = self.env
         if env.INFO_IN_RESET:
-            obs, info = env.reset()
+            obs, info = env.reset(seed=seed)
         else:
-            obs = env.reset()
+            obs = env.reset(seed=seed)
             info = None
         if ctrl_data is not None:
             for data_key, data_val in ctrl.results_dict.items():
@@ -230,8 +252,7 @@ class BaseExperiment:
             trajs_data = self.train_env.data
         return dict(trajs_data)
 
-    @staticmethod
-    def compute_metrics(trajs_data):
+    def compute_metrics(self, trajs_data):
         '''Compute all standard metrics on the given trajectory data.
 
         Args:
@@ -241,18 +262,8 @@ class BaseExperiment:
             metrics (dict): The metrics calculated from the raw data.
         '''
 
-        met = MetricExtractor(trajs_data)
-        # collect & compute all sorts of metrics here
-        metrics = {
-            'average_length': np.asarray(met.get_episode_lengths()).mean(),
-            'average_return': np.asarray(met.get_episode_returns()).mean(),
-            'average_rmse': np.asarray(met.get_episode_rmse()).mean(),
-            'rmse_std': np.asarray(met.get_episode_rmse()).std(),
-            'worst_case_rmse_at_0.5': compute_cvar(np.asarray(met.get_episode_rmse()), 0.5, lower_range=False),
-            'failure_rate':  np.asarray(met.get_episode_constraint_violations()).mean(),
-            'average_constraint_violation': np.asarray(met.get_episode_constraint_violation_steps()).mean(),
-            # others ???
-        }
+        metrics = self.metric_extractor.compute_metrics(data=trajs_data, verbose=self.verbose)
+
         return metrics
 
     def reset(self):
@@ -355,7 +366,7 @@ class RecordDataWrapper(gym.Wrapper):
                 self.episode_data[key].append(val)
             return obs, info
         else:
-            obs = self.env.reset()
+            obs = self.env.reset(**kwargs)
             step_data = dict(
                 obs=obs, state=self.env.state
             )
@@ -402,13 +413,36 @@ class MetricExtractor:
         (how many constraint violations happened in each episode)
     '''
 
-    def __init__(self, data):
-        '''Creates a class to extract metrics from standard trajectory data.
+    def compute_metrics(self, data, verbose=False):
+        '''Compute all standard metrics on the given trajectory data.
 
         Args:
-            data (defaultdict(list)): The raw data from the executed runs, in standard form from the Experiment class.
+            data (defaultdict(list)): The raw data from the executed runs.
+            verbose (bool, optional): If to suppress compute_metrics print statetments.
+
+        Returns:
+            metrics (dict): The metrics calculated from the raw data.
         '''
+
         self.data = data
+        self.verbose = verbose
+
+        # collect & compute all sorts of metrics here
+        metrics = {
+            'average_length': np.asarray(self.get_episode_lengths()).mean(),
+            'length': self.get_episode_lengths() if len(self.get_episode_lengths()) > 1 else self.get_episode_lengths()[0],
+            'average_return': np.asarray(self.get_episode_returns()).mean(),
+            'average_rmse': np.asarray(self.get_episode_rmse()).mean(),
+            'rmse': np.asarray(self.get_episode_rmse())  if len(self.get_episode_rmse()) > 1 else self.get_episode_rmse()[0],
+            'rmse_std': np.asarray(self.get_episode_rmse()).std(),
+            'worst_case_rmse_at_0.5': compute_cvar(np.asarray(self.get_episode_rmse()), 0.5, lower_range=False),
+            'failure_rate':  np.asarray(self.get_episode_constraint_violations()).mean(),
+            'average_constraint_violation': np.asarray(self.get_episode_constraint_violation_steps()).mean(),
+            'constraint_violation_std': np.asarray(self.get_episode_constraint_violation_steps()).std(),
+            'constraint_violation': np.asarray(self.get_episode_constraint_violation_steps()) if len(self.get_episode_constraint_violation_steps()) > 1 else self.get_episode_constraint_violation_steps()[0],
+            # others ???
+        }
+        return metrics
 
     def get_episode_data(self, key, postprocess_func=lambda x: x):
         '''Extract data field from recorded trajectory data, optionally postprocess each episode data (e.g. get sum).
@@ -425,8 +459,15 @@ class MetricExtractor:
             episode_data = [postprocess_func(ep_val) for ep_val in self.data[key]]
         elif key in self.data['info'][0][-1]:
             # if the data field is contained in step info dict
-            episode_data = [postprocess_func([info.get(key, 0.) for info in ep_info])
-                            for ep_info in self.data['info']]
+            episode_data = []
+            for ep_info in self.data['info']:
+                ep_info_data = []
+                for info in ep_info:
+                    if key in info:
+                        ep_info_data.append(info.get(key))
+                    elif self.verbose:
+                        print(f'[Warn] MetricExtractor.get_episode_data: key {key} not in info dict.')
+                episode_data.append(postprocess_func(ep_info_data))
         else:
             raise KeyError(f'Given data key \'{key}\' does not exist in recorded trajectory data.')
         return episode_data
@@ -473,4 +514,3 @@ class MetricExtractor:
         '''
         return self.get_episode_data('constraint_violation',
                                      postprocess_func=sum)
-

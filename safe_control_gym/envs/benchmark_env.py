@@ -199,6 +199,7 @@ class BenchmarkEnv(gym.Env, ABC):
         # Default seed None means pure randomness/no seeding.
         self.seed(seed)
         self.initial_reset = False
+        self.at_reset = False
         self.INFO_IN_RESET = info_in_reset
 
     def seed(self,
@@ -299,8 +300,8 @@ class BenchmarkEnv(gym.Env, ABC):
 
     @abstractmethod
     def _setup_symbolic(self, prior_prop={}, **kwargs):
-        '''Creates a symbolic (CasADi) model for dynamics and cost. 
-        
+        '''Creates a symbolic (CasADi) model for dynamics and cost.
+
         Args:
             prior_prop (dict): specify the prior inertial prop to use in the symbolic model.
         '''
@@ -347,10 +348,15 @@ class BenchmarkEnv(gym.Env, ABC):
         '''
         raise NotImplementedError
 
-    def before_reset(self):
-        '''Pre-processing before calling `.reset()`. '''
+    def before_reset(self, seed=None):
+        '''Pre-processing before calling `.reset()`.
+
+        Args:
+            seed (int): Number to reset the env with a new random seed.
+        '''
         # Housekeeping variables.
         self.initial_reset = True
+        self.at_reset = True
         self.pyb_step_counter = 0
         self.ctrl_step_counter = 0
         self.current_raw_action = None  # Action sent by controller, possibly normalized and unclipped
@@ -362,6 +368,8 @@ class BenchmarkEnv(gym.Env, ABC):
             self.disturbances[mode].reset(self)
         if self.adversary_disturbance is not None:
             self.adv_action = None
+        if seed is not None:
+            self.seed(seed)
 
     def after_reset(self, obs, info):
         '''Post-processing after calling `.reset()`.
@@ -378,6 +386,7 @@ class BenchmarkEnv(gym.Env, ABC):
         info['current_step'] = 0
         if self.constraints is not None and not(self.constraints.state_constraints == []):
             info['constraint_values'] = self.constraints.get_values(self, only_state=True)
+        self.at_reset = False
         return obs, info
 
     @abstractmethod
@@ -555,7 +564,7 @@ class BenchmarkEnv(gym.Env, ABC):
         else:
             raise ValueError('Trajectory plane should be in form of ab, where a and b can be {x, y, z}.')
         # Generate time stamps.
-        times = np.arange(0, traj_length, sample_time)
+        times = np.arange(0, traj_length+sample_time, sample_time) # sample time added to make reference one step longer than traj_length
         pos_ref_traj = np.zeros((len(times), 3))
         vel_ref_traj = np.zeros((len(times), 3))
         speed_traj = np.zeros((len(times), 1))
