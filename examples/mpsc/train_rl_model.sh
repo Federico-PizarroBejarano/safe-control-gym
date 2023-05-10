@@ -3,8 +3,8 @@
 SYS='cartpole'
 # SYS='quadrotor'
 
-TASK='stab'
-# TASK='track'
+# TASK='stab'
+TASK='track'
 
 ALGO='ppo'
 # ALGO='sac'
