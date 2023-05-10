@@ -6,7 +6,7 @@ from functools import partial
 
 import numpy as np
 
-from safe_control_gym.experiments.base_experiment import BaseExperiment
+from safe_control_gym.experiments.base_experiment import BaseExperiment, MetricExtractor
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
@@ -426,8 +426,9 @@ def run_multiple(plot=True):
                     all_uncert_results[key].append(uncert_results[key][0])
                 all_cert_results[key].append(cert_results[key][0])
 
-    uncert_metrics = BaseExperiment.compute_metrics(all_uncert_results)
-    cert_metrics = BaseExperiment.compute_metrics(all_cert_results)
+    met = MetricExtractor()
+    uncert_metrics = met.compute_metrics(data=all_uncert_results)
+    cert_metrics = met.compute_metrics(data=all_cert_results)
 
     all_results = {'uncert_results': all_uncert_results,
                    'uncert_metrics': uncert_metrics,

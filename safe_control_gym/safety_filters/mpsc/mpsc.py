@@ -246,6 +246,7 @@ class MPSC(BaseSafetyFilter, ABC):
                 success = False
                 certified_action = clipped_action
 
+        certified_action = np.squeeze(np.array(certified_action))
         self.results_dict['kinf'].append(self.kinf)
         self.results_dict['certified_action'].append(certified_action)
         self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
