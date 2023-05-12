@@ -7,8 +7,8 @@ import torch
 
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
-from safe_control_gym.utils.utils import set_dir_from_config, set_device_from_config, set_seed_from_config
-
+from safe_control_gym.utils.plotting import plot_from_logs
+from safe_control_gym.utils.utils import mkdirs, set_dir_from_config, set_device_from_config, set_seed_from_config
 
 def train(config):
     '''Training template.
@@ -51,9 +51,27 @@ def train(config):
     print('Training done.')
 
 
+def make_plots(config):
+    '''Produces plots for logged stats during training.
+    Usage
+        * use with `--func plot` and `--restore {dir_path}` where `dir_path` is
+            the experiment folder containing the logs.
+        * save figures under `dir_path/plots/`.
+    '''
+    # Define source and target log locations.
+    log_dir = os.path.join(config.output_dir, 'logs')
+    plot_dir = os.path.join(config.output_dir, 'plots')
+    mkdirs(plot_dir)
+    plot_from_logs(log_dir, plot_dir, window=3)
+    print('Plotting done.')
+
+MAIN_FUNCS = {'train': train, 'plot': make_plots}
+
+
 if __name__ == '__main__':
     # Make config.
     fac = ConfigFactory()
+    fac.add_argument('--func', type=str, default='train', help='main function to run.')
     fac.add_argument('--thread', type=int, default=0, help='number of threads to use (set by torch).')
     config_dict = fac.merge()
 
@@ -62,4 +80,7 @@ if __name__ == '__main__':
         # E.g. set single thread for less context switching
         torch.set_num_threads(config_dict.thread)
 
-    train(config_dict)
+    func = MAIN_FUNCS.get(config_dict.func, None)
+    if func is None:
+        raise Exception(f'Main function {config_dict.func} not supported.')
+    func(config_dict)
