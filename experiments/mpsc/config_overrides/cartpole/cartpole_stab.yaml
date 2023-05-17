@@ -70,3 +70,4 @@ task_config:
     constrained_variable: input
   done_on_out_of_bound: True
   done_on_violation: False
+  use_constraint_penalty: False

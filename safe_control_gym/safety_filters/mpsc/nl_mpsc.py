@@ -779,10 +779,10 @@ class NL_MPSC(MPSC):
 
         # Create solver (IPOPT solver as of this version).
         opts = {'expand': False,
-                'ipopt.print_level': 4,
+                'ipopt.print_level': 0,
                 'ipopt.sb': 'yes',
                 'ipopt.max_iter': 50,
-                'print_time': 1}
+                'print_time': 0}
         if self.integration_algo == 'rk4':
             opts['expand'] = True
         opti.solver('ipopt', opts)

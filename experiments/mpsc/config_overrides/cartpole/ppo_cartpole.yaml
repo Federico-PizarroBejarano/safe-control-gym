@@ -24,9 +24,9 @@ algo_config:
   max_grad_norm: 0.5
 
   # runner args
-  max_env_steps: 100000
+  max_env_steps: 200000
   num_workers: 1
-  rollout_batch_size: 4
+  rollout_batch_size: 1
   rollout_steps: 100
   deque_size: 10
   eval_batch_size: 10
@@ -38,3 +38,6 @@ algo_config:
   eval_interval: 1000
   eval_save_best: True
   tensorboard: False
+
+  # safety filter
+  buffer_safe_action: True
