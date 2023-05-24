@@ -7,13 +7,22 @@ SYS='cartpole'
 TASK='stab'
 # TASK='track'
 
-# SAFETY_FILTER='linear_mpsc'
-SAFETY_FILTER='nl_mpsc'
-
 ALGO='ppo'
 # ALGO='sac'
 
-TAG='early_stop_2'
+# SAFETY_FILTER='linear_mpsc'
+SAFETY_FILTER='nl_mpsc'
+
+MPSC_COST='one_step_cost'
+# MPSC_COST='constant_cost'
+# MPSC_COST='regularized_cost'
+# MPSC_COST='lqr_cost'
+# MPSC_COST='precomputed_cost'
+# MPSC_COST='learned_cost'
+
+MPSC_COST_HORIZON=2
+
+TAG='mpsf_pen'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -31,7 +40,10 @@ python3 train_rl.py \
     --overrides \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
+        ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
     --output_dir ./unsafe_rl_temp_data/${TAG}/ \
     --seed 2 \
     --kv_overrides \
-        task_config.init_state=None
+        task_config.init_state=None \
+        sf_config.cost_function=${MPSC_COST} \
+        sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \

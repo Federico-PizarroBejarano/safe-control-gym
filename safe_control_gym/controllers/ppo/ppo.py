@@ -80,6 +80,10 @@ class PPO(BaseController):
             use_tensorboard = False
         self.logger = ExperimentLogger(output_dir, log_file_out=log_file_out, use_tensorboard=use_tensorboard)
 
+        # Adding safety filter
+        self.safety_filter = None
+
+
     def reset(self):
         '''Do initializations for training or evaluation.'''
         if self.training:
@@ -90,7 +94,9 @@ class PPO(BaseController):
             self.eval_env.add_tracker('mse', 0, mode='queue')
 
             self.total_steps = 0
-            obs, _ = self.env.reset()
+            obs, info = self.env.reset()
+            self.info = info['n'][0]
+            self.true_obs = obs
             self.obs = self.obs_normalizer(obs)
         else:
             # Add episodic stats to be tracked.
@@ -249,11 +255,29 @@ class PPO(BaseController):
         self.obs_normalizer.unset_read_only()
         rollouts = PPOBuffer(self.env.observation_space, self.env.action_space, self.rollout_steps, self.rollout_batch_size)
         obs = self.obs
+        true_obs = self.true_obs
+        info = self.info
         start = time.time()
         for _ in range(self.rollout_steps):
             with torch.no_grad():
                 act, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
-            next_obs, rew, done, info = self.env.step(act)
+
+            # Adding safety filter
+            buffered_action = act
+            success = False
+            if self.safety_filter is not None:
+                physical_action = self.env.envs[0].denormalize_action(act)
+                unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
+                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                if success:
+                    act = self.env.envs[0].normalize_action(certified_action)
+                    if self.buffer_safe_action is True:
+                        buffered_action = act
+
+            next_obs, rew, done, info = self.env.step([act])
+            if self.penalize_sf_diff and success:
+                rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*100
+            next_true_obs = next_obs
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
@@ -268,9 +292,14 @@ class PPO(BaseController):
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
                     terminal_v[idx] = terminal_val
-            rollouts.push({'obs': obs, 'act': act, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
+
+            rollouts.push({'obs': obs, 'act': buffered_action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
             obs = next_obs
+            true_obs = next_true_obs
+            info = info['n'][0]
         self.obs = obs
+        self.true_obs = true_obs
+        self.info = info
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
         last_val = self.agent.ac.critic(torch.FloatTensor(obs).to(self.device)).detach().cpu().numpy()

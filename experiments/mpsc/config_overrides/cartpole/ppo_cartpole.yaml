@@ -40,4 +40,5 @@ algo_config:
   tensorboard: False
 
   # safety filter
-  buffer_safe_action: True
+  buffer_safe_action: False
+  penalize_sf_diff: True

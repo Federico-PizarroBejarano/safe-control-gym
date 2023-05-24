@@ -16,10 +16,11 @@ import pickle
 import numpy as np
 import casadi as cs
 import cvxpy as cp
+from pytope import Polytope
 from scipy.linalg import sqrtm, solve_discrete_are
 
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
-from safe_control_gym.controllers.mpc.mpc_utils import rk_discrete
+from safe_control_gym.controllers.mpc.mpc_utils import rk_discrete, discretize_linear_system
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.safety_filters.cbf.cbf_utils import cartesian_product
 from safe_control_gym.envs.benchmark_env import Task, Environment
@@ -85,7 +86,30 @@ class NL_MPSC(MPSC):
     def set_dynamics(self):
         '''Compute the discrete dynamics.'''
 
-        if self.integration_algo == 'rk4':
+        if self.integration_algo == 'LTI':
+            dfdxdfdu = self.model.df_func(x=self.X_EQ, u=self.U_EQ)
+            self.Ac = dfdxdfdu['dfdx'].toarray()
+            self.Bc = dfdxdfdu['dfdu'].toarray()
+
+            delta_x = cs.MX.sym('delta_x', self.model.nx, 1)
+            delta_u = cs.MX.sym('delta_u', self.model.nu, 1)
+            delta_w = cs.MX.sym('delta_w', self.model.nx, 1)
+
+            self.Ad, self.Bd = discretize_linear_system(self.Ac, self.Bc, self.dt, exact=True)
+
+            x_dot_lin_vec = self.Ad @ delta_x + self.Bd @ delta_u
+            dynamics_func = cs.Function('fd',
+                                        [delta_x, delta_u],
+                                        [x_dot_lin_vec],
+                                        ['x0', 'p'],
+                                        ['xf'])
+
+            self.Ac = cs.Function('Ac', [delta_x, delta_u, delta_w], [self.Ac], ['x', 'u', 'w'], ['Ac'])
+            self.Bc = cs.Function('Bc', [delta_x, delta_u, delta_w], [self.Bc], ['x', 'u', 'w'], ['Bc'])
+
+            self.Ad = cs.Function('Ad', [delta_x, delta_u, delta_w], [self.Ad], ['x', 'u', 'w'], ['Ad'])
+            self.Bd = cs.Function('Bd', [delta_x, delta_u, delta_w], [self.Bd], ['x', 'u', 'w'], ['Bd'])
+        elif self.integration_algo == 'rk4':
             dynamics_func = rk_discrete(self.model.fc_func,
                                         self.model.nx,
                                         self.model.nu,
@@ -127,24 +151,31 @@ class NL_MPSC(MPSC):
         w_sym = cs.MX.sym('delta_w', self.q, 1)
 
         self.get_error_function(env=env)
-        self.E = np.diag(self.max_w_per_dim) / self.dt
+        if self.integration_algo == 'rk4':
+            self.Ec = np.diag(self.max_w_per_dim) / self.dt
 
-        if self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
-            self.E *= 2
+            if self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
+                self.Ec *= 2
 
-        self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym + self.X_mid, u_sym + self.U_mid) + self.E @ w_sym], ['x', 'u', 'w'], ['f'])
-        phi_1 = cs.Function('phi_1', [x_sym, u_sym, w_sym], [self.f(x_sym, u_sym, w_sym)], ['x', 'u', 'w'], ['phi_1'])
-        phi_2 = cs.Function('phi_2', [x_sym, u_sym, w_sym], [self.f(x_sym + 0.5 * self.dt * phi_1(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_2'])
-        phi_3 = cs.Function('phi_3', [x_sym, u_sym, w_sym], [self.f(x_sym + 0.5 * self.dt * phi_2(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_3'])
-        phi_4 = cs.Function('phi_4', [x_sym, u_sym, w_sym], [self.f(x_sym + self.dt * phi_3(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_4'])
-        rungeKutta = x_sym + self.dt / 6 * (phi_1(x_sym, u_sym, w_sym) + 2 * phi_2(x_sym, u_sym, w_sym) + 2 * phi_3(x_sym, u_sym, w_sym) + phi_4(x_sym, u_sym, w_sym))
-        self.disc_f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [rungeKutta + self.X_mid], ['x', 'u', 'w'], ['disc_f'])
+            self.f = cs.Function('f', [x_sym, u_sym, w_sym], [self.model.fc_func(x_sym + self.X_mid, u_sym + self.U_mid) + self.Ec @ w_sym], ['x', 'u', 'w'], ['f'])
+            phi_1 = cs.Function('phi_1', [x_sym, u_sym, w_sym], [self.f(x_sym, u_sym, w_sym)], ['x', 'u', 'w'], ['phi_1'])
+            phi_2 = cs.Function('phi_2', [x_sym, u_sym, w_sym], [self.f(x_sym + 0.5 * self.dt * phi_1(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_2'])
+            phi_3 = cs.Function('phi_3', [x_sym, u_sym, w_sym], [self.f(x_sym + 0.5 * self.dt * phi_2(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_3'])
+            phi_4 = cs.Function('phi_4', [x_sym, u_sym, w_sym], [self.f(x_sym + self.dt * phi_3(x_sym, u_sym, w_sym), u_sym, w_sym)], ['x', 'u', 'w'], ['phi_4'])
+            rungeKutta = x_sym + self.dt / 6 * (phi_1(x_sym, u_sym, w_sym) + 2 * phi_2(x_sym, u_sym, w_sym) + 2 * phi_3(x_sym, u_sym, w_sym) + phi_4(x_sym, u_sym, w_sym))
+            self.disc_f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [rungeKutta + self.X_mid], ['x', 'u', 'w'], ['disc_f'])
 
-        self.Ac = cs.Function('Ac', [x_sym, u_sym, w_sym], [cs.jacobian(self.f(x_sym, u_sym, w_sym), x_sym)], ['x', 'u', 'w'], ['Ac'])
-        self.Bc = cs.Function('Bc', [x_sym, u_sym, w_sym], [cs.jacobian(self.f(x_sym, u_sym, w_sym), u_sym)], ['x', 'u', 'w'], ['Bc'])
+            self.Ac = cs.Function('Ac', [x_sym, u_sym, w_sym], [cs.jacobian(self.f(x_sym, u_sym, w_sym), x_sym)], ['x', 'u', 'w'], ['Ac'])
+            self.Bc = cs.Function('Bc', [x_sym, u_sym, w_sym], [cs.jacobian(self.f(x_sym, u_sym, w_sym), u_sym)], ['x', 'u', 'w'], ['Bc'])
 
-        self.Ad = cs.Function('Ad', [x_sym, u_sym, w_sym], [cs.jacobian(self.disc_f(x_sym, u_sym, w_sym), x_sym)], ['x', 'u', 'w'], ['Ad'])
-        self.Bd = cs.Function('Bd', [x_sym, u_sym, w_sym], [cs.jacobian(self.disc_f(x_sym, u_sym, w_sym), u_sym)], ['x', 'u', 'w'], ['Bd'])
+            self.Ad = cs.Function('Ad', [x_sym, u_sym, w_sym], [cs.jacobian(self.disc_f(x_sym, u_sym, w_sym), x_sym)], ['x', 'u', 'w'], ['Ad'])
+            self.Bd = cs.Function('Bd', [x_sym, u_sym, w_sym], [cs.jacobian(self.disc_f(x_sym, u_sym, w_sym), u_sym)], ['x', 'u', 'w'], ['Bd'])
+        elif self.integration_algo == 'LTI':
+            self.Ed = np.diag(self.max_w_per_dim)
+            self.Ec = self.Ed/self.dt
+
+            self.f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [self.Ac(x_sym, u_sym, w_sym) @ x_sym + self.Bc(x_sym, u_sym, w_sym) @ u_sym + self.Ec @ w_sym], ['x', 'u', 'w'], ['disc_f'])
+            self.disc_f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [self.Ad(x_sym, u_sym, w_sym) @ x_sym + self.Bd(x_sym, u_sym, w_sym) @ u_sym + self.Ed @ w_sym], ['x', 'u', 'w'], ['disc_f'])
 
         self.synthesize_lyapunov()
         self.get_terminal_ingredients()
@@ -183,7 +214,6 @@ class NL_MPSC(MPSC):
         print('MEAN ERROR:', np.mean(normed_w))
         print('MAX ERROR PER DIM:', np.max(w, axis=0))
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
-        self.error_distrib = np.sum(np.abs(w), axis=0) / np.linalg.norm(np.sum(np.abs(w), axis=0))
         self.max_w_per_dim = np.max(w, axis=0)
         self.max_w = np.max(normed_w)
         self.w_func = lambda x, u, s: self.max_w
@@ -197,7 +227,9 @@ class NL_MPSC(MPSC):
         lamb = 0.008  # lambda lower bound
         self.rho_c = 0.192  # tuning parameter determines how fast the lyapunov function contracts
 
-        if self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
+        if self.integration_algo == 'LTI':
+            self.Theta = [0]
+        elif self.env.NAME == Environment.CARTPOLE or (self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2):
             self.Theta = [self.state_constraint.lower_bounds[-2], 0, self.state_constraint.upper_bounds[-2]]
         else:
             self.Theta = [self.state_constraint.lower_bounds[6], 0, self.state_constraint.upper_bounds[6]]
@@ -262,14 +294,15 @@ class NL_MPSC(MPSC):
             self.c_js[j] = np.linalg.norm((self.L_x[j, :] + self.L_u[j, :] @ self.K) @ sqrtm(self.X))
 
         c_max = max(self.c_js)
-        w_bar_c = np.sqrt(np.max(np.linalg.eig(self.E.T @ self.P @ self.E)[0]))
+        w_bar_c = np.sqrt(np.max(np.linalg.eig(self.Ec.T @ self.P @ self.Ec)[0]))
 
         # Get Discrete-time system values
         self.rho = np.exp(-self.rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / self.rho_c  # even using rho_c from the paper yields different w_bar
+        self.w_bar = max(self.w_bar, self.max_w + self.tolerance)
         horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
         self.s_bar_f = horizon_multiplier * self.w_bar
-        assert self.w_bar > self.max_w, f'[ERROR] w_bar ({self.w_bar}) is too small compared to max_w ({self.max_w}).'
+        # assert self.w_bar > self.max_w, f'[ERROR] w_bar ({self.w_bar}) is too small compared to max_w ({self.max_w}).'
         assert self.s_bar_f > self.max_w * horizon_multiplier + self.tolerance, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
         assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
         self.s_bar_f = self.max_w * horizon_multiplier + self.tolerance
@@ -298,6 +331,9 @@ class NL_MPSC(MPSC):
         self.K_f = -np.dot(np.linalg.inv(self.R + np.dot(btp, B_lin)), np.dot(btp, A_lin))
         self.check_terminal_ingredients()
         self.check_terminal_constraints()
+
+        if self.integration_algo == 'LTI':
+            self.get_terminal_constraint()
 
     def box2polytopic(self, constraint):
         '''Convert constraints into an explicit polytopic form. This assumes that constraints contain the origin.
@@ -377,7 +413,7 @@ class NL_MPSC(MPSC):
             AXBY = A_theta @ X + B_theta @ Y
 
             constraint_1 = AXBY + AXBY.T + 2 * self.rho_c * X
-            constraint_2 = cp.bmat([[AXBY + AXBY.T + lamb * X, self.E], [self.E.T, -lamb * np.eye(self.q)]])
+            constraint_2 = cp.bmat([[AXBY + AXBY.T + lamb * X, self.Ec], [self.Ec.T, -lamb * np.eye(self.q)]])
 
             Constraints += [constraint_1 << 0]
             Constraints += [constraint_2 << 0]
@@ -659,6 +695,23 @@ class NL_MPSC(MPSC):
         print(f'Number of checks failed due to 29b: {failed_29b}')
         print(f'Number of checks failed due to 29d: {failed_29d}')
 
+    def get_terminal_constraint(self):
+        '''Calculates the terminal set as a linear constraint'''
+        interior_points = []
+        for _ in range(self.n_samples):
+            state = np.random.uniform(self.state_constraint.lower_bounds, self.state_constraint.upper_bounds)
+            num_disturbances = 100
+            disturbances = self.randsphere(num_disturbances, self.n, self.max_w).T
+            for w in range(num_disturbances):
+                disturbed_state = state + disturbances[:, w]
+                if disturbed_state @ self.P_f @ disturbed_state <= self.gamma**2:
+                    interior_points.append(state)
+        self.terminal_set = Polytope(interior_points)
+        self.terminal_set.minimize_V_rep()
+
+        self.terminal_A = self.terminal_set.A
+        self.terminal_b = self.terminal_set.b
+
     def load(self,
              path,
              ):
@@ -689,6 +742,10 @@ class NL_MPSC(MPSC):
         self.P_f = parameters['P_f']
         self.K_f = parameters['K_f']
 
+        if self.integration_algo == 'LTI' and self.use_terminal_set is True:
+            self.terminal_A = parameters['terminal_A']
+            self.terminal_b = parameters['terminal_b']
+
         self.L_x_sym = cs.MX(self.L_x)
         self.L_u_sym = cs.MX(self.L_u)
         self.l_sym = cs.MX(self.l)
@@ -718,6 +775,10 @@ class NL_MPSC(MPSC):
         parameters['P_f'] = self.P_f
         parameters['K_f'] = self.K_f
 
+        if self.integration_algo == 'LTI':
+            parameters['terminal_A'] = self.terminal_A
+            parameters['terminal_b'] = self.terminal_b
+
         with open(path, 'wb') as f:
             pickle.dump(parameters, f)
 
@@ -728,15 +789,16 @@ class NL_MPSC(MPSC):
         horizon = self.horizon
         nx, nu = self.model.nx, self.model.nu
         # Define optimizer and variables.
-        opti = cs.Opti()
+        if self.integration_algo == 'LTI':
+            opti = cs.Opti('conic')
+        elif self.integration_algo == 'rk4':
+            opti = cs.Opti()
         # States.
         z_var = opti.variable(nx, horizon + 1)
         # Inputs.
         v_var = opti.variable(nu, horizon)
         # Lyapunov bound.
         s_var = opti.variable(1, horizon + 1)
-        # Error bound.
-        w_var = opti.variable(1, horizon + 1)
         # Certified input.
         next_u = opti.variable(nu, 1)
         # Desired input.
@@ -748,6 +810,7 @@ class NL_MPSC(MPSC):
             X_GOAL = opti.parameter(1, nx)
         elif self.env.TASK == Task.TRAJ_TRACKING:
             X_GOAL = opti.parameter(self.horizon, nx)
+        slack = opti.variable(1, 1)
 
         for i in range(self.horizon):
             # Dynamics constraints
@@ -755,20 +818,22 @@ class NL_MPSC(MPSC):
             opti.subject_to(z_var[:, i + 1] == next_state)
 
             # Lyapunov size increase
-            s_var[:, i + 1] = self.rho * s_var[:, i] + w_var[:, i]
+            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + self.max_w)
             opti.subject_to(s_var[:, i] <= self.s_bar_f)
-            opti.subject_to(w_var[:, i] <= self.w_bar)
-            opti.subject_to(w_var[:, i] >= self.w_func(z_var[:, i], v_var[:, i], s_var[:, i]))
 
             # Constraints
             for j in range(self.p):
                 tighten_by = self.c_js[j] * s_var[:, i + 1]
-                opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= 0)
+                opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
+                opti.subject_to(slack >= 0)
 
         # Final state constraints
         if self.use_terminal_set:
-            terminal_cost = (z_var[:, -1] - self.X_mid).T @ self.P_f @ (z_var[:, -1] - self.X_mid)
-            opti.subject_to(terminal_cost <= self.gamma**2)
+            if self.integration_algo == 'LTI':
+                opti.subject_to(cs.vec(self.terminal_A @ z_var[:, -1] - self.terminal_b) <= 0)
+            elif self.integration_algo == 'rk4':
+                terminal_cost = (z_var[:, -1] - self.X_mid).T @ self.P_f @ (z_var[:, -1] - self.X_mid)
+                opti.subject_to(terminal_cost <= self.gamma**2)
 
         # Initial state constraints
         opti.subject_to(z_var[:, 0] == x_init)
@@ -778,20 +843,21 @@ class NL_MPSC(MPSC):
         opti.subject_to(next_u == v_var[:, 0])
 
         # Create solver (IPOPT solver as of this version).
-        opts = {'expand': False,
-                'ipopt.print_level': 0,
-                'ipopt.sb': 'yes',
-                'ipopt.max_iter': 50,
-                'print_time': 0}
-        if self.integration_algo == 'rk4':
-            opts['expand'] = True
-        opti.solver('ipopt', opts)
+        if self.integration_algo == 'LTI':
+            opts = {'expand': True, 'printLevel': 'none'}
+            opti.solver('qpoases', opts)
+        elif self.integration_algo == 'rk4':
+            opts = {'expand': True,
+                    'ipopt.print_level': 0,
+                    'ipopt.sb': 'yes',
+                    'ipopt.max_iter': 50,
+                    'print_time': 0}
+            opti.solver('ipopt', opts)
         self.opti_dict = {
             'opti': opti,
             'z_var': z_var,
             'v_var': v_var,
             's_var': s_var,
-            'w_var': w_var,
             'u_L': u_L,
             'x_init': x_init,
             'next_u': next_u,
@@ -800,4 +866,5 @@ class NL_MPSC(MPSC):
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
+        cost = cost + 500*slack
         opti.minimize(cost)

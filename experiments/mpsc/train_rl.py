@@ -57,7 +57,7 @@ def train():
 
     safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
 
-    # ctrl.safety_filter = safety_filter
+    ctrl.safety_filter = safety_filter
 
     # Training.
     ctrl.learn()

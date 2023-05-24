@@ -5,7 +5,6 @@ from inspect import signature
 from collections import defaultdict
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 from safe_control_gym.experiments.base_experiment import MetricExtractor
@@ -500,70 +499,6 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
 
         plt.tight_layout()
         plt.show()
-
-
-def generate_dataframe():
-    '''Generates a dataframe with all the data from all the experiments.'''
-    dataframe = {}
-
-    for mpsc_cost_horizon in [2, 5, 10]:
-        dataframe[mpsc_cost_horizon] = {}
-        for system in ['cartpole', 'quadrotor_2D', 'quadrotor_3D']:
-            global system_name
-            system_name = system
-            dataframe[mpsc_cost_horizon][system_name] = {}
-            for task in ['stab', 'track']:
-                dataframe[mpsc_cost_horizon][system_name][task] = {}
-
-                all_results = load_all_algos(system_name, task, mpsc_cost_horizon)
-                for algo in ordered_algos:
-                    if algo not in all_results:
-                        continue
-                    dataframe[mpsc_cost_horizon][system_name][task][algo] = {}
-                    for cost in ['one_step', 'regularized', 'precomputed']:
-                        raw_data = all_results[algo][cost]
-                        dataframe[mpsc_cost_horizon][system_name][task][algo][cost] = extract_main_results(raw_data)
-
-    return pd.DataFrame(dataframe)
-
-
-def extract_main_results(raw_data):
-    '''Extracts the important metrics into a form to be put into the dataframe.
-
-    Args:
-        raw_data (dict): A dictionary containing all the data from the desired experiment.
-
-    Returns:
-        metrics (dict): The main results of the experiment.
-    '''
-    metrics = {}
-
-    metrics['magnitude_of_corrections'] = np.median(extract_magnitude_of_corrections(raw_data))
-    metrics['max_correction'] = np.median(extract_max_correction(raw_data))
-    metrics['rate_of_change_of_inputs'] = np.median(extract_rate_of_change_of_inputs(raw_data))
-    metrics['rate_of_change_of_corrections'] = np.median(extract_rate_of_change_of_corrections(raw_data))
-    metrics['number_of_corrections'] = np.median(extract_number_of_corrections(raw_data))
-
-    return metrics
-
-
-def create_table(dataframe, system):
-    '''Takes in a dictionary of all the results and creates the appropriate dataframe.
-
-    Args:
-        dataframe (dict): The dictionary of all the results.
-        system (str): The system to be graphed.
-
-    Returns:
-        df (pd.DataFrame): The dataframe containing the data.
-    '''
-    all_dfs = {}
-    for M in [2, 5, 10]:
-        data = {(outerKey, innerKey): {key: values['precomputed'][key] / values['regularized'][key] for key in values['precomputed'].keys()} for outerKey, innerDict in dataframe[M][system].items() for innerKey, values in innerDict.items()}
-        all_dfs[M] = pd.DataFrame(data)
-    df = pd.concat(all_dfs.values(), axis=0, keys=all_dfs.keys())
-    print(df)
-    return df
 
 
 def create_paper_plot(system, task, data_extractor):

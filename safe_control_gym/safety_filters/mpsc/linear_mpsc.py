@@ -81,7 +81,7 @@ class LINEAR_MPSC(MPSC):
         dfdu = dfdxdfdu['dfdu'].toarray()
         delta_x = cs.MX.sym('delta_x', self.model.nx, 1)
         delta_u = cs.MX.sym('delta_u', self.model.nu, 1)
-        self.discrete_dfdx, self.discrete_dfdu = discretize_linear_system(dfdx, dfdu, self.dt)
+        self.discrete_dfdx, self.discrete_dfdu = discretize_linear_system(dfdx, dfdu, self.dt, exact=True)
 
         if self.integration_algo == 'LTI':
             x_dot_lin_vec = self.discrete_dfdx @ delta_x + self.discrete_dfdu @ delta_u

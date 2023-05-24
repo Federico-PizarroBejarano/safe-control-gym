@@ -5,6 +5,7 @@ import numpy as np
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 from safe_control_gym.controllers.pid.pid import PID
 from safe_control_gym.envs.benchmark_env import Environment
+from safe_control_gym.envs.env_wrappers.vectorized_env.vec_env import VecEnv
 
 
 class PRECOMPUTED_COST(MPSC_COST):
@@ -88,6 +89,11 @@ class PRECOMPUTED_COST(MPSC_COST):
         if self.uncertified_controller is None:
             raise Exception('[ERROR] No underlying controller passed to P_MPSC')
 
+        if isinstance(self.uncertified_controller.env, VecEnv):
+            uncert_env = self.uncertified_controller.env.envs[0]
+        else:
+            uncert_env = self.uncertified_controller.env
+
         v_L = np.zeros((self.model.nu, self.mpsc_cost_horizon))
 
         if isinstance(self.uncertified_controller, PID):
@@ -101,15 +107,15 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
 
-            if self.uncertified_controller.env.NORMALIZED_RL_ACTION_SPACE:
+            if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 if self.env.NAME == Environment.CARTPOLE:
-                    action = self.uncertified_controller.env.action_scale * action
+                    action = uncert_env.action_scale * action
                 elif self.env.NAME == Environment.QUADROTOR:
-                    action = (1 + self.uncertified_controller.env.norm_act_scale * action) * self.uncertified_controller.env.hover_thrust
+                    action = (1 + uncert_env.norm_act_scale * action) * uncert_env.hover_thrust
 
             action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
 
-            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
+            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001 and self.uncertified_controller.training is False:
                 print(f'MISMATCH BETWEEN Unsafe Controller AND MPSC Guess!!!! Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}')
                 raise ValueError()
 

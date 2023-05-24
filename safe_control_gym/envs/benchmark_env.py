@@ -504,6 +504,8 @@ class BenchmarkEnv(gym.Env, ABC):
                 info['constraint_violation'] = 1
                 if self.DONE_ON_VIOLATION:
                     done = True
+                    if self.COST == Cost.RL_REWARD and self.use_constraint_penalty:
+                        rew += -10
             else:
                 info['constraint_violation'] = 0
         else:
