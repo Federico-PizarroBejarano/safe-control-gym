@@ -866,5 +866,5 @@ class NL_MPSC(MPSC):
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
-        cost = cost + 500*slack
+        cost = cost + 1000*slack
         opti.minimize(cost)

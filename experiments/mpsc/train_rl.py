@@ -1,6 +1,7 @@
 '''Template training/plotting/testing script.'''
 
 import os
+import shutil
 from functools import partial
 
 from safe_control_gym.utils.configuration import ConfigFactory
@@ -16,6 +17,13 @@ def train():
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = True
+
+    if os.path.isdir(config.output_dir):
+        cont = input(f'Overwrite {config.output_dir} [y/n]: ')
+        if cont.lower() == 'y':
+            shutil.rmtree(config.output_dir, ignore_errors=True)
+        else:
+            return
 
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:

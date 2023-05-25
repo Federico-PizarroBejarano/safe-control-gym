@@ -30,8 +30,6 @@ else
     SYS_NAME='quadrotor'
 fi
 
-rm -rf ./unsafe_rl_temp_data/${TAG}/
-
 # Train the unsafe controller/agent.
 python3 train_rl.py \
     --algo ${ALGO} \
