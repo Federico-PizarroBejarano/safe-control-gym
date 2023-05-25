@@ -1,11 +1,13 @@
 '''This script analyzes and plots the results from MPSC experiments.'''
 
+import os
 import pickle
 from inspect import signature
 from collections import defaultdict
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
@@ -13,7 +15,7 @@ from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_conte
 
 
 plot = True
-save_figs = False
+save_figs = True
 ordered_algos = ['lqr', 'ppo', 'sac']
 # ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
 
@@ -71,6 +73,26 @@ def load_all_algos(system, task, mpsc_cost_horizon):
             continue
 
         all_results[algo] = load_one_experiment(system, task, algo, mpsc_cost_horizon)
+
+    return all_results
+
+
+def load_all_models(system, task, algo):
+    '''Loads the results of every MPSC cost function for a specific experiment with every algo.
+
+    Args:
+        system (str): The system to be controlled.
+        task (str): The task to be completed (either 'stab' or 'track').
+
+    Returns:
+        all_results (dict): A dictionary containing all the results.
+    '''
+
+    all_results = {}
+
+    for model in os.listdir('./unsafe_rl_temp_data/'):
+        with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_{algo}_{model}.pkl', 'rb') as f:
+            all_results[model] = pickle.load(f)
 
     return all_results
 
@@ -588,17 +610,70 @@ def create_paper_plot(system, task, data_extractor):
         fig.savefig(f'./results_mpsc/{system}_{task}_{image_suffix}.png', dpi=300)
 
 
+def plot_model_comparisons(system, task, algo, data_extractor):
+    '''Plots the constraint violations of every controller for a specific experiment.
+
+    Args:
+        system (str): The system to be controlled.
+        task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+    '''
+
+    all_results = load_all_models(system, task, algo)
+
+    fig = plt.figure(figsize=(16.0, 10.0))
+    ax = fig.add_subplot(111)
+
+    labels = sorted(os.listdir('./unsafe_rl_temp_data/'))
+    data = []
+
+    for model in sorted(os.listdir('./unsafe_rl_temp_data/')):
+        exp_data = all_results[model]
+        data.append(data_extractor(exp_data))
+
+    ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
+    ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
+
+    x = np.arange(1, len(labels) + 1)
+    ax.set_xticks(x, labels, weight='bold', fontsize=15)
+
+    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
+    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))
+
+    cm = mpl.colormaps['inferno']
+    colors = [cm(i/len(labels)) for i in range(1, len(labels)+1)]
+    for patch, color in zip(bplot['boxes'], colors):
+        patch.set_facecolor(color)
+
+    fig.tight_layout()
+
+    ax.set_ylim(ymin=0)
+    ax.yaxis.grid(True)
+
+    if plot is True:
+        plt.show()
+    if save_figs:
+        image_suffix = data_extractor.__name__.replace('extract_', '')
+        fig.savefig(f'./results_mpsc/{system}/{task}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+
+
 if __name__ == '__main__':
     ordered_costs = ['one_step', 'regularized', 'precomputed']
 
     def extract_rate_of_change_of_inputs(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=1, mode='input')
     def extract_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=1, mode='correction')
 
+    def extract_roc_cert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=True)
+    def extract_roc_uncert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=False)
+
     system_name = 'cartpole'
-    task_name = 'track'
-    create_paper_plot(system_name, task_name, extract_magnitude_of_corrections)
-    create_paper_plot(system_name, task_name, extract_max_correction)
-    create_paper_plot(system_name, task_name, extract_rate_of_change_of_inputs)
+    task_name = 'stab'
+    algo_name = 'ppo'
+    plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_rmse)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
 
     # mpsc_cost_horizon_num = 2
 

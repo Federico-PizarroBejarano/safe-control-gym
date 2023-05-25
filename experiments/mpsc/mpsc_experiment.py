@@ -1,5 +1,6 @@
 '''This script tests the MPSC safety filter implementation.'''
 
+import os
 import pickle
 import shutil
 from functools import partial
@@ -155,7 +156,7 @@ regularization_parameters = {
 }
 
 
-def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None):
+def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None, model=None):
     '''Main function to run MPSC experiments.
 
     Args:
@@ -165,6 +166,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         n_steps (int): How many steps to run the experiment.
         curr_path (str): The current relative path to the experiment folder.
         init_state (np.ndarray): Optionally can add a different initial state.
+        model (str): Optional model name to use for RL agent.
 
     Returns:
         X_GOAL (np.ndarray): The goal (stabilization or reference trajectory) of the experiment.
@@ -208,7 +210,10 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     if config.algo in ['ppo', 'sac']:
         # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
+        if model is None:
+            ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
+        else:
+            ctrl.load(f'{curr_path}/unsafe_rl_temp_data/{model}/model_latest.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -500,8 +505,54 @@ def run_uncertified_trajectory(n_episodes=10):
         pickle.dump(uncert_results, f)
 
 
+def run_multiple_models(plot=True):
+    '''Runs all models at every saved starting point.
+
+    Args:
+        plot (bool): Whether to plot the results.
+    '''
+
+    fac = ConfigFactory()
+    config = fac.merge()
+
+    task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
+    if config.task == Environment.QUADROTOR:
+        system = f'quadrotor_{str(config.task_config.quad_type)}D'
+    else:
+        system = config.task
+
+    starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy')
+
+    for model in os.listdir('./unsafe_rl_temp_data/'):
+        for i in range(starting_points.shape[0]):
+            init_state = starting_points[i, :]
+            X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=init_state, model=model)
+            if i == 0:
+                all_uncert_results, all_cert_results = uncert_results, cert_results
+            else:
+                for key in all_cert_results.keys():
+                    if key in all_uncert_results:
+                        all_uncert_results[key].append(uncert_results[key][0])
+                    all_cert_results[key].append(cert_results[key][0])
+
+        met = MetricExtractor()
+        uncert_metrics = met.compute_metrics(data=all_uncert_results)
+        cert_metrics = met.compute_metrics(data=all_cert_results)
+
+        all_results = {'uncert_results': all_uncert_results,
+                    'uncert_metrics': uncert_metrics,
+                    'cert_results': all_cert_results,
+                    'cert_metrics': cert_metrics,
+                    'config': config,
+                    'X_GOAL': X_GOAL}
+
+        with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_{config.algo}_{model}.pkl', 'wb') as f:
+            pickle.dump(all_results, f)
+
+
 if __name__ == '__main__':
     run()
     # run_uncertified_trajectory()
     # determine_feasible_starting_points(num_points=10)
     # run_multiple(plot=False)
+    # run_multiple_models(plot=False)

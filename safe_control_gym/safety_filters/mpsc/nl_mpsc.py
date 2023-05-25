@@ -826,6 +826,7 @@ class NL_MPSC(MPSC):
                 tighten_by = self.c_js[j] * s_var[:, i + 1]
                 opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
                 opti.subject_to(slack >= 0)
+                # opti.subject_to(slack <= 0)
 
         # Final state constraints
         if self.use_terminal_set:
@@ -862,9 +863,10 @@ class NL_MPSC(MPSC):
             'x_init': x_init,
             'next_u': next_u,
             'X_GOAL': X_GOAL,
+            'slack': slack,
         }
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
-        cost = cost + 1000*slack
+        cost = cost + 250*slack
         opti.minimize(cost)

@@ -505,16 +505,16 @@ class BenchmarkEnv(gym.Env, ABC):
                 if self.DONE_ON_VIOLATION:
                     done = True
                     if self.COST == Cost.RL_REWARD and self.use_constraint_penalty:
-                        rew += -10
+                        rew = 0
             else:
                 info['constraint_violation'] = 0
         else:
             info['constraint_violation'] = 0
 
         # Apply penalized reward when close to constraint violation
-        if self.COST == Cost.RL_REWARD:
-            if self.constraints is not None and self.use_constraint_penalty and self.constraints.is_almost_active(self, c_value=c_value):
-                rew += self.constraint_penalty
+        # if self.COST == Cost.RL_REWARD:
+        #     if self.constraints is not None and self.use_constraint_penalty and self.constraints.is_almost_active(self, c_value=c_value):
+        #         rew += self.constraint_penalty
 
         # Terminate when reaching time limit,
         # but distinguish between done due to true termination or time limit reached
