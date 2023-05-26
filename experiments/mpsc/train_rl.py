@@ -4,6 +4,9 @@ import os
 import shutil
 from functools import partial
 
+import munch
+import yaml
+
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import mkdirs, set_device_from_config, set_seed_from_config
@@ -71,6 +74,9 @@ def train():
     ctrl.learn()
     ctrl.close()
     print('Training done.')
+
+    with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:
+        yaml.dump(munch.unmunchify(config), file, default_flow_style=False)
 
     make_plots(config)
 

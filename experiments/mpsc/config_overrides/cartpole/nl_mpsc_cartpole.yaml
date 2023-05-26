@@ -28,3 +28,7 @@ sf_config:
   cost_function: one_step_cost
   mpsc_cost_horizon: 5
   decay_factor: 0.85
+
+  # Softening
+  soften_constraints: False
+  slack_cost: 250

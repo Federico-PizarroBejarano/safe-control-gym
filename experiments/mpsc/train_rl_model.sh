@@ -45,3 +45,4 @@ python3 train_rl.py \
         task_config.init_state=None \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
+        sf_config.soften_constraints=True \

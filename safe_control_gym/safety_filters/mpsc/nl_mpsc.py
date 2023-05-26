@@ -42,6 +42,8 @@ class NL_MPSC(MPSC):
                  cost_function: Cost_Function = Cost_Function.ONE_STEP_COST,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
+                 soften_constraints: bool = False,
+                 slack_cost: float = 250,
                  **kwargs
                  ):
         '''Initialize the MPSC.
@@ -63,6 +65,8 @@ class NL_MPSC(MPSC):
         super().__init__(env_func, horizon, q_lin, r_lin, integration_algo, warmstart, additional_constraints, use_terminal_set, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
         self.n_samples = n_samples
+        self.soften_constraints = soften_constraints
+        self.slack_cost = slack_cost
 
         self.n = self.model.nx
         self.m = self.model.nu
@@ -826,7 +830,8 @@ class NL_MPSC(MPSC):
                 tighten_by = self.c_js[j] * s_var[:, i + 1]
                 opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
                 opti.subject_to(slack >= 0)
-                # opti.subject_to(slack <= 0)
+                if self.soften_constraints is False:
+                    opti.subject_to(slack <= 0)
 
         # Final state constraints
         if self.use_terminal_set:
@@ -868,5 +873,5 @@ class NL_MPSC(MPSC):
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
-        cost = cost + 250*slack
+        cost = cost + self.slack_cost*slack
         opti.minimize(cost)
