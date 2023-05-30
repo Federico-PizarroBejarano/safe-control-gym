@@ -22,7 +22,7 @@ MPSC_COST='one_step_cost'
 
 MPSC_COST_HORIZON=2
 
-TAG='mpsf_pen'
+TAG='TEST'
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS

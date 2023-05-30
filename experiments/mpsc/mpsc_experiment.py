@@ -213,7 +213,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         if model is None:
             ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
         else:
-            ctrl.load(f'{curr_path}/unsafe_rl_temp_data/{model}/model_latest.pt')
+            ctrl.load(f'{curr_path}/unsafe_rl_temp_data/{model}/model_best.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -523,7 +523,7 @@ def run_multiple_models(plot=True):
 
     starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy')
 
-    for model in os.listdir('./unsafe_rl_temp_data/'):
+    for model in ['TEST']: #os.listdir('./unsafe_rl_temp_data/'):
         for i in range(starting_points.shape[0]):
             init_state = starting_points[i, :]
             X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=init_state, model=model)
@@ -551,8 +551,8 @@ def run_multiple_models(plot=True):
 
 
 if __name__ == '__main__':
-    # run()
+    # run(model='TEST')
     # run_uncertified_trajectory()
-    # determine_feasible_starting_points(num_points=10)
+    # determine_feasible_starting_points(num_points=25)
     # run_multiple(plot=False)
     run_multiple_models(plot=False)

@@ -279,9 +279,7 @@ class PPO(BaseController):
             if done is True:
                 finished = True
             if self.penalize_sf_diff and success:
-                rew = np.log(rew)
-                rew -= 100*self.safety_filter.cost_prev
-                rew = np.exp(rew)
+                rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*1000
             next_true_obs = next_obs
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)

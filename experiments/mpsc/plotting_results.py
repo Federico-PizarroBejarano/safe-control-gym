@@ -665,6 +665,7 @@ if __name__ == '__main__':
 
     def extract_roc_cert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=True)
     def extract_roc_uncert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=False)
+    def extract_constraint_violations_uncert(results_data): return extract_constraint_violations(results_data, certified=False)
 
     system_name = 'cartpole'
     task_name = 'stab'
@@ -673,6 +674,8 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_rmse)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
     # plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
 
     # mpsc_cost_horizon_num = 2
