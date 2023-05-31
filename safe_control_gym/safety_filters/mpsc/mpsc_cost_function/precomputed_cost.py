@@ -4,6 +4,7 @@ import numpy as np
 
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 from safe_control_gym.controllers.pid.pid import PID
+from safe_control_gym.controllers.ppo.ppo import PPO
 from safe_control_gym.envs.benchmark_env import Environment
 from safe_control_gym.envs.env_wrappers.vectorized_env.vec_env import VecEnv
 
@@ -96,16 +97,16 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         v_L = np.zeros((self.model.nu, self.mpsc_cost_horizon))
 
-        if isinstance(self.uncertified_controller, PID):
-            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
-            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
+        if isinstance(self.uncertified_controller, PID) or (isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True):
+            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy', save_only_random_seed=True)
+            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy', load_only_random_seed=True)
 
         for h in range(self.mpsc_cost_horizon):
             next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
             # Concatenate goal info (goal state(s)) for RL
             extended_obs = self.env.extend_obs(obs, next_step + 1)
 
-            action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
+            action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step}, training=self.uncertified_controller.training)
 
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 if self.env.NAME == Environment.CARTPOLE:
@@ -115,16 +116,15 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
 
-            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001 and self.uncertified_controller.training is False:
-                print(f'MISMATCH BETWEEN Unsafe Controller AND MPSC Guess!!!! Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}')
-                raise ValueError()
+            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
+                raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
             v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
 
             obs = np.squeeze(self.model.fd_func(x0=obs, p=action)['xf'].toarray())
 
-        if isinstance(self.uncertified_controller, PID):
-            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
-            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
+        if isinstance(self.uncertified_controller, PID) or (isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True):
+            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy', load_only_random_seed=True)
+            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy', save_only_random_seed=True)
 
         return v_L

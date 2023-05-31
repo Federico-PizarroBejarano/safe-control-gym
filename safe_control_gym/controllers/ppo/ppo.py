@@ -19,6 +19,7 @@ import torch
 
 from safe_control_gym.utils.logging import ExperimentLogger
 from safe_control_gym.utils.utils import get_random_state, set_random_state, is_wrapped
+
 from safe_control_gym.envs.env_wrappers.vectorized_env import make_vec_envs
 from safe_control_gym.envs.env_wrappers.record_episode_statistics import RecordEpisodeStatistics, VecRecordEpisodeStatistics
 from safe_control_gym.math_and_models.normalization import BaseNormalizer, MeanStdNormalizer, RewardStdNormalizer
@@ -112,9 +113,17 @@ class PPO(BaseController):
         self.logger.close()
 
     def save(self,
-             path
+             path,
+             save_only_random_seed=False,
              ):
         '''Saves model params and experiment state to checkpoint path.'''
+        if save_only_random_seed is True:
+            exp_state = {
+                'random_state': get_random_state(),
+                'env_random_state': self.env.get_env_random_state()
+            }
+            torch.save(exp_state, path)
+            return
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
         state_dict = {
@@ -133,10 +142,15 @@ class PPO(BaseController):
         torch.save(state_dict, path)
 
     def load(self,
-             path
+             path,
+             load_only_random_seed=False,
              ):
         '''Restores model and experiment given checkpoint path.'''
         state = torch.load(path)
+        if load_only_random_seed is True:
+            set_random_state(state['random_state'])
+            self.env.set_env_random_state(state['env_random_state'])
+            return
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
         self.obs_normalizer.load_state_dict(state['obs_normalizer'])
@@ -183,7 +197,7 @@ class PPO(BaseController):
             if self.log_interval and self.total_steps % self.log_interval == 0:
                 self.log_step(results)
 
-    def select_action(self, obs, info=None):
+    def select_action(self, obs, info=None, training=False):
         '''Determine the action to take at the current timestep.
 
         Args:
@@ -194,9 +208,14 @@ class PPO(BaseController):
             action (ndarray): The action chosen by the controller.
         '''
 
-        with torch.no_grad():
-            obs = torch.FloatTensor(obs).to(self.device)
-            action = self.agent.ac.act(obs)
+        if not training:
+            with torch.no_grad():
+                obs = torch.FloatTensor(obs).to(self.device)
+                action = self.agent.ac.act(obs)
+        else:
+            with torch.no_grad():
+                obs = torch.FloatTensor(obs).to(self.device)
+                action, _, _ = self.agent.ac.step(obs)
 
         return action
 
@@ -260,6 +279,8 @@ class PPO(BaseController):
         finished = False
         start = time.time()
         for _ in range(self.rollout_steps):
+            if self.safety_filter is not None:
+                self.save('./temp-data/saved_controller_prev.npy', save_only_random_seed=True)
             with torch.no_grad():
                 act, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
 
