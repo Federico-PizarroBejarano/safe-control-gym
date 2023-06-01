@@ -296,6 +296,9 @@ class LINEAR_MPSC(MPSC):
         elif self.env.TASK == Task.TRAJ_TRACKING:
             X_GOAL = opti.parameter(self.horizon, nx)
 
+        slack = opti.variable(1, 1)  # TODO: Add slack
+        opti.subject_to(slack == 0)
+
         # Constraints (currently only handles a single constraint for state and input).
         state_constraints = self.tightened_state_constraint.get_symbolic_model()
         input_constraints = self.tightened_input_constraint.get_symbolic_model()
@@ -336,11 +339,13 @@ class LINEAR_MPSC(MPSC):
             'x_init': x_init,
             'X_EQ': X_EQ,
             'X_GOAL': X_GOAL,
+            'slack': slack,
         }
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
         opti.minimize(cost)
+        self.opti_dict['cost'] = cost
 
     def before_optimization(self, obs):
         '''Setup the optimization.

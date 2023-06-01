@@ -882,3 +882,4 @@ class NL_MPSC(MPSC):
         if self.soften_constraints:
             cost = cost + self.slack_cost*slack
         opti.minimize(cost)
+        self.opti_dict['cost'] = cost
