@@ -512,11 +512,12 @@ def run_uncertified_trajectory(n_episodes=10):
         pickle.dump(uncert_results, f)
 
 
-def run_multiple_models(plot=True):
+def run_multiple_models(plot=True, model=None):
     '''Runs all models at every saved starting point.
 
     Args:
         plot (bool): Whether to plot the results.
+        model (str): A specific model to evaluate.
     '''
 
     fac = ConfigFactory()
@@ -530,7 +531,12 @@ def run_multiple_models(plot=True):
 
     starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy')
 
-    for model in ['TEST']: #os.listdir('./unsafe_rl_temp_data/'):
+    if model is None:
+        all_models = os.listdir('./unsafe_rl_temp_data/')
+    else:
+        all_models = [model]
+
+    for model in all_models:
         for i in range(starting_points.shape[0]):
             init_state = starting_points[i, :]
             X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=init_state, model=model)
@@ -562,4 +568,4 @@ if __name__ == '__main__':
     # run_uncertified_trajectory()
     # determine_feasible_starting_points(num_points=25, num_steps=25)
     # run_multiple(plot=False)
-    run_multiple_models(plot=False)
+    run_multiple_models(plot=False, model='TEST')

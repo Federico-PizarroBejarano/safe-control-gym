@@ -817,6 +817,9 @@ class NL_MPSC(MPSC):
 
         if self.soften_constraints:
             slack = opti.variable(1, 1)
+        else:
+            slack = opti.variable(1, 1)
+            opti.subject_to(slack == 0)
 
         for i in range(self.horizon):
             # Dynamics constraints
@@ -871,6 +874,7 @@ class NL_MPSC(MPSC):
             'x_init': x_init,
             'next_u': next_u,
             'X_GOAL': X_GOAL,
+            'slack': slack,
         }
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).

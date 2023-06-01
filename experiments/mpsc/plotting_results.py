@@ -14,7 +14,7 @@ from safe_control_gym.envs.benchmark_env import Task, Environment
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_content, get_discrete_derivative
 
 
-plot = True
+plot = False
 save_figs = True
 ordered_algos = ['lqr', 'ppo', 'sac']
 # ordered_algos = ['lqr', 'pid', 'ppo', 'sac']

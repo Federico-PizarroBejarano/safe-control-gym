@@ -180,7 +180,7 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             sol = opti.solve()
             # self.cost_prev = sol.value(self.cost_function.get_cost(opti_dict)) + 250*sol.value(opti_dict['slack'])
-            # self.slack_prev = sol.value(opti_dict['slack'])
+            self.slack_prev = sol.value(opti_dict['slack'])
             x_val, u_val, next_u_val = sol.value(z_var), sol.value(v_var), sol.value(next_u)
             self.z_prev = x_val
             self.v_prev = u_val.reshape((self.model.nu), self.horizon)
