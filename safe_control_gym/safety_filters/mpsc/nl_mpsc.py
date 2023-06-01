@@ -815,6 +815,9 @@ class NL_MPSC(MPSC):
         elif self.env.TASK == Task.TRAJ_TRACKING:
             X_GOAL = opti.parameter(self.horizon, nx)
 
+        if self.soften_constraints:
+            slack = opti.variable(1, 1)
+
         for i in range(self.horizon):
             # Dynamics constraints
             next_state = self.dynamics_func(x0=z_var[:, i], p=v_var[:, i])['xf']
@@ -828,7 +831,6 @@ class NL_MPSC(MPSC):
             for j in range(self.p):
                 tighten_by = self.c_js[j] * s_var[:, i + 1]
                 if self.soften_constraints:
-                    slack = opti.variable(1, 1)
                     opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
                     opti.subject_to(slack >= 0)
                 else:
