@@ -560,6 +560,6 @@ def run_multiple_models(plot=True):
 if __name__ == '__main__':
     # run(model='TEST')
     # run_uncertified_trajectory()
-    # determine_feasible_starting_points(num_points=25)
+    # determine_feasible_starting_points(num_points=25, num_steps=25)
     # run_multiple(plot=False)
     run_multiple_models(plot=False)
