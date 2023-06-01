@@ -38,7 +38,7 @@ python3 ./mpsc_experiment.py \
     --overrides \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
-        ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}_eval.yaml \
+        ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
     --kv_overrides \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \

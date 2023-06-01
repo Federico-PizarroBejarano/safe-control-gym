@@ -10,10 +10,10 @@ sf_config:
     - 0.5
 
   # MPC Parameters
-  horizon: 20
+  horizon: 5
   warmstart: True
-  integration_algo: rk4
-  use_terminal_set: True
+  integration_algo: LTI
+  use_terminal_set: False
 
   # Prior info
   prior_info:
@@ -30,5 +30,5 @@ sf_config:
   decay_factor: 0.85
 
   # Softening
-  soften_constraints: True
-  slack_cost: 1000
+  soften_constraints: False
+  slack_cost: 250

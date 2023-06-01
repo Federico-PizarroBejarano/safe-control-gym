@@ -258,7 +258,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         safety_filter.learn(env=train_env)
         safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
     else:
-        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}_eval.pkl')
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
 
     if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.setup_optimizer()

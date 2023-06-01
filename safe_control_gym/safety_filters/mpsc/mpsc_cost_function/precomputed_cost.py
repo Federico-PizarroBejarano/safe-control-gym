@@ -97,7 +97,10 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         v_L = np.zeros((self.model.nu, self.mpsc_cost_horizon))
 
-        if isinstance(self.uncertified_controller, PID) or (isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True):
+        if isinstance(self.uncertified_controller, PID):
+            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
+            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
+        elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True:
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy', save_only_random_seed=True)
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy', load_only_random_seed=True)
 
@@ -106,7 +109,10 @@ class PRECOMPUTED_COST(MPSC_COST):
             # Concatenate goal info (goal state(s)) for RL
             extended_obs = self.env.extend_obs(obs, next_step + 1)
 
-            action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step}, training=self.uncertified_controller.training)
+            if isinstance(self.uncertified_controller, PPO):
+                action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step}, training=self.uncertified_controller.training)
+            else:
+                action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
 
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 if self.env.NAME == Environment.CARTPOLE:
@@ -123,7 +129,10 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             obs = np.squeeze(self.model.fd_func(x0=obs, p=action)['xf'].toarray())
 
-        if isinstance(self.uncertified_controller, PID) or (isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True):
+        if isinstance(self.uncertified_controller, PID):
+            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
+            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
+        elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True:
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy', load_only_random_seed=True)
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy', save_only_random_seed=True)
 

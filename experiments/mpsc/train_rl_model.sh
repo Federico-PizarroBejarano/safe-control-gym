@@ -39,7 +39,7 @@ python3 train_rl.py \
     --overrides \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
-        ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
+        ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}_linear.yaml \
     --output_dir ./unsafe_rl_temp_data/${TAG}/ \
     --seed 2 \
     --kv_overrides \
