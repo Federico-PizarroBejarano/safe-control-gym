@@ -1,0 +1,34 @@
+safety_filter: nl_mpsc
+sf_config:
+  # LQR controller parameters
+  r_lin:
+    - 0.1
+  q_lin:
+    - 0.02
+    - 0.001
+    - 10
+    - 0.5
+
+  # MPC Parameters
+  horizon: 20
+  warmstart: True
+  integration_algo: rk4
+  use_terminal_set: True
+
+  # Prior info
+  prior_info:
+    prior_prop: null
+    randomize_prior_prop: False
+    prior_prop_rand_info: null
+
+  # Learning disturbance bounds
+  n_samples: 600
+
+  # Cost function
+  cost_function: one_step_cost
+  mpsc_cost_horizon: 5
+  decay_factor: 0.85
+
+  # Softening
+  soften_constraints: False
+  slack_cost: 250

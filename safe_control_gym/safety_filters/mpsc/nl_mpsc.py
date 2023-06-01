@@ -814,7 +814,6 @@ class NL_MPSC(MPSC):
             X_GOAL = opti.parameter(1, nx)
         elif self.env.TASK == Task.TRAJ_TRACKING:
             X_GOAL = opti.parameter(self.horizon, nx)
-        slack = opti.variable(1, 1)
 
         for i in range(self.horizon):
             # Dynamics constraints
@@ -828,10 +827,12 @@ class NL_MPSC(MPSC):
             # Constraints
             for j in range(self.p):
                 tighten_by = self.c_js[j] * s_var[:, i + 1]
-                opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
-                opti.subject_to(slack >= 0)
-                if self.soften_constraints is False:
-                    opti.subject_to(slack <= 0)
+                if self.soften_constraints:
+                    slack = opti.variable(1, 1)
+                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
+                    opti.subject_to(slack >= 0)
+                else:
+                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= 0)
 
         # Final state constraints
         if self.use_terminal_set:
@@ -868,10 +869,10 @@ class NL_MPSC(MPSC):
             'x_init': x_init,
             'next_u': next_u,
             'X_GOAL': X_GOAL,
-            'slack': slack,
         }
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
-        cost = cost + self.slack_cost*slack
+        if self.soften_constraints:
+            cost = cost + self.slack_cost*slack
         opti.minimize(cost)

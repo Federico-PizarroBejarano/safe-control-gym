@@ -276,7 +276,7 @@ def extract_number_of_corrections(results_data):
 
 
 def extract_rmse(results_data, certified=True):
-    '''Extracts the number of corrections from an experiment's data.
+    '''Extracts the RMSEs from an experiment's data.
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
@@ -291,6 +291,24 @@ def extract_rmse(results_data, certified=True):
         met.data = results_data['uncert_results']
         rmse = np.asarray(met.get_episode_rmse())
     return rmse
+
+
+def extract_length(results_data, certified=True):
+    '''Extracts the lengths from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        length (list): The list of lengths for all experiments.
+    '''
+    if certified:
+        met.data = results_data['cert_results']
+        length = np.asarray(met.get_episode_lengths())
+    else:
+        met.data = results_data['uncert_results']
+        length = np.asarray(met.get_episode_lengths())
+    return length
 
 
 def extract_simulation_time(results_data, certified=True):
@@ -676,6 +694,7 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_rmse)
     plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_length)
     # plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
 
     # mpsc_cost_horizon_num = 2

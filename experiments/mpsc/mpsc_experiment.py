@@ -196,6 +196,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     else:
         system = config.task
 
+    if task == 'stab':
+        config.task_config.task_info.stabilization_goal_tolerance = 0.05
+
     # Create an environment
     env_func = partial(make,
                        config.task,
@@ -255,7 +258,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         safety_filter.learn(env=train_env)
         safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
     else:
-        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}_eval.pkl')
 
     if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.setup_optimizer()
@@ -302,11 +305,12 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     return env.X_GOAL, uncert_results, uncert_metrics, cert_results, cert_metrics
 
 
-def determine_feasible_starting_points(num_points=100):
+def determine_feasible_starting_points(num_points=100, num_steps=25):
     '''Calculates feasible starting points for a system and task.
 
     Args:
         num_points (int): The number of points to generate.
+        num_steps (int): The number of certified steps to check.
     '''
 
     # Define arguments.
@@ -376,16 +380,19 @@ def determine_feasible_starting_points(num_points=100):
 
         _, uncert_metrics = uncert_experiment.run_evaluation(n_episodes=1)
         uncert_experiment.reset()
-        cert_results, cert_metrics = cert_experiment.run_evaluation(n_steps=10)
+
+        if uncert_metrics['average_constraint_violation'] <= 5 \
+            or uncert_metrics['average_length'] != config.task_config.ctrl_freq * config.task_config.episode_len_sec:
+            continue
+
+        cert_results, cert_metrics = cert_experiment.run_evaluation(n_steps=num_steps)
         cert_experiment.reset()
         test_env.close()
 
         mpsc_results = cert_results['safety_filter_data'][0]
 
-        if cert_metrics['average_length'] == 10 \
+        if cert_metrics['average_length'] == num_steps \
                 and np.all(mpsc_results['feasible']) \
-                and uncert_metrics['average_constraint_violation'] > 5 \
-                and uncert_metrics['average_length'] == config.task_config.ctrl_freq * config.task_config.episode_len_sec \
                 and cert_metrics['average_constraint_violation'] == 0:
             starting_points.append(cert_results['state'][0][0])
 
