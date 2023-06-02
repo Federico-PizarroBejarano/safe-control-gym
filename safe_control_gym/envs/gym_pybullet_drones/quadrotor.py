@@ -867,9 +867,9 @@ class Quadrotor(BaseAviary):
             if self.goal_reached:
                 return True
 
-        # # Done if the episode length is exceeded.
-        # if (self.ctrl_step_counter + 1) / self.CTRL_FREQ >= self.EPISODE_LEN_SEC:
-        #     return True
+        # Done if the episode length is exceeded.
+        if (self.ctrl_step_counter + 1) / self.CTRL_FREQ >= self.EPISODE_LEN_SEC:
+            return True
 
         # # Done if a constraint is violated.
         # if self.constraints is not None:

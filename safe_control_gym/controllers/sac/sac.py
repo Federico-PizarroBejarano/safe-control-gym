@@ -88,6 +88,9 @@ class SAC(BaseController):
             use_tensorboard = False
         self.logger = ExperimentLogger(output_dir, log_file_out=log_file_out, use_tensorboard=use_tensorboard)
 
+        # Adding safety filter
+        self.safety_filter = None
+
     def reset(self):
         '''Prepares for training or testing.'''
         if self.training:
@@ -98,7 +101,9 @@ class SAC(BaseController):
             self.eval_env.add_tracker('mse', 0, mode='queue')
 
             self.total_steps = 0
-            obs, _ = self.env.reset()
+            obs, info = self.env.reset()
+            self.info = info['n'][0]
+            self.true_obs = obs
             self.obs = self.obs_normalizer(obs)
             self.buffer = SACBuffer(self.env.observation_space, self.env.action_space, self.max_buffer_size, self.train_batch_size)
         else:
@@ -261,6 +266,8 @@ class SAC(BaseController):
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         obs = self.obs
+        true_obs = self.true_obs
+        info = self.info
         start = time.time()
 
         if self.total_steps < self.warm_up_steps:
@@ -268,8 +275,23 @@ class SAC(BaseController):
         else:
             with torch.no_grad():
                 act = self.agent.ac.act(torch.FloatTensor(obs).to(self.device), deterministic=False)
-        next_obs, rew, done, info = self.env.step(act)
 
+        # Adding safety filter
+        buffered_action = act
+        success = False
+        if self.safety_filter is not None:
+            physical_action = self.env.envs[0].denormalize_action(act)
+            unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
+            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+            if success:
+                act = self.env.envs[0].normalize_action(certified_action)
+                if self.buffer_safe_action is True:
+                    buffered_action = act
+
+        next_obs, rew, done, info = self.env.step([act])
+        if self.penalize_sf_diff and success:
+            rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*1000
+        next_true_obs = next_obs
         next_obs = self.obs_normalizer(next_obs)
         rew = self.reward_normalizer(rew, done)
         mask = 1 - np.asarray(done)
@@ -296,7 +318,7 @@ class SAC(BaseController):
 
         self.buffer.push({
             'obs': obs,
-            'act': act,
+            'act': buffered_action,
             'rew': rew,
             # 'next_obs': next_obs,
             # 'mask': mask,
@@ -304,8 +326,12 @@ class SAC(BaseController):
             'mask': true_mask,
         })
         obs = next_obs
+        true_obs = next_true_obs
+        info = info['n'][0]
 
         self.obs = obs
+        self.true_obs = true_obs
+        self.info = info
         self.total_steps += self.rollout_batch_size
 
         # learn

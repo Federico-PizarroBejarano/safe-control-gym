@@ -276,7 +276,6 @@ class PPO(BaseController):
         obs = self.obs
         true_obs = self.true_obs
         info = self.info
-        finished = False
         start = time.time()
         for _ in range(self.rollout_steps):
             if self.safety_filter is not None:
@@ -287,7 +286,7 @@ class PPO(BaseController):
             # Adding safety filter
             buffered_action = act
             success = False
-            if self.safety_filter is not None and not finished:
+            if self.safety_filter is not None:
                 physical_action = self.env.envs[0].denormalize_action(act)
                 unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
@@ -297,8 +296,6 @@ class PPO(BaseController):
                         buffered_action = act
 
             next_obs, rew, done, info = self.env.step([act])
-            if done is True:
-                finished = True
             if self.penalize_sf_diff and success:
                 rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*1000
             next_true_obs = next_obs

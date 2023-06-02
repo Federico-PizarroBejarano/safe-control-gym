@@ -216,7 +216,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         if model is None:
             ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
         else:
-            ctrl.load(f'{curr_path}/unsafe_rl_temp_data/{model}/model_best.pt')
+            ctrl.load(f'{curr_path}/unsafe_rl_temp_data/{config.algo}/{model}/model_best.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -532,7 +532,7 @@ def run_multiple_models(plot=True, model=None):
     starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy')
 
     if model is None:
-        all_models = os.listdir('./unsafe_rl_temp_data/')
+        all_models = os.listdir(f'./unsafe_rl_temp_data/{config.algo}/')
     else:
         all_models = [model]
 

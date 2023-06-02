@@ -90,7 +90,7 @@ def load_all_models(system, task, algo):
 
     all_results = {}
 
-    for model in os.listdir('./unsafe_rl_temp_data/'):
+    for model in os.listdir(f'./unsafe_rl_temp_data/{algo}/'):
         with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_{algo}_{model}.pkl', 'rb') as f:
             all_results[model] = pickle.load(f)
 
@@ -642,10 +642,10 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = sorted(os.listdir('./unsafe_rl_temp_data/'))
+    labels = sorted(os.listdir(f'./unsafe_rl_temp_data/{algo}/'))
     data = []
 
-    for model in sorted(os.listdir('./unsafe_rl_temp_data/')):
+    for model in labels:
         exp_data = all_results[model]
         data.append(data_extractor(exp_data))
 
