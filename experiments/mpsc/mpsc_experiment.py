@@ -180,6 +180,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = False
+    config.task_config['done_on_violation'] = False
     if init_state is not None:
         config.task_config['init_state'] = init_state
     config.task_config['randomized_init'] = False

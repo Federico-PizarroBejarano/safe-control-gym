@@ -672,7 +672,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
         plt.show()
     if save_figs:
         image_suffix = data_extractor.__name__.replace('extract_', '')
-        fig.savefig(f'./results_mpsc/{system}/{task}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+        fig.savefig(f'./results_mpsc/{system}/{task}/graphs/{algo}/{system}_{task}_{image_suffix}.png', dpi=300)
 
 
 if __name__ == '__main__':
@@ -687,7 +687,7 @@ if __name__ == '__main__':
 
     system_name = 'cartpole'
     task_name = 'stab'
-    algo_name = 'ppo'
+    algo_name = 'sac'
     plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
@@ -695,7 +695,7 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_length)
-    # plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
 
     # mpsc_cost_horizon_num = 2
 
