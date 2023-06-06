@@ -277,7 +277,8 @@ class SAC(BaseController):
                 act = self.agent.ac.act(torch.FloatTensor(obs).to(self.device), deterministic=False)
 
         # Adding safety filter
-        buffered_action = act
+        unsafe_action = act
+        applied_action = act
         success = False
         if self.safety_filter is not None:
             physical_action = self.env.envs[0].denormalize_action(act)
@@ -285,12 +286,13 @@ class SAC(BaseController):
             certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
             if success:
                 act = self.env.envs[0].normalize_action(certified_action)
-                if self.buffer_safe_action is True:
-                    buffered_action = act
+                applied_action = act
 
-        next_obs, rew, done, info = self.env.step([act])
-        if self.penalize_sf_diff and success:
-            rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*1000
+        next_obs, rew, done, info = self.env.step([applied_action])
+        if self.penalize_sf_diff and success and np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action) > 0.1:
+            unsafe_rew = 0
+        else:
+            unsafe_rew = rew
         next_true_obs = next_obs
         next_obs = self.obs_normalizer(next_obs)
         rew = self.reward_normalizer(rew, done)
@@ -316,9 +318,19 @@ class SAC(BaseController):
             true_mask[idx] = 1.0
         true_next_obs = _flatten_obs(true_next_obs)
 
+        if unsafe_rew != rew:
+            self.buffer.push({
+                'obs': obs,
+                'act': unsafe_action,
+                'rew': unsafe_rew,
+                # 'next_obs': next_obs,
+                # 'mask': mask,
+                'next_obs': true_next_obs,
+                'mask': true_mask,
+            })
         self.buffer.push({
             'obs': obs,
-            'act': buffered_action,
+            'act': applied_action,
             'rew': rew,
             # 'next_obs': next_obs,
             # 'mask': mask,
