@@ -49,7 +49,6 @@ def train():
                 env_func,
                 checkpoint_path=os.path.join(config.output_dir, 'model_latest.pt'),
                 output_dir=config.output_dir,
-                use_gpu=config.use_gpu,
                 seed=config.seed,
                 **config.algo_config)
     ctrl.reset()
@@ -68,7 +67,7 @@ def train():
 
     safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_{task}_linear.pkl')
 
-    ctrl.safety_filter = safety_filter
+    # ctrl.safety_filter = safety_filter
 
     # Training.
     ctrl.learn()

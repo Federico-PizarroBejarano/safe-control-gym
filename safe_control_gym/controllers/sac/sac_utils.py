@@ -285,7 +285,7 @@ class MLPActorCritic(nn.Module):
 
     def act(self, obs, deterministic=False):
         a, _ = self.actor(obs, deterministic, False)
-        return a.numpy()
+        return a.cpu().numpy()
 
 
 # -----------------------------------------------------------------------------------
