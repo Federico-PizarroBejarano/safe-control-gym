@@ -289,8 +289,8 @@ class SAC(BaseController):
                 applied_action = act
 
         next_obs, rew, done, info = self.env.step([applied_action])
-        if self.penalize_sf_diff and success and np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action) > 0.1:
-            unsafe_rew = 0
+        if self.penalize_sf_diff and success:
+            unsafe_rew = rew - 10*np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)
         else:
             unsafe_rew = rew
         next_true_obs = next_obs

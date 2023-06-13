@@ -18,25 +18,25 @@ task_config:
   init_state_randomization_info:
     init_x:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_x_dot:
       distrib: 'uniform'
-      low: -0.1
-      high: 0.1
+      low: -1
+      high: 1
     init_theta:
       distrib: 'uniform'
       low: -0.16
       high: 0.16
     init_theta_dot:
       distrib: 'uniform'
-      low: -0.1
-      high: 0.1
+      low: -1
+      high: 1
 
   task: stabilization
   task_info:
     stabilization_goal: [0.7, 0]
-    stabilization_goal_tolerance: 0.0
+    stabilization_goal_tolerance: 0.05
 
   inertial_prop:
     pole_length: 0.5
@@ -50,7 +50,7 @@ task_config:
   # RL Reward
   rew_state_weight: [1, 1, 1, 1]
   rew_act_weight: 0.1
-  rew_exponential: True
+  rew_exponential: False
 
   # constraints
   constraints:

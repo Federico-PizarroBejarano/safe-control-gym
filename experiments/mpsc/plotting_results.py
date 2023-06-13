@@ -433,6 +433,27 @@ def extract_number_of_correction_intervals(results_data):
     return correction_frequency
 
 
+def extract_reward(results_data, certified):
+    '''Extracts the mean reward from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
+
+    Returns:
+        mean_reward (list): The list of mean rewards.
+    '''
+    if certified:
+        met.data = results_data['cert_results']
+        returns = np.asarray(met.get_episode_returns())
+    else:
+        met.data = results_data['uncert_results']
+        returns = np.asarray(met.get_episode_returns())
+
+
+    return returns
+
+
 def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
     '''Plots a series of graphs detailing the experiments in the passed in data.
 
@@ -665,7 +686,8 @@ def plot_model_comparisons(system, task, algo, data_extractor):
 
     fig.tight_layout()
 
-    ax.set_ylim(ymin=0)
+    if data_extractor != extract_reward_cert:
+        ax.set_ylim(ymin=0)
     ax.yaxis.grid(True)
 
     if plot is True:
@@ -684,6 +706,7 @@ if __name__ == '__main__':
     def extract_roc_cert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=True)
     def extract_roc_uncert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=False)
     def extract_constraint_violations_uncert(results_data): return extract_constraint_violations(results_data, certified=False)
+    def extract_reward_cert(results_data): return extract_reward(results_data, certified=True)
 
     system_name = 'cartpole'
     task_name = 'stab'
@@ -696,6 +719,7 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_length)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_reward_cert)
 
     # mpsc_cost_horizon_num = 2
 
