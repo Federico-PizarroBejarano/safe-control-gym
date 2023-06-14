@@ -36,7 +36,7 @@ task_config:
   task: stabilization
   task_info:
     stabilization_goal: [0.7, 0]
-    stabilization_goal_tolerance: 0.05
+    stabilization_goal_tolerance: 0.0
 
   inertial_prop:
     pole_length: 0.5

@@ -48,3 +48,6 @@ python3 train_rl.py \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \
         sf_config.soften_constraints=True \
+
+./mpsc_experiment.sh
+python plotting_results.py

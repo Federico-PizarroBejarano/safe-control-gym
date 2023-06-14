@@ -197,8 +197,8 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     else:
         system = config.task
 
-    if task == 'stab':
-        config.task_config.task_info.stabilization_goal_tolerance = 0.05
+    # if task == 'stab':
+    #     config.task_config.task_info.stabilization_goal_tolerance = 0.05
 
     # Create an environment
     env_func = partial(make,
