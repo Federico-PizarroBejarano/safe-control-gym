@@ -22,9 +22,9 @@ def train():
     config.algo_config['training'] = True
 
     if config.algo == 'ppo':
-        config.algo_config.rew_exponential = True
+        config.task_config.rew_exponential = True
     else:
-        config.algo_config.rew_exponential = False
+        config.task_config.rew_exponential = False
 
     if os.path.isdir(config.output_dir):
         cont = input(f'Overwrite {config.output_dir} [y/n]: ')

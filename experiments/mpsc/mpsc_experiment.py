@@ -198,9 +198,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         system = config.task
 
     if config.algo == 'ppo':
-        config.algo_config.rew_exponential = True
+        config.task_config.rew_exponential = True
     else:
-        config.algo_config.rew_exponential = False
+        config.task_config.rew_exponential = False
 
     # Create an environment
     env_func = partial(make,

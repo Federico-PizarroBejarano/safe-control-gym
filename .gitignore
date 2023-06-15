@@ -8,6 +8,7 @@ examples/pid/*data/
 #
 experiments/mpsc/temp-data/
 experiments/mpsc/unsafe_rl_temp_data/
+experiments/mpsc/models/rl_models/**/*.jpg
 #
 results/
 z_docstring.py
@@ -76,7 +77,6 @@ coverage.xml
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
