@@ -9,8 +9,8 @@ TASK='stab'
 
 # ALGO='lqr'
 # ALGO='pid'
-# ALGO='ppo'
-ALGO='sac'
+ALGO='ppo'
+# ALGO='sac'
 
 # SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'

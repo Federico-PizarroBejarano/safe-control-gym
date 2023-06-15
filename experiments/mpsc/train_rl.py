@@ -21,6 +21,11 @@ def train():
     config = fac.merge()
     config.algo_config['training'] = True
 
+    if config.algo == 'ppo':
+        config.algo_config.rew_exponential = True
+    else:
+        config.algo_config.rew_exponential = False
+
     if os.path.isdir(config.output_dir):
         cont = input(f'Overwrite {config.output_dir} [y/n]: ')
         if cont.lower() == 'y':
