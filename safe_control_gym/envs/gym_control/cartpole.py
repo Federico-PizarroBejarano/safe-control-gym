@@ -648,7 +648,9 @@ class CartPole(BenchmarkEnv):
             self.goal_reached = bool(np.linalg.norm(self.state - self.X_GOAL) < self.TASK_INFO['stabilization_goal_tolerance'])
             if self.goal_reached:
                 return True
-
+        # Done if the episode length is exceeded.
+        if self.DONE_WHEN_EPISODE_LEN_EXCEEDED and (self.ctrl_step_counter + 1) / self.CTRL_FREQ >= self.EPISODE_LEN_SEC:
+            return True
         # Done if state is out-of-bounds.
         if self.done_on_out_of_bound:
             x, _, theta, _ = self.state

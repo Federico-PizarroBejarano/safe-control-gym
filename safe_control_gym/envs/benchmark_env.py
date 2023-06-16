@@ -77,6 +77,7 @@ class BenchmarkEnv(gym.Env, ABC):
                  # Constraint.
                  constraints=None,
                  done_on_violation: bool = False,
+                 done_when_episode_len_exceeded: bool = False,
                  use_constraint_penalty=False,
                  constraint_penalty=-1,
                  # Disturbance.
@@ -114,6 +115,7 @@ class BenchmarkEnv(gym.Env, ABC):
                 to randomize the inert. properties.
             constraints (Dict, optional): Dictionary to specify the constraints being used.
             done_on_violation (bool, optional): Whether to return done==True on a constraint violation.
+            done_when_episode_len_exceeded (bool, optional): Whether to return done==True when episode done.
             use_constraint_penalty (bool, optional): If to use shaped reward to penalize potential
                 constraint violation.
             constraint_penalty (float, optional): Constraint penalty cost for reward shaping.
@@ -183,6 +185,7 @@ class BenchmarkEnv(gym.Env, ABC):
         # Set constraint info.
         self.CONSTRAINTS = constraints
         self.DONE_ON_VIOLATION = done_on_violation
+        self.DONE_WHEN_EPISODE_LEN_EXCEEDED = done_when_episode_len_exceeded
         self.use_constraint_penalty = use_constraint_penalty
         self.constraint_penalty = constraint_penalty
         self._setup_constraints()

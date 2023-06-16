@@ -23,8 +23,10 @@ def train():
 
     if config.algo == 'ppo':
         config.task_config.rew_exponential = True
+        config.task_config.done_when_episode_len_exceeded = False
     else:
         config.task_config.rew_exponential = False
+        config.task_config.done_when_episode_len_exceeded = True
 
     if os.path.isdir(config.output_dir):
         cont = input(f'Overwrite {config.output_dir} [y/n]: ')
