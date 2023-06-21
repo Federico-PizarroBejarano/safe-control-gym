@@ -13,5 +13,3 @@
 #SBATCH --qos=normal
 
 ./train_rl_model.sh
-./mpsc_experiment.sh
-python plotting_results.py
