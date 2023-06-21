@@ -323,19 +323,19 @@ class SAC(BaseController):
                 'obs': obs,
                 'act': unsafe_action,
                 'rew': unsafe_rew,
-                # 'next_obs': next_obs,
-                # 'mask': mask,
-                'next_obs': true_next_obs,
-                'mask': true_mask,
+                'next_obs': next_obs,
+                'mask': mask,
+                # 'next_obs': true_next_obs,
+                # 'mask': true_mask,
             })
         self.buffer.push({
             'obs': obs,
             'act': applied_action,
             'rew': rew,
-            # 'next_obs': next_obs,
-            # 'mask': mask,
-            'next_obs': true_next_obs,
-            'mask': true_mask,
+            'next_obs': next_obs,
+            'mask': mask,
+            # 'next_obs': true_next_obs,
+            # 'mask': true_mask,
         })
         obs = next_obs
         true_obs = next_true_obs

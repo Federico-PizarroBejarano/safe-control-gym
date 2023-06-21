@@ -199,10 +199,8 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     if config.algo == 'ppo':
         config.task_config.rew_exponential = True
-        config.task_config.done_when_episode_len_exceeded = False
     else:
         config.task_config.rew_exponential = False
-        config.task_config.done_when_episode_len_exceeded = True
 
     # Create an environment
     env_func = partial(make,
