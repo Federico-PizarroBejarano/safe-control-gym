@@ -301,7 +301,7 @@ class PPO(BaseController):
 
             action = np.atleast_1d(np.squeeze([act]))
             next_obs, rew, done, info = self.env.step(action)
-            if done[0] is True and self.use_safe_reset is True:
+            if done[0] == True and self.use_safe_reset is True:
                 next_obs, info = self.env_reset(self.env)
             if self.penalize_sf_diff and success:
                 rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*1000
