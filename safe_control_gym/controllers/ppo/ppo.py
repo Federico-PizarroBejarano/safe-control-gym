@@ -39,6 +39,10 @@ class PPO(BaseController):
                  use_gpu=False,
                  seed=0,
                  **kwargs):
+        self.filter_train_actions = False
+        self.buffer_safe_action = False
+        self.penalize_sf_diff = False
+        self.use_safe_reset = False
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
         # Task.
         if self.training:
@@ -95,7 +99,7 @@ class PPO(BaseController):
             self.eval_env.add_tracker('mse', 0, mode='queue')
 
             self.total_steps = 0
-            obs, info = self.env.reset()
+            obs, info = self.env_reset(self.env)
             self.info = info['n'][0]
             self.true_obs = obs
             self.obs = self.obs_normalizer(obs)
@@ -238,7 +242,7 @@ class PPO(BaseController):
                 env.add_tracker('constraint_values', 0, mode='queue')
                 env.add_tracker('mse', 0, mode='queue')
 
-        obs, info = env.reset()
+        obs, info = self.env_reset(env)
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
@@ -254,7 +258,7 @@ class PPO(BaseController):
                 assert 'episode' in info
                 ep_returns.append(info['episode']['r'])
                 ep_lengths.append(info['episode']['l'])
-                obs, _ = env.reset()
+                obs, _ = self.env_reset(env)
             obs = self.obs_normalizer(obs)
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
@@ -286,7 +290,7 @@ class PPO(BaseController):
             # Adding safety filter
             buffered_action = act
             success = False
-            if self.safety_filter is not None:
+            if self.safety_filter is not None and self.filter_train_actions is True:
                 physical_action = self.env.envs[0].denormalize_action(act)
                 unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
@@ -295,7 +299,10 @@ class PPO(BaseController):
                     if self.buffer_safe_action is True:
                         buffered_action = act
 
-            next_obs, rew, done, info = self.env.step([act])
+            action = np.atleast_1d(np.squeeze([act]))
+            next_obs, rew, done, info = self.env.step(action)
+            if done[0] is True and self.use_safe_reset is True:
+                next_obs, info = self.env_reset(self.env)
             if self.penalize_sf_diff and success:
                 rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*1000
             next_true_obs = next_obs
@@ -396,3 +403,28 @@ class PPO(BaseController):
                 prefix='stat_eval')
         # Print summary table
         self.logger.dump_scalars()
+
+    def env_reset(self, env):
+        '''Resets the environment until a feasible initial state is found.
+
+        Args:
+            env (BenchmarkEnv): The environment that is being reset.
+
+        Returns:
+            obs (ndarray): The initial observation.
+            info (dict): The initial info.
+        '''
+        success = False
+        act = np.array([[0]]) #self.model.U_EQ
+        obs, info = env.reset()
+
+        while self.use_safe_reset is True \
+            and self.safety_filter is not None \
+            and (success is not True or self.safety_filter.slack_prev > 10**(-7)):
+            obs, info = env.reset()
+            info['current_step'] = 1
+            physical_action = self.env.envs[0].denormalize_action(act)
+            unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
+            _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+
+        return obs, info

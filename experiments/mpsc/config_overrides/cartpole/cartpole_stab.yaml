@@ -18,20 +18,20 @@ task_config:
   init_state_randomization_info:
     init_x:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_x_dot:
       distrib: 'uniform'
-      low: -0.5
-      high: 0.5
+      low: -1
+      high: 1
     init_theta:
       distrib: 'uniform'
-      low: -0.14
-      high: 0.14
+      low: -0.16
+      high: 0.16
     init_theta_dot:
       distrib: 'uniform'
-      low: -0.5
-      high: 0.5
+      low: -1
+      high: 1
 
   task: stabilization
   task_info:
