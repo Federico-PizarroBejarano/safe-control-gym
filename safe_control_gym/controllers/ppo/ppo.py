@@ -420,11 +420,13 @@ class PPO(BaseController):
 
         while self.use_safe_reset is True \
             and self.safety_filter is not None \
-            and (success is not True or self.safety_filter.slack_prev > 10**(-7)):
+            and (success is not True or self.safety_filter.slack_prev > 0):
             obs, info = env.reset()
             info['current_step'] = 1
             physical_action = self.env.envs[0].denormalize_action(act)
             unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
             _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+            if success == False:
+                self.safety_filter.setup_optimizer()
 
         return obs, info
