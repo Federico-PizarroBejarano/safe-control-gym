@@ -26,12 +26,7 @@ def train():
     else:
         config.task_config.rew_exponential = False
 
-    if os.path.isdir(config.output_dir):
-        cont = input(f'Overwrite {config.output_dir} [y/n]: ')
-        if cont.lower() == 'y':
-            shutil.rmtree(config.output_dir, ignore_errors=True)
-        else:
-            return
+    shutil.rmtree(config.output_dir, ignore_errors=True)
 
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:

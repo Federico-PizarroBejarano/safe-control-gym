@@ -451,7 +451,7 @@ class SafeExplorerPPO(BaseController):
 
     def eval_constraint_models(self):
         '''Runs evaluation for the constraint models.'''
-        eval_resutls = defaultdict(list)
+        eval_results = defaultdict(list)
         self.safety_layer.eval()
         self.obs_normalizer.set_read_only()
         # Collect evaluation data.
@@ -459,7 +459,7 @@ class SafeExplorerPPO(BaseController):
         for batch in self.constraint_buffer.sampler(self.constraint_batch_size):
             losses = self.safety_layer.compute_loss(batch)
             for i, loss in enumerate(losses):
-                eval_resutls[f'constraint_{i}_loss'].append(loss.item())
+                eval_results[f'constraint_{i}_loss'].append(loss.item())
         self.constraint_buffer.reset()
-        eval_resutls = {k: sum(v) / len(v) for k, v in eval_resutls.items()}
-        return eval_resutls
+        eval_results = {k: sum(v) / len(v) for k, v in eval_results.items()}
+        return eval_results

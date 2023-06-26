@@ -728,8 +728,6 @@ class NL_MPSC(MPSC):
         with open(path, 'rb') as f:
             parameters = pickle.load(f)
 
-        print(parameters)
-
         self.rho_c = parameters['rho_c']
         self.Theta = parameters['Theta']
         self.X = parameters['X']

@@ -139,7 +139,7 @@ class SACAgent:
 
     def update(self, batch):
         '''Updates model parameters based on current training batch.'''
-        resutls = defaultdict(list)
+        results = defaultdict(list)
 
         # actor update
         policy_loss, entropy_loss = self.compute_policy_loss(batch)
@@ -161,10 +161,10 @@ class SACAgent:
         # update target networks
         soft_update(self.ac, self.ac_targ, self.tau)
 
-        resutls['policy_loss'] = policy_loss.item()
-        resutls['critic_loss'] = critic_loss.item()
-        resutls['entropy_loss'] = entropy_loss.item()
-        return resutls
+        results['policy_loss'] = policy_loss.item()
+        results['critic_loss'] = critic_loss.item()
+        results['entropy_loss'] = entropy_loss.item()
+        return results
 
 
 # -----------------------------------------------------------------------------------
