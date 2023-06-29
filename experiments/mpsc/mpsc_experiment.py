@@ -571,4 +571,4 @@ if __name__ == '__main__':
     # run_uncertified_trajectory()
     # determine_feasible_starting_points(num_points=25, num_steps=25)
     # run_multiple(plot=False)
-    run_multiple_models(plot=False, model='TEST')
+    run_multiple_models(plot=False)

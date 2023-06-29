@@ -99,6 +99,7 @@ class MPSC(BaseSafetyFilter, ABC):
 
         if cost_function == Cost_Function.ONE_STEP_COST:
             self.cost_function = ONE_STEP_COST()
+            self.cost_function.mpsc_cost_horizon = 1
         elif cost_function == Cost_Function.CONSTANT_COST:
             self.cost_function = CONSTANT_COST(self.env, mpsc_cost_horizon, decay_factor)
         elif cost_function == Cost_Function.REGULARIZED_COST:
@@ -284,5 +285,6 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
         self.z_prev = None
         self.v_prev = None
+        self.slack_prev = 0
         self.kinf = self.horizon - 1
         self.setup_results_dict()

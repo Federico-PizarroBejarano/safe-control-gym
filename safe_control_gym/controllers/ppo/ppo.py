@@ -282,7 +282,7 @@ class PPO(BaseController):
         info = self.info
         start = time.time()
         for _ in range(self.rollout_steps):
-            if self.safety_filter is not None:
+            if self.safety_filter is not None and self.safety_filter.mpsc_cost_horizon > 1:
                 self.save('./temp-data/saved_controller_prev.npy', save_only_random_seed=True)
             with torch.no_grad():
                 act, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
@@ -298,13 +298,15 @@ class PPO(BaseController):
                     act = self.env.envs[0].normalize_action(certified_action)
                     if self.buffer_safe_action is True:
                         buffered_action = act
+                else:
+                    self.safety_filter.setup_optimizer()
 
             action = np.atleast_1d(np.squeeze([act]))
             next_obs, rew, done, info = self.env.step(action)
             if done[0] == True and self.use_safe_reset is True:
                 next_obs, info = self.env_reset(self.env)
             if self.penalize_sf_diff and success:
-                rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*1000
+                rew -= np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)*10
             next_true_obs = next_obs
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
