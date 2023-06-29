@@ -1,5 +1,5 @@
 task_config:
-  seed: 42
+  seed: 4077
   info_in_reset: True
   ctrl_freq: 15
   pyb_freq: 750
@@ -36,7 +36,7 @@ task_config:
   task: stabilization
   task_info:
     stabilization_goal: [0.7, 0]
-    stabilization_goal_tolerance: 0.0
+    stabilization_goal_tolerance: 0.05
 
   inertial_prop:
     pole_length: 0.5

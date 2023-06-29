@@ -41,7 +41,7 @@ python3 train_rl.py \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}_linear.yaml \
     --output_dir ./models/rl_models/${ALGO}/${TAG}/ \
-    --seed 2 \
+    --seed 5 \
     --kv_overrides \
         task_config.init_state=None \
         sf_config.cost_function=${MPSC_COST} \
