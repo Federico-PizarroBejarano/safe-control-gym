@@ -282,7 +282,9 @@ class PPO(BaseController):
         info = self.info
         start = time.time()
         for _ in range(self.rollout_steps):
-            if self.safety_filter is not None and self.safety_filter.mpsc_cost_horizon > 1:
+            if self.safety_filter is not None \
+               and self.filter_train_actions is True \
+               and self.safety_filter.cost_function.mpsc_cost_horizon > 1:
                 self.save('./temp-data/saved_controller_prev.npy', save_only_random_seed=True)
             with torch.no_grad():
                 act, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
