@@ -42,3 +42,4 @@ python3 ./mpsc_experiment.py \
     --kv_overrides \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
+    --model=${1}

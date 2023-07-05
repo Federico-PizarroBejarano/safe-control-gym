@@ -31,6 +31,7 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         self.output_dir = output_dir
         self.uncertified_controller = None
+        self.skip_checks = False
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
@@ -100,9 +101,6 @@ class PRECOMPUTED_COST(MPSC_COST):
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
-        elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True:
-            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy', save_only_random_seed=True)
-            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy', load_only_random_seed=True)
 
         for h in range(self.mpsc_cost_horizon):
             next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
@@ -122,7 +120,7 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
 
-            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
+            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001 and not self.skip_checks:
                 raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
             v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
@@ -132,8 +130,5 @@ class PRECOMPUTED_COST(MPSC_COST):
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
-        elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.training is True:
-            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy', load_only_random_seed=True)
-            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy', save_only_random_seed=True)
 
         return v_L

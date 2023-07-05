@@ -674,7 +674,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
 
     x = np.arange(1, len(labels) + 1)
-    ax.set_xticks(x, labels, weight='bold', fontsize=15)
+    ax.set_xticks(x, labels, weight='bold', fontsize=15, rotation=45, ha='right')
 
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
     bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))

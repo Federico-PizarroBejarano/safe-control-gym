@@ -116,18 +116,21 @@ class PPO(BaseController):
             self.eval_env.close()
         self.logger.close()
 
+    def get_random_state(self):
+        state = {
+                    'random_state': get_random_state(),
+                    'env_random_state': self.env.get_env_random_state()
+                }
+        return state
+
+    def set_random_state(self, state):
+        set_random_state(state['random_state'])
+        self.env.set_env_random_state(state['env_random_state'])
+
     def save(self,
              path,
-             save_only_random_seed=False,
              ):
         '''Saves model params and experiment state to checkpoint path.'''
-        if save_only_random_seed is True:
-            exp_state = {
-                'random_state': get_random_state(),
-                'env_random_state': self.env.get_env_random_state()
-            }
-            torch.save(exp_state, path)
-            return
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
         state_dict = {
@@ -147,14 +150,9 @@ class PPO(BaseController):
 
     def load(self,
              path,
-             load_only_random_seed=False,
              ):
         '''Restores model and experiment given checkpoint path.'''
         state = torch.load(path)
-        if load_only_random_seed is True:
-            set_random_state(state['random_state'])
-            self.env.set_env_random_state(state['env_random_state'])
-            return
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
         self.obs_normalizer.load_state_dict(state['obs_normalizer'])
@@ -285,9 +283,16 @@ class PPO(BaseController):
             if self.safety_filter is not None \
                and self.filter_train_actions is True \
                and self.safety_filter.cost_function.mpsc_cost_horizon > 1:
-                self.save('./temp-data/saved_controller_prev.npy', save_only_random_seed=True)
+                prev_state = self.get_random_state()
+
             with torch.no_grad():
                 act, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
+
+            if self.safety_filter is not None \
+               and self.filter_train_actions is True \
+               and self.safety_filter.cost_function.mpsc_cost_horizon > 1:
+                next_state = self.get_random_state()
+                self.set_random_state(prev_state)
 
             # Adding safety filter
             buffered_action = act
@@ -302,6 +307,11 @@ class PPO(BaseController):
                         buffered_action = act
                 else:
                     self.safety_filter.setup_optimizer()
+
+            if self.safety_filter is not None \
+               and self.filter_train_actions is True \
+               and self.safety_filter.cost_function.mpsc_cost_horizon > 1:
+                self.set_random_state(next_state)
 
             action = np.atleast_1d(np.squeeze([act]))
             next_obs, rew, done, info = self.env.step(action)
@@ -422,15 +432,18 @@ class PPO(BaseController):
         act = np.array([[0]]) #self.model.U_EQ
         obs, info = env.reset()
 
-        while self.use_safe_reset is True \
-            and self.safety_filter is not None \
-            and (success is not True or self.safety_filter.slack_prev > 0):
-            obs, info = env.reset()
-            info['current_step'] = 1
-            physical_action = self.env.envs[0].denormalize_action(act)
-            unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
-            _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-            if success == False:
-                self.safety_filter.setup_optimizer()
+        if self.use_safe_reset is True and self.safety_filter is not None:
+            self.safety_filter.cost_function.skip_checks = True
+
+            while (success is not True or self.safety_filter.slack_prev > 0):
+                obs, info = env.reset()
+                info['current_step'] = 1
+                physical_action = self.env.envs[0].denormalize_action(act)
+                unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
+                _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                if success == False:
+                    self.safety_filter.setup_optimizer()
+
+            self.safety_filter.cost_function.skip_checks = False
 
         return obs, info
