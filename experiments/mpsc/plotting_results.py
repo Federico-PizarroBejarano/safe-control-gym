@@ -90,7 +90,7 @@ def load_all_models(system, task, algo):
 
     all_results = {}
 
-    for model in os.listdir(f'./models/rl_models/{algo}/'):
+    for model in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'):
         with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_{algo}_{model}.pkl', 'rb') as f:
             all_results[model] = pickle.load(f)
 
@@ -663,7 +663,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = sorted(os.listdir(f'./models/rl_models/{algo}/'))
+    labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'))
     data = []
 
     for model in labels:

@@ -75,7 +75,7 @@ python3 train_rl.py \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}_linear.yaml \
-    --output_dir ./models/rl_models/${ALGO}/${TAG}/ \
+    --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}/${TAG}/ \
     --seed 2 \
     --kv_overrides \
         task_config.init_state=None \
