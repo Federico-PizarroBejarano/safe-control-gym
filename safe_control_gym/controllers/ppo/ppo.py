@@ -429,7 +429,7 @@ class PPO(BaseController):
             info (dict): The initial info.
         '''
         success = False
-        act = np.array([[0]]) #self.model.U_EQ
+        act = self.eval_env.symbolic.U_EQ
         obs, info = env.reset()
 
         if self.use_safe_reset is True and self.safety_filter is not None:
