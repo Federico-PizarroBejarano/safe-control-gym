@@ -21,7 +21,7 @@ MPSC_COST='one_step_cost'
 # MPSC_COST='learned_cost'
 
 MPSC_COST_HORIZON=2
-DECAY_FACTOR=0.95
+DECAY_FACTOR=0.85
 
 TAG='TEST'
 

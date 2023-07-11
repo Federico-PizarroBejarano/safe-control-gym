@@ -450,8 +450,50 @@ def extract_reward(results_data, certified):
         met.data = results_data['uncert_results']
         returns = np.asarray(met.get_episode_returns())
 
-
     return returns
+
+
+def extract_final_dist(results_data, certified):
+    '''Extracts the final distance from stabilization goal from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
+
+    Returns:
+        final_dist (list): The list of final distances.
+    '''
+    if certified:
+        data = results_data['cert_results']
+    else:
+        data = results_data['uncert_results']
+
+    if results_data['X_GOAL'].ndim < 2:
+        final_dists = [np.linalg.norm(results_data['X_GOAL'] - data['state'][i][-1]) for i in range(len(data['obs']))]
+    else:
+        final_dists = [np.linalg.norm(results_data['X_GOAL'][:len(data['state'][i][:, 0]), 0] - data['state'][i][:, 0]) for i in range(len(data['obs']))]
+
+    return final_dists
+
+
+def extract_failed(results_data, certified):
+    '''Extracts the percent failed from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
+
+    Returns:
+        failed (list): The percent failed.
+    '''
+    if certified:
+        data = results_data['cert_results']
+    else:
+        data = results_data['uncert_results']
+
+    failed = [data['info'][i][-1]['out_of_bounds'] for i in range(len(data['info']))]
+
+    return [np.mean(failed)]
 
 
 def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
@@ -705,8 +747,18 @@ if __name__ == '__main__':
 
     def extract_roc_cert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=True)
     def extract_roc_uncert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=False)
+
+    def extract_constraint_violations_cert(results_data): return extract_constraint_violations(results_data, certified=True)
     def extract_constraint_violations_uncert(results_data): return extract_constraint_violations(results_data, certified=False)
+
     def extract_reward_cert(results_data): return extract_reward(results_data, certified=True)
+    def extract_reward_uncert(results_data): return extract_reward(results_data, certified=False)
+
+    def extract_final_dist_cert(results_data): return extract_final_dist(results_data, certified=True)
+    def extract_final_dist_uncert(results_data): return extract_final_dist(results_data, certified=False)
+
+    def extract_failed_cert(results_data): return extract_failed(results_data, certified=True)
+    def extract_failed_uncert(results_data): return extract_failed(results_data, certified=False)
 
     system_name = 'cartpole'
     task_name = 'stab'
@@ -714,12 +766,18 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_rmse)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_length)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_cert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_reward_uncert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_failed_cert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_failed_uncert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)
 
     # mpsc_cost_horizon_num = 2
 

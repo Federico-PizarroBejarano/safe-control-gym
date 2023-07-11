@@ -107,7 +107,7 @@ class PRECOMPUTED_COST(MPSC_COST):
             # Concatenate goal info (goal state(s)) for RL
             extended_obs = self.env.extend_obs(obs, next_step + 1)
 
-            if isinstance(self.uncertified_controller, PPO):
+            if self.uncertified_controller.training:
                 action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step}, training=self.uncertified_controller.training)
             else:
                 action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
