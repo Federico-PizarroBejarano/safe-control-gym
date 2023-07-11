@@ -41,6 +41,10 @@ class SAC(BaseController):
                  use_gpu=False,
                  seed=0,
                  **kwargs):
+        self.filter_train_actions = False
+        self.buffer_safe_action = False
+        self.penalize_sf_diff = False
+        self.use_safe_reset = False
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
 
         # task
@@ -288,7 +292,8 @@ class SAC(BaseController):
                 act = self.env.envs[0].normalize_action(certified_action)
                 applied_action = act
 
-        next_obs, rew, done, info = self.env.step([applied_action])
+        action = np.atleast_1d(np.squeeze([applied_action]))
+        next_obs, rew, done, info = self.env.step(action)
         if self.penalize_sf_diff and success:
             unsafe_rew = rew - 10*np.linalg.norm(physical_action - certified_action)/np.linalg.norm(certified_action)
         else:
@@ -318,7 +323,7 @@ class SAC(BaseController):
             true_mask[idx] = 1.0
         true_next_obs = _flatten_obs(true_next_obs)
 
-        if unsafe_rew != rew:
+        if not np.array_equal(unsafe_rew, rew):
             self.buffer.push({
                 'obs': obs,
                 'act': unsafe_action,

@@ -1,4 +1,4 @@
-algo: ppo
+algo: safe_explorer_ppo
 algo_config:
   # model args
   hidden_dim: 128
@@ -6,6 +6,12 @@ algo_config:
   # loss args
   use_gae: True
   entropy_coef: 0.01
+
+  # Safety layer args
+  pretraining: False
+  pretrained: null
+  constraint_slack: 0.05
+  constraint_hidden_dim: 128
 
   # optim args
   opt_epochs: 20

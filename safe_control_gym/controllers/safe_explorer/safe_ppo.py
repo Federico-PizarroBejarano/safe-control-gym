@@ -39,12 +39,12 @@ class SafeExplorerPPO(BaseController):
             self.env = VecRecordEpisodeStatistics(self.env, self.deque_size)
             self.eval_env = env_func(seed=seed * 111)
             self.eval_env = RecordEpisodeStatistics(self.eval_env, self.deque_size)
-            self.num_constraints = self.env.envs[0].num_constraints
+            self.num_constraints = self.eval_env.constraints.num_state_constraints
         else:
             # Testing only.
             self.env = env_func()
             self.env = RecordEpisodeStatistics(self.env)
-            self.num_constraints = self.env.num_constraints
+            self.num_constraints = self.env.constraints.num_state_constraints
         # Safety layer.
         self.safety_layer = SafetyLayer(self.env.observation_space,
                                         self.env.action_space,
@@ -106,7 +106,7 @@ class SafeExplorerPPO(BaseController):
             self.total_steps = 0
             obs, info = self.env.reset()
             self.obs = self.obs_normalizer(obs)
-            self.c = np.array([inf['constraint_values'] for inf in info['n']])
+            self.c = np.array([inf['constraint_values'][:self.num_constraints] for inf in info['n']])
         else:
             # Add episodic stats to be tracked.
             self.env.add_tracker('constraint_violation', 0, mode='queue')
@@ -335,7 +335,7 @@ class SafeExplorerPPO(BaseController):
                 'c': c,
             })
             obs = next_obs
-            c = np.array([inf['constraint_values'] for inf in info['n']])
+            c = np.array([inf['constraint_values'][:self.num_constraints] for inf in info['n']])
         self.obs = obs
         self.c = c
         self.total_steps += self.rollout_batch_size * self.rollout_steps
@@ -430,7 +430,7 @@ class SafeExplorerPPO(BaseController):
         step = 0
         obs, info = self.env.reset()
         obs = self.obs_normalizer(obs)
-        c = np.array([inf['constraint_values'] for inf in info['n']])
+        c = np.array([inf['constraint_values'][:self.num_constraints] for inf in info['n']])
         while step < num_steps:
             action_spaces = self.env.get_attr('action_space')
             action = np.array([space.sample() for space in action_spaces])
@@ -439,14 +439,14 @@ class SafeExplorerPPO(BaseController):
             c_next = []
             for i, d in enumerate(done):
                 if d:
-                    c_next_i = info['n'][i]['terminal_info']['constraint_values']
+                    c_next_i = info['n'][i]['terminal_info']['constraint_values'][:self.num_constraints]
                 else:
-                    c_next_i = info['n'][i]['constraint_values']
+                    c_next_i = info['n'][i]['constraint_values'][:self.num_constraints]
                 c_next.append(c_next_i)
             c_next = np.array(c_next)
             self.constraint_buffer.push({'act': action, 'obs': obs, 'c': c, 'c_next': c_next})
             obs = obs_next
-            c = np.array([inf['constraint_values'] for inf in info['n']])
+            c = np.array([inf['constraint_values'][:self.num_constraints] for inf in info['n']])
             step += self.rollout_batch_size
 
     def eval_constraint_models(self):
