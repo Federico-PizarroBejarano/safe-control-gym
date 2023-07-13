@@ -11,6 +11,7 @@ TASK='stab'
 # ALGO='pid'
 ALGO='ppo'
 # ALGO='sac'
+# ALGO='safe_explorer_ppo'
 
 # SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'

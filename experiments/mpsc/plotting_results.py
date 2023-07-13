@@ -760,6 +760,9 @@ if __name__ == '__main__':
     def extract_failed_cert(results_data): return extract_failed(results_data, certified=True)
     def extract_failed_uncert(results_data): return extract_failed(results_data, certified=False)
 
+    def extract_length_cert(results_data): return extract_length(results_data, certified=True)
+    def extract_length_uncert(results_data): return extract_length(results_data, certified=False)
+
     system_name = 'cartpole'
     task_name = 'stab'
     algo_name = 'ppo'
@@ -771,7 +774,8 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_length)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_length_cert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_length_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_failed_cert)

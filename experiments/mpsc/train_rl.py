@@ -21,10 +21,10 @@ def train():
     config = fac.merge()
     config.algo_config['training'] = True
 
-    if config.algo == 'ppo':
-        config.task_config.rew_exponential = True
-    else:
+    if config.algo == 'sac':
         config.task_config.rew_exponential = False
+    else:
+        config.task_config.rew_exponential = True
 
     shutil.rmtree(config.output_dir, ignore_errors=True)
 
@@ -54,20 +54,21 @@ def train():
     ctrl.reset()
 
     # Setup MPSC.
-    safety_filter = make(config.safety_filter,
-                         env_func,
-                         **config.sf_config)
-    safety_filter.reset()
+    if config.algo_config.filter_train_actions or config.algo_config.use_safe_reset:
+        safety_filter = make(config.safety_filter,
+                            env_func,
+                            **config.sf_config)
+        safety_filter.reset()
 
-    if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
-        safety_filter.cost_function.uncertified_controller = ctrl
-        safety_filter.cost_function.output_dir = '.'
-        if config.algo == 'pid':
-            ctrl.save('./temp-data/saved_controller_prev.npy')
+        if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
+            safety_filter.cost_function.uncertified_controller = ctrl
+            safety_filter.cost_function.output_dir = '.'
+            if config.algo == 'pid':
+                ctrl.save('./temp-data/saved_controller_prev.npy')
 
-    safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_{task}_linear.pkl')
+        safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_{task}_linear.pkl')
 
-    ctrl.safety_filter = safety_filter
+        ctrl.safety_filter = safety_filter
 
     # Training.
     ctrl.learn()

@@ -21,6 +21,7 @@ TASK='stab'
 
 ALGO='ppo'
 # ALGO='sac'
+# ALGO='safe_explorer_ppo'
 
 # SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'
@@ -66,6 +67,18 @@ else
     SYS_NAME='quadrotor'
 fi
 
+if [ "$ALGO" == 'safe_explorer_ppo' ]; then
+    # Pretrain the unsafe controller/agent.
+    python3 train_rl.py \
+        --algo ${ALGO} \
+        --task ${SYS_NAME} \
+        --overrides \
+            ./config_overrides/${SYS}/${ALGO}_${SYS}_pretrain.yaml \
+            ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
+        --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
+        --seed 2
+fi
+
 # Train the unsafe controller/agent.
 python3 train_rl.py \
     --algo ${ALGO} \
@@ -87,5 +100,6 @@ python3 train_rl.py \
         algo_config.use_safe_reset=$2 \
         task_config.done_on_violation=$3 \
         algo_config.penalize_sf_diff=$4 \
+        algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
 
 ./mpsc_experiment.sh $TAG

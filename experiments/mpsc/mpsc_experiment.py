@@ -119,11 +119,13 @@ regularization_parameters = {
             'lqr': 0.0,
             'ppo': 0.125,
             'sac': 0.07,
+            'safe_explorer_ppo': 0.125,
         },
         'track': {
             'lqr': 0.0,
             'ppo': 0.01,
             'sac': 1000.0,
+            'safe_explorer_ppo': 0.01,
         },
     },
     'quadrotor_2D': {
@@ -132,12 +134,14 @@ regularization_parameters = {
             'pid': 2.5,
             'ppo': 1.0,
             'sac': 1.0,
+            'safe_explorer_ppo': 1.0,
         },
         'track': {
             'lqr': 0.0,
             'pid': 10000.0,
             'ppo': 10000.0,
             'sac': 100.0,
+            'safe_explorer_ppo': 10000.0,
         },
     },
     'quadrotor_3D': {
@@ -146,12 +150,14 @@ regularization_parameters = {
             'pid': 10000.0,
             'ppo': 100.0,
             'sac': 100.0,
+            'safe_explorer_ppo': 100.0,
         },
         'track': {
             'lqr': 1000000.0,
             'pid': 10000.0,
             'ppo': 100.0,
             'sac': 100.0,
+            'safe_explorer_ppo': 100.0,
         },
     }
 }
@@ -185,7 +191,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     if init_state is not None:
         config.task_config['init_state'] = init_state
     config.task_config['randomized_init'] = False
-    if config.algo in ['ppo', 'sac']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         config.task_config['cost'] = Cost.RL_REWARD
         config.task_config['normalized_rl_action_space'] = True
     else:
@@ -198,10 +204,10 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     else:
         system = config.task
 
-    if config.algo == 'ppo':
-        config.task_config.rew_exponential = True
-    else:
+    if config.algo == 'sac':
         config.task_config.rew_exponential = False
+    else:
+        config.task_config.rew_exponential = True
 
     # Create an environment
     env_func = partial(make,
@@ -215,7 +221,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                 **config.algo_config,
                 output_dir=curr_path + '/temp')
 
-    if config.algo in ['ppo', 'sac']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
         if model is None:
             ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
@@ -321,7 +327,7 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = False
-    if config.algo in ['ppo', 'sac']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         config.task_config['cost'] = Cost.RL_REWARD
         config.task_config['normalized_rl_action_space'] = True
     else:
@@ -354,7 +360,7 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
                 **config.algo_config,
                 output_dir='./temp')
 
-    if config.algo in ['ppo', 'sac']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
         ctrl.load(f'./models/rl_models/{config.algo}_model_{system}_{task}.pt')
 
@@ -471,7 +477,7 @@ def run_uncertified_trajectory(n_episodes=10):
     config = fac.merge()
     config.algo_config['training'] = False
     config.task_config['randomized_init'] = False
-    if config.algo in ['ppo', 'sac']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         config.task_config['cost'] = Cost.RL_REWARD
         config.task_config['normalized_rl_action_space'] = True
     else:
@@ -495,7 +501,7 @@ def run_uncertified_trajectory(n_episodes=10):
                 **config.algo_config,
                 output_dir='./temp')
 
-    if config.algo in ['ppo', 'sac']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
         ctrl.load(f'./models/rl_models/{config.algo}_model_{system}_{task}.pt')
 
