@@ -309,6 +309,13 @@ class SAC(BaseController):
         unsafe_action = act
         applied_action = act
         success = False
+
+        if self.filter_train_actions is True and self.safety_filter is not None:
+            if self.total_steps < self.warm_up_steps:
+                self.safety_filter.cost_function.skip_checks = True
+            else:
+                self.safety_filter.cost_function.skip_checks = False
+
         if self.safety_filter is not None and self.filter_train_actions is True:
             physical_action = self.env.envs[0].denormalize_action(act)
             unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]

@@ -13,7 +13,7 @@ algo_config:
 
   # runner args
   max_env_steps: 200000
-  warm_up_steps: 0
+  warm_up_steps: 1000
   rollout_batch_size: 1
   num_workers: 1
   max_buffer_size: 1000000
