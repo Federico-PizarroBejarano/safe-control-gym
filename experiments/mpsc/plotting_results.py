@@ -94,6 +94,9 @@ def load_all_models(system, task, algo):
         with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_{algo}_{model}.pkl', 'rb') as f:
             all_results[model] = pickle.load(f)
 
+    with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_safe_explorer_ppo_none.pkl', 'rb') as f:
+            all_results['safe_ppo'] = pickle.load(f)
+
     return all_results
 
 
@@ -705,7 +708,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'))
+    labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/')+['safe_ppo'])
     data = []
 
     for model in labels:
