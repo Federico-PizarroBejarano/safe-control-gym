@@ -10,7 +10,7 @@ algo_config:
   # Safety layer args
   pretraining: True
   pretrained: null
-  constraint_hidden_dim: 64
+  constraint_hidden_dim: 100
   constraint_lr: 0.0001
   constraint_batch_size: 256
   constraint_steps_per_epoch: 3000
@@ -18,7 +18,7 @@ algo_config:
   constraint_eval_steps: 1500
   constraint_eval_interval: 5
   constraint_buffer_size: 1000000
-  constraint_slack: 0.05
+  constraint_slack: [0.01, 0.01, 0.01, 0.05, 0.01, 0.01, 0.01, 0.05]
 
   # loss args
   gamma: 0.99

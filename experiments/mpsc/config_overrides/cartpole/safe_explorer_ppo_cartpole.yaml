@@ -10,8 +10,8 @@ algo_config:
   # Safety layer args
   pretraining: False
   pretrained: null
-  constraint_slack: 0.05
-  constraint_hidden_dim: 64
+  constraint_slack: [0.01, 0.01, 0.01, 0.05, 0.01, 0.01, 0.01, 0.05]
+  constraint_hidden_dim: 100
 
   # loss args
   gamma: 0.99
