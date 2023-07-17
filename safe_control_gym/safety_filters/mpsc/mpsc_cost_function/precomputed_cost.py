@@ -107,10 +107,14 @@ class PRECOMPUTED_COST(MPSC_COST):
             # Concatenate goal info (goal state(s)) for RL
             extended_obs = self.env.extend_obs(obs, next_step + 1)
 
+            info = {
+                    'current_step': next_step,
+                    'constraint_values': np.concatenate([self.get_constraint_value(con, obs) for con in self.env.constraints.state_constraints])
+                   }
             if self.uncertified_controller.training:
-                action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step}, training=self.uncertified_controller.training)
+                action = self.uncertified_controller.select_action(obs=extended_obs, info=info, training=self.uncertified_controller.training)
             else:
-                action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
+                action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
 
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 if self.env.NAME == Environment.CARTPOLE:
@@ -132,3 +136,15 @@ class PRECOMPUTED_COST(MPSC_COST):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
         return v_L
+
+    def get_constraint_value(self, con, state):
+        '''Gets the value of a constraint given the state.
+
+        Args:
+            con (Constraint): The constraint.
+            state (ndarray): The state to be tested.
+
+        Returns:
+            value (float): The value of the constraint at the given state.
+        '''
+        return np.round_(np.atleast_1d(np.squeeze(con.sym_func(np.array(state, ndmin=1)))), decimals=con.decimals)
