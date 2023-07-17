@@ -96,6 +96,7 @@ def load_all_models(system, task, algo):
 
     with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_safe_explorer_ppo_none.pkl', 'rb') as f:
             all_results['safe_ppo'] = pickle.load(f)
+            all_results['safe_ppo_cert'] = all_results['safe_ppo']
 
     return all_results
 
@@ -708,12 +709,22 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/')+['safe_ppo'])
+    labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'))
+    if 'cert' not in data_extractor.__name__:
+        labels = sorted(labels + ['safe_ppo_cert'])
+    elif 'uncert' in data_extractor.__name__:
+        labels = sorted(labels + ['safe_ppo'])
+    else:
+        labels = sorted(labels + ['safe_ppo'] + ['safe_ppo_cert'])
+
     data = []
 
     for model in labels:
         exp_data = all_results[model]
-        data.append(data_extractor(exp_data))
+        if model == 'safe_ppo':
+            data.append(data_extractor(exp_data, certified=False))
+        else:
+            data.append(data_extractor(exp_data))
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
     ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
@@ -746,25 +757,27 @@ if __name__ == '__main__':
     ordered_costs = ['one_step', 'regularized', 'precomputed']
 
     def extract_rate_of_change_of_inputs(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=1, mode='input')
-    def extract_rate_of_change_of_corrections(results_data): return extract_rate_of_change(results_data, certified=True, order=1, mode='correction')
 
-    def extract_roc_cert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=True)
-    def extract_roc_uncert(results_data): return extract_rate_of_change_of_inputs(results_data, certified=False)
+    def extract_roc_cert(results_data, certified=True): return extract_rate_of_change_of_inputs(results_data, certified)
+    def extract_roc_uncert(results_data, certified=False): return extract_rate_of_change_of_inputs(results_data, certified)
 
-    def extract_constraint_violations_cert(results_data): return extract_constraint_violations(results_data, certified=True)
-    def extract_constraint_violations_uncert(results_data): return extract_constraint_violations(results_data, certified=False)
+    def extract_rmse_cert(results_data, certified=True): return extract_rmse(results_data, certified)
+    def extract_rmse_uncert(results_data, certified=False): return extract_rmse(results_data, certified)
 
-    def extract_reward_cert(results_data): return extract_reward(results_data, certified=True)
-    def extract_reward_uncert(results_data): return extract_reward(results_data, certified=False)
+    def extract_constraint_violations_cert(results_data, certified=True): return extract_constraint_violations(results_data, certified)
+    def extract_constraint_violations_uncert(results_data, certified=False): return extract_constraint_violations(results_data, certified)
 
-    def extract_final_dist_cert(results_data): return extract_final_dist(results_data, certified=True)
-    def extract_final_dist_uncert(results_data): return extract_final_dist(results_data, certified=False)
+    def extract_reward_cert(results_data, certified=True): return extract_reward(results_data, certified)
+    def extract_reward_uncert(results_data, certified=False): return extract_reward(results_data, certified)
 
-    def extract_failed_cert(results_data): return extract_failed(results_data, certified=True)
-    def extract_failed_uncert(results_data): return extract_failed(results_data, certified=False)
+    def extract_final_dist_cert(results_data, certified=True): return extract_final_dist(results_data, certified)
+    def extract_final_dist_uncert(results_data, certified=False): return extract_final_dist(results_data, certified)
 
-    def extract_length_cert(results_data): return extract_length(results_data, certified=True)
-    def extract_length_uncert(results_data): return extract_length(results_data, certified=False)
+    def extract_failed_cert(results_data, certified=True): return extract_failed(results_data, certified)
+    def extract_failed_uncert(results_data, certified=False): return extract_failed(results_data, certified)
+
+    def extract_length_cert(results_data, certified=True): return extract_length(results_data, certified)
+    def extract_length_uncert(results_data, certified=False): return extract_length(results_data, certified)
 
     system_name = 'cartpole'
     task_name = 'stab'
@@ -773,7 +786,8 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_rmse)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_cert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
