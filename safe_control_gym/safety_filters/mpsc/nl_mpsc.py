@@ -21,7 +21,7 @@ from scipy.linalg import sqrtm, solve_discrete_are
 
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
 from safe_control_gym.controllers.mpc.mpc_utils import rk_discrete, discretize_linear_system
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, get_error_parameters, error_function
 from safe_control_gym.safety_filters.cbf.cbf_utils import cartesian_product
 from safe_control_gym.envs.benchmark_env import Task, Environment
 
@@ -67,6 +67,8 @@ class NL_MPSC(MPSC):
         self.n_samples = n_samples
         self.soften_constraints = soften_constraints
         self.slack_cost = slack_cost
+
+        self.extra_tighten = 2*1e-2
 
         self.n = self.model.nx
         self.m = self.model.nu
@@ -140,8 +142,6 @@ class NL_MPSC(MPSC):
         if env is None:
             env = self.training_env
 
-        self.tolerance = 1e-4
-
         if self.env.NAME == Environment.CARTPOLE:
             self.x_r = np.array([self.X_EQ[0], 0, 0, 0])
         elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
@@ -201,14 +201,18 @@ class NL_MPSC(MPSC):
 
         # Create set of error residuals.
         w = np.zeros((self.n_samples, self.n))
+        states = np.zeros((self.n_samples, self.n))
+        actions = np.zeros((self.n_samples, self.m))
 
         # Use uniform sampling of control inputs and states.
         for i in range(self.n_samples):
             init_state, _ = env.reset()
+            states[i, :] = init_state
             if self.env.NAME == Environment.QUADROTOR:
                 u = np.random.rand(self.model.nu) / 20 - 1 / 40 + self.U_EQ
             else:
                 u = env.action_space.sample()  # Will yield a random action within action space.
+            actions[i, :] = u
             x_next_obs, _, _, _ = env.step(u)
             x_next_estimate = np.squeeze(self.dynamics_func(x0=init_state, p=u)['xf'].toarray())
             w[i, :] = x_next_obs - x_next_estimate
@@ -220,7 +224,18 @@ class NL_MPSC(MPSC):
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
         self.max_w_per_dim = np.max(w, axis=0)
         self.max_w = np.max(normed_w)
-        self.w_func = lambda x, u, s: self.max_w
+        # self.w_func = lambda x, u, s: self.max_w
+        if self.integration_algo == 'LTI':
+            degree = 1
+            num_stds = 2
+        else:
+            degree = 2
+            num_stds = 3
+        self.error_parameters = get_error_parameters(states, actions, normed_w, degree)
+        def w_func(state, action):
+            input_vec = cs.horzcat(state.T, action)
+            return error_function(*self.error_parameters, num_stds, input_vec)
+        self.w_func = w_func
 
     def synthesize_lyapunov(self):
         '''Synthesize the appropriate constants related to the lyapunov function of the system.'''
@@ -303,13 +318,13 @@ class NL_MPSC(MPSC):
         # Get Discrete-time system values
         self.rho = np.exp(-self.rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / self.rho_c  # even using rho_c from the paper yields different w_bar
-        self.w_bar = max(self.w_bar, self.max_w + self.tolerance)
+        self.w_bar = max(self.w_bar, self.max_w)
         horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
         self.s_bar_f = horizon_multiplier * self.w_bar
         # assert self.w_bar > self.max_w, f'[ERROR] w_bar ({self.w_bar}) is too small compared to max_w ({self.max_w}).'
-        assert self.s_bar_f > self.max_w * horizon_multiplier + self.tolerance, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
+        assert self.s_bar_f > self.max_w * horizon_multiplier + self.extra_tighten, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
         assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
-        self.s_bar_f = self.max_w * horizon_multiplier + self.tolerance
+        # self.s_bar_f = self.max_w * horizon_multiplier + self.extra_tighten
         self.gamma = 1 / c_max - self.s_bar_f
 
         self.delta_loc = (horizon_multiplier * self.w_bar)**2
@@ -354,7 +369,7 @@ class NL_MPSC(MPSC):
         l = []
 
         Z_mid = (constraint.upper_bounds + constraint.lower_bounds) / 2.0
-        Z_limits = np.array([[constraint.upper_bounds[i] - Z_mid[i], constraint.lower_bounds[i] - Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
+        Z_limits = (1-self.extra_tighten)*np.array([[constraint.upper_bounds[i] - Z_mid[i], constraint.lower_bounds[i] - Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
 
         dim = Z_limits.shape[0]
         eye_dim = np.eye(dim)
@@ -476,7 +491,7 @@ class NL_MPSC(MPSC):
             A_theta = self.Ac(x_test, u_test - self.U_mid, w_test).toarray()
             B_theta = self.Bc(x_test, u_test - self.U_mid, w_test).toarray()
             left_side = max(np.linalg.eig(X_sqrt @ (A_theta + B_theta @ self.K).T @ P_sqrt + P_sqrt @ (A_theta + B_theta @ self.K) @ X_sqrt)[0]) + 2 * self.rho_c
-            assert left_side <= self.tolerance, f'[ERROR] The solution {left_side} is not within the tolerance {self.tolerance}'
+            assert left_side <= 0.0001, f'[ERROR] The solution {left_side} is not within the tolerance {0.0001}'
 
     def check_lyapunov_func(self):
         '''Check the incremental Lyapunov function.'''
@@ -704,12 +719,8 @@ class NL_MPSC(MPSC):
         interior_points = []
         for _ in range(self.n_samples):
             state = np.random.uniform(self.state_constraint.lower_bounds, self.state_constraint.upper_bounds)
-            num_disturbances = 100
-            disturbances = self.randsphere(num_disturbances, self.n, self.max_w).T
-            for w in range(num_disturbances):
-                disturbed_state = state + disturbances[:, w]
-                if disturbed_state @ self.P_f @ disturbed_state <= self.gamma**2:
-                    interior_points.append(state)
+            if state.T @ self.P_f @ state <= self.gamma**2:
+                interior_points.append(state)
         self.terminal_set = Polytope(interior_points)
         self.terminal_set.minimize_V_rep()
 
@@ -738,7 +749,15 @@ class NL_MPSC(MPSC):
         self.s_bar_f = parameters['s_bar_f']
         self.w_bar = parameters['w_bar']
         self.max_w = parameters['max_w']
-        self.w_func = lambda x, u, s: self.max_w
+        self.error_parameters = parameters['error_parameters']
+        if self.integration_algo == 'LTI':
+            num_stds = 2
+        else:
+            num_stds = 3
+        def w_func(state, action):
+            input_vec = cs.horzcat(state.T, action)
+            return error_function(*self.error_parameters, num_stds, input_vec)
+        self.w_func = w_func
         self.c_js = parameters['c_js']
         self.gamma = parameters['gamma']
         self.P_f = parameters['P_f']
@@ -772,6 +791,7 @@ class NL_MPSC(MPSC):
         parameters['s_bar_f'] = self.s_bar_f
         parameters['w_bar'] = self.w_bar
         parameters['max_w'] = self.max_w
+        parameters['error_parameters'] = self.error_parameters
         parameters['c_js'] = self.c_js
         parameters['gamma'] = self.gamma
         parameters['P_f'] = self.P_f
@@ -814,10 +834,13 @@ class NL_MPSC(MPSC):
             X_GOAL = opti.parameter(self.horizon, nx)
 
         if self.soften_constraints:
-            slack = opti.variable(1, 1)
+            slack = opti.variable(self.p, self.horizon)
+            slack_term = opti.variable(1, 1)
         else:
-            slack = opti.variable(1, 1)
+            slack = opti.variable(1,1)
+            slack_term = opti.variable(1, 1)
             opti.subject_to(slack == 0)
+            opti.subject_to(slack_term == 0)
 
         for i in range(self.horizon):
             # Dynamics constraints
@@ -825,25 +848,37 @@ class NL_MPSC(MPSC):
             opti.subject_to(z_var[:, i + 1] == next_state)
 
             # Lyapunov size increase
-            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + self.max_w)
+            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + (1 + self.extra_tighten) * self.w_func(z_var[:, i], v_var[:, i]))
             opti.subject_to(s_var[:, i] <= self.s_bar_f)
+            opti.subject_to(self.w_func(z_var[:, i], v_var[:, i]) <= self.max_w)
 
             # Constraints
             for j in range(self.p):
-                tighten_by = self.c_js[j] * s_var[:, i + 1]
+                tighten_by = (1 + self.extra_tighten) * self.c_js[j] * s_var[:, i + 1]
                 if self.soften_constraints:
-                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
-                    opti.subject_to(slack >= 0)
+                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack[j,i]/self.slack_cost)
+                    opti.subject_to(slack[j,i] >= 0.0001)
                 else:
                     opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= 0)
 
         # Final state constraints
         if self.use_terminal_set:
             if self.integration_algo == 'LTI':
-                opti.subject_to(cs.vec(self.terminal_A @ z_var[:, -1] - self.terminal_b) <= 0)
+                if self.soften_constraints:
+                    opti.subject_to(cs.vec(self.terminal_A @ z_var[:, -1] - self.terminal_b) <= slack_term/self.slack_cost)
+                    opti.subject_to(slack_term >= 0.0001)
+                else:
+                    opti.subject_to(cs.vec(self.terminal_A @ z_var[:, -1] - self.terminal_b) <= 0)
             elif self.integration_algo == 'rk4':
                 terminal_cost = (z_var[:, -1] - self.X_mid).T @ self.P_f @ (z_var[:, -1] - self.X_mid)
-                opti.subject_to(terminal_cost <= self.gamma**2)
+                if self.soften_constraints:
+                    opti.subject_to(terminal_cost <= self.gamma**2 + slack_term/self.slack_cost)
+                    opti.subject_to(slack_term >= 0.0001)
+                else:
+                    opti.subject_to(terminal_cost <= self.gamma**2)
+        else:
+            if self.soften_constraints:
+                opti.subject_to(slack_term == 0)
 
         # Initial state constraints
         opti.subject_to(z_var[:, 0] == x_init)
@@ -873,11 +908,15 @@ class NL_MPSC(MPSC):
             'next_u': next_u,
             'X_GOAL': X_GOAL,
             'slack': slack,
+            'slack_term': slack_term,
         }
 
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
         if self.soften_constraints:
-            cost = cost + self.slack_cost*slack
+            for i in range(self.horizon):
+                for j in range(self.p):
+                    cost = cost + self.slack_cost * slack[j,i]
+            cost = cost + self.slack_cost * slack_term
         opti.minimize(cost)
         self.opti_dict['cost'] = cost

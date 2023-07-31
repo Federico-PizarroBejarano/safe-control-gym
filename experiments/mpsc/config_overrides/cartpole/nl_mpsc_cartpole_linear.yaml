@@ -13,7 +13,7 @@ sf_config:
   horizon: 5
   warmstart: True
   integration_algo: LTI
-  use_terminal_set: False
+  use_terminal_set: True
 
   # Prior info
   prior_info:
@@ -22,7 +22,7 @@ sf_config:
     prior_prop_rand_info: null
 
   # Learning disturbance bounds
-  n_samples: 600
+  n_samples: 6000
 
   # Cost function
   cost_function: one_step_cost

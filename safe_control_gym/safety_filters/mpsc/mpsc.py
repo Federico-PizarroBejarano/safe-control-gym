@@ -182,6 +182,7 @@ class MPSC(BaseSafetyFilter, ABC):
             sol = opti.solve()
             self.cost_prev = sol.value(opti_dict['cost'])
             self.slack_prev = sol.value(opti_dict['slack'])
+            self.slack_term_prev = sol.value(opti_dict['slack_term'])
             x_val, u_val, next_u_val = sol.value(z_var), sol.value(v_var), sol.value(next_u)
             self.z_prev = x_val
             self.v_prev = u_val.reshape((self.model.nu), self.horizon)
@@ -286,5 +287,6 @@ class MPSC(BaseSafetyFilter, ABC):
         self.z_prev = None
         self.v_prev = None
         self.slack_prev = 0
+        self.slack_term_prev = 0
         self.kinf = self.horizon - 1
         self.setup_results_dict()

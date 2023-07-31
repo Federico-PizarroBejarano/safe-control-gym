@@ -22,8 +22,8 @@ task_config:
       high: 2
     init_x_dot:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_theta:
       distrib: 'uniform'
       low: -0.16

@@ -434,16 +434,19 @@ class PPO(BaseController):
 
         if self.use_safe_reset is True and self.safety_filter is not None:
             self.safety_filter.cost_function.skip_checks = True
+            self.safety_filter.soften_constraints = False
+            self.safety_filter.setup_optimizer()
 
-            while (success is not True or self.safety_filter.slack_prev > 0):
+            while success is not True:
                 obs, info = env.reset()
                 info['current_step'] = 1
                 physical_action = self.env.envs[0].denormalize_action(act)
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
+                self.safety_filter.reset_before_run()
                 _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if not success:
-                    self.safety_filter.setup_optimizer()
 
             self.safety_filter.cost_function.skip_checks = False
+            self.safety_filter.soften_constraints = True
+            self.safety_filter.setup_optimizer()
 
         return obs, info

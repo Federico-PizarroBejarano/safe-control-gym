@@ -10,6 +10,9 @@ import numpy as np
 import pytope as pt
 from scipy.fftpack import fft, fftfreq
 from scipy.optimize import minimize
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import BayesianRidge
 
 from safe_control_gym.envs.constraints import BoundedConstraint, LinearConstraint
 from safe_control_gym.envs.benchmark_env import Environment, Task
@@ -251,3 +254,80 @@ def lqr_action_mismatch(K, actions, state_errors, U_EQ, pattern):
     K = (pattern * K).T
     error = np.linalg.norm((actions - (-state_errors @ K + U_EQ)).flatten())
     return error
+
+
+def get_error_parameters(states, actions, errors, degree):
+    '''Executes bayesian ridge regression on the states and actions
+    to determine the error between the nominal model and real system.
+
+    Args:
+        states (np.ndarray): The starting states recorded.
+        actions (np.ndarray): The actions recorded.
+        errors (np.ndarray): The model errors recorded.
+        degree (int): The degree of the polynomial features to use.
+
+    Returns:
+        error_parameters (list): A list of all the calculated parameters.
+    '''
+    func_inputs = np.hstack((states, actions))
+    brr_poly = make_pipeline(
+        PolynomialFeatures(degree=degree, include_bias=True),
+        StandardScaler(),
+        BayesianRidge(),
+    ).fit(func_inputs, errors)
+
+    powers = brr_poly.named_steps['polynomialfeatures'].powers_
+    means = brr_poly.named_steps['standardscaler'].mean_
+    stds = brr_poly.named_steps['standardscaler'].scale_
+    coefs = brr_poly.named_steps['bayesianridge'].coef_
+    intercept = brr_poly.named_steps['bayesianridge'].intercept_
+    sigmas = brr_poly.named_steps['bayesianridge'].sigma_
+    alpha = brr_poly.named_steps['bayesianridge'].alpha_
+
+    parameters = [powers, means, stds, coefs, intercept, sigmas, alpha]
+    return parameters
+
+
+def error_function(powers, means, stds, coefs, intercept, sigmas, alpha, num_stds, input_vec):
+    '''A function that executes the learned regression function to find the model
+    error on an input composed of concatenated state and input.
+
+    Args:
+        powers (np.ndarray): A list of the powers each input element is raised to,
+            to determine each feature.
+        means (np.ndarray): The means of each input channel.
+        stds (np.ndarray): The standard deciation of each input channel.
+        coefs (np.ndarray): The calculated coefficients of the regression.
+        intercept (float): The calculated intercept of the regression.
+        sigmas (np.ndarray): A value calculated to determine the standard
+            deviation of the regression.
+        alpha (float): A value calculated to determine the standard deviation
+            of the regression.
+        num_stds (int): The number of standard deviations in which to upper
+            bounds the error.
+        input_vec (np.ndarray): The value (state + action) to estimate the error from
+
+    Returns:
+        estimated_error (float): An upper bound on the estimated error,
+            within num_stds standard deviations.
+    '''
+    transformed_vec = []
+    for power in powers:
+        val = 1
+        for i, p in enumerate(power):
+            val *= input_vec[i]**p
+        transformed_vec.append(val)
+
+    final_val = 0
+    scaled_vec = []
+    for i, val in enumerate(transformed_vec):
+        val = (val-means[i])/stds[i]
+        final_val += val*coefs[i]
+        scaled_vec.append(val)
+
+    final_val += intercept
+
+    sigmas_squared_data = sum(np.dot(scaled_vec, sigmas) * scaled_vec)
+    final_std = np.sqrt(sigmas_squared_data + (1.0 / alpha))
+
+    return final_val + final_std*num_stds

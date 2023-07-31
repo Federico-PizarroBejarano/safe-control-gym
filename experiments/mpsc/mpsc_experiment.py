@@ -257,6 +257,11 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         safety_filter.cost_function.regularization_const = regularization_parameters[system][task][config.algo]
         safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl')
 
+    if config.sf_config.integration_algo == 'LTI':
+        linear_suffix = '_linear'
+    else:
+        linear_suffix = ''
+
     if training is True:
         train_env = env_func(randomized_init=True,
                              init_state_randomization_info=reachable_state_randomization[system],
@@ -266,9 +271,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                              disturbance=None,
                              )
         safety_filter.learn(env=train_env)
-        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
+        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}{linear_suffix}.pkl')
     else:
-        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}{linear_suffix}.pkl')
 
     if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.setup_optimizer()
