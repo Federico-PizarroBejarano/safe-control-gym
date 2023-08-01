@@ -8,7 +8,6 @@ examples/pid/*data/
 #
 experiments/mpsc/temp-data/
 experiments/mpsc/unsafe_rl_temp_data/
-experiments/mpsc/models/rl_models/**/*.jpg
 #
 results/
 z_docstring.py
