@@ -30,5 +30,5 @@ sf_config:
   decay_factor: 0.85
 
   # Softening
-  soften_constraints: False
-  slack_cost: 250
+  soften_constraints: True
+  slack_cost: 2
