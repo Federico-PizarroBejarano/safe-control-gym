@@ -68,8 +68,6 @@ class NL_MPSC(MPSC):
         self.soften_constraints = soften_constraints
         self.slack_cost = slack_cost
 
-        self.extra_tighten = 2*1e-2
-
         self.n = self.model.nx
         self.m = self.model.nu
         self.q = self.model.nx
@@ -186,6 +184,8 @@ class NL_MPSC(MPSC):
 
         self.L_x_sym = cs.MX(self.L_x)
         self.L_u_sym = cs.MX(self.L_u)
+        self.L_size = np.sum(np.abs(self.L_x), axis=1) + np.sum(np.abs(self.L_u), axis=1)
+        self.L_size_sym = cs.MX(self.L_size)
         self.l_sym = cs.MX(self.l)
         self.setup_optimizer()
 
@@ -321,10 +321,8 @@ class NL_MPSC(MPSC):
         self.w_bar = max(self.w_bar, self.max_w)
         horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
         self.s_bar_f = horizon_multiplier * self.w_bar
-        # assert self.w_bar > self.max_w, f'[ERROR] w_bar ({self.w_bar}) is too small compared to max_w ({self.max_w}).'
-        assert self.s_bar_f > self.max_w * horizon_multiplier + self.extra_tighten, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
+        assert self.s_bar_f > self.max_w * horizon_multiplier, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
         assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
-        # self.s_bar_f = self.max_w * horizon_multiplier + self.extra_tighten
         self.gamma = 1 / c_max - self.s_bar_f
 
         self.delta_loc = (horizon_multiplier * self.w_bar)**2
@@ -369,7 +367,7 @@ class NL_MPSC(MPSC):
         l = []
 
         Z_mid = (constraint.upper_bounds + constraint.lower_bounds) / 2.0
-        Z_limits = (1-self.extra_tighten)*np.array([[constraint.upper_bounds[i] - Z_mid[i], constraint.lower_bounds[i] - Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
+        Z_limits = np.array([[constraint.upper_bounds[i] - Z_mid[i], constraint.lower_bounds[i] - Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
 
         dim = Z_limits.shape[0]
         eye_dim = np.eye(dim)
@@ -769,6 +767,8 @@ class NL_MPSC(MPSC):
 
         self.L_x_sym = cs.MX(self.L_x)
         self.L_u_sym = cs.MX(self.L_u)
+        self.L_size = np.sum(np.abs(self.L_x), axis=1) + np.sum(np.abs(self.L_u), axis=1)
+        self.L_size_sym = cs.MX(self.L_size)
         self.l_sym = cs.MX(self.l)
 
         self.setup_optimizer()
@@ -848,15 +848,15 @@ class NL_MPSC(MPSC):
             opti.subject_to(z_var[:, i + 1] == next_state)
 
             # Lyapunov size increase
-            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + (1 + self.extra_tighten) * self.w_func(z_var[:, i], v_var[:, i]))
+            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + self.w_func(z_var[:, i], v_var[:, i]))
             opti.subject_to(s_var[:, i] <= self.s_bar_f)
             opti.subject_to(self.w_func(z_var[:, i], v_var[:, i]) <= self.max_w)
 
             # Constraints
             for j in range(self.p):
-                tighten_by = (1 + self.extra_tighten) * self.c_js[j] * s_var[:, i + 1]
+                tighten_by = self.c_js[j] * s_var[:, i + 1]
                 if self.soften_constraints:
-                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack[j,i]/1000.0)
+                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack[j,i]/(1000.0*self.L_size_sym[j]))
                     opti.subject_to(slack[j,i] >= 0.0001)
                 else:
                     opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= 0)

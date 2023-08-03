@@ -31,4 +31,4 @@ sf_config:
 
   # Softening
   soften_constraints: True
-  slack_cost: 2
+  slack_cost: 0.05
