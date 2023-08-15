@@ -62,6 +62,7 @@ class NL_MPSC(MPSC):
             decay_factor (float): How much to discount future costs.
         '''
 
+        self.model_bias = None
         super().__init__(env_func, horizon, q_lin, r_lin, integration_algo, warmstart, additional_constraints, use_terminal_set, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
         self.n_samples = n_samples
@@ -95,13 +96,17 @@ class NL_MPSC(MPSC):
             self.Ac = dfdxdfdu['dfdx'].toarray()
             self.Bc = dfdxdfdu['dfdu'].toarray()
 
-            delta_x = cs.MX.sym('delta_x', self.model.nx, 1)
-            delta_u = cs.MX.sym('delta_u', self.model.nu, 1)
+            delta_x = self.model.x_sym
+            delta_u = self.model.u_sym
             delta_w = cs.MX.sym('delta_w', self.model.nx, 1)
 
             self.Ad, self.Bd = discretize_linear_system(self.Ac, self.Bc, self.dt, exact=True)
 
             x_dot_lin_vec = self.Ad @ delta_x + self.Bd @ delta_u
+
+            if self.model_bias is not None:
+                x_dot_lin_vec = x_dot_lin_vec + self.model_bias
+
             dynamics_func = cs.Function('fd',
                                         [delta_x, delta_u],
                                         [x_dot_lin_vec],
@@ -217,14 +222,22 @@ class NL_MPSC(MPSC):
             x_next_estimate = np.squeeze(self.dynamics_func(x0=init_state, p=u)['xf'].toarray())
             w[i, :] = x_next_obs - x_next_estimate
 
+        print('MEAN ERROR PER DIM:', np.mean(w, axis=0))
+        self.model_bias = np.mean(w, axis=0)
+        self.set_dynamics()
+
+        w = w - np.mean(w, axis=0)
         normed_w = np.linalg.norm(w, axis=1)
+        self.max_w_per_dim = np.minimum(np.max(w, axis=0), np.mean(w, axis=0) + 3*np.std(w, axis=0))
+        self.max_w = min(np.max(normed_w), np.mean(normed_w) + 3*np.std(normed_w))
+
         print('MAX ERROR:', np.max(normed_w))
+        print('STD ERROR:', np.mean(normed_w) + 3*np.std(normed_w))
         print('MEAN ERROR:', np.mean(normed_w))
         print('MAX ERROR PER DIM:', np.max(w, axis=0))
+        print('STD ERROR PER DIM:', np.mean(w, axis=0) + 3*np.std(w, axis=0))
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
-        self.max_w_per_dim = np.max(w, axis=0)
-        self.max_w = np.max(normed_w)
-        # self.w_func = lambda x, u, s: self.max_w
+
         if self.integration_algo == 'LTI':
             degree = 1
             num_stds = 2
@@ -233,7 +246,7 @@ class NL_MPSC(MPSC):
             num_stds = 3
         self.error_parameters = get_error_parameters(states, actions, normed_w, degree)
         def w_func(state, action):
-            input_vec = cs.horzcat(state.T, action)
+            input_vec = cs.horzcat(state.T, action.T)
             return error_function(*self.error_parameters, num_stds, input_vec)
         self.w_func = w_func
 
@@ -318,18 +331,17 @@ class NL_MPSC(MPSC):
         # Get Discrete-time system values
         self.rho = np.exp(-self.rho_c * self.dt)
         self.w_bar = w_bar_c * (1 - self.rho) / self.rho_c  # even using rho_c from the paper yields different w_bar
-        self.w_bar = max(self.w_bar, self.max_w)
+        # self.w_bar = max(self.w_bar, self.max_w)
         horizon_multiplier = (1 - self.rho**self.horizon) / (1 - self.rho)
         self.s_bar_f = horizon_multiplier * self.w_bar
-        assert self.s_bar_f > self.max_w * horizon_multiplier, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
-        assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
+        # assert self.s_bar_f > self.max_w * horizon_multiplier, f'[ERROR] s_bar_f ({self.s_bar_f}) is too small with respect to max_w ({self.max_w}).'
+        # assert self.max_w * horizon_multiplier < 1.0, '[ERROR] max_w is too large and will overwhelm terminal set.'
         self.gamma = 1 / c_max - self.s_bar_f
 
         self.delta_loc = (horizon_multiplier * self.w_bar)**2
 
         print(f'rho: {self.rho}')
         print(f'w_bar: {self.w_bar}')
-        print(f'Original s_bar_f: {self.w_bar * horizon_multiplier}')
         print(f's_bar_f: {self.s_bar_f}')
         print(f'gamma: {self.gamma}')
 
@@ -349,7 +361,7 @@ class NL_MPSC(MPSC):
         self.check_terminal_ingredients()
         self.check_terminal_constraints()
 
-        if self.integration_algo == 'LTI':
+        if self.integration_algo == 'LTI' and self.use_terminal_set:
             self.get_terminal_constraint()
 
     def box2polytopic(self, constraint):
@@ -717,7 +729,7 @@ class NL_MPSC(MPSC):
         interior_points = []
         for _ in range(self.n_samples):
             state = np.random.uniform(self.state_constraint.lower_bounds, self.state_constraint.upper_bounds)
-            if state.T @ self.P_f @ state <= self.gamma**2:
+            if (state - self.X_mid).T @ self.P_f @ (state - self.X_mid) <= self.gamma**2:
                 interior_points.append(state)
         self.terminal_set = Polytope(interior_points)
         self.terminal_set.minimize_V_rep()
@@ -753,7 +765,7 @@ class NL_MPSC(MPSC):
         else:
             num_stds = 3
         def w_func(state, action):
-            input_vec = cs.horzcat(state.T, action)
+            input_vec = cs.horzcat(state.T, action.T)
             return error_function(*self.error_parameters, num_stds, input_vec)
         self.w_func = w_func
         self.c_js = parameters['c_js']
@@ -797,7 +809,7 @@ class NL_MPSC(MPSC):
         parameters['P_f'] = self.P_f
         parameters['K_f'] = self.K_f
 
-        if self.integration_algo == 'LTI':
+        if self.integration_algo == 'LTI' and self.use_terminal_set is True:
             parameters['terminal_A'] = self.terminal_A
             parameters['terminal_b'] = self.terminal_b
 

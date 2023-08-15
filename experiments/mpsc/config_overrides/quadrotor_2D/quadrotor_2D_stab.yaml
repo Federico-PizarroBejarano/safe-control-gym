@@ -20,28 +20,28 @@ task_config:
   init_state_randomization_info:
     init_x:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_x_dot:
       distrib: 'uniform'
-      low: -0.1
-      high: 0.1
+      low: -1
+      high: 1
     init_z:
       distrib: 'uniform'
-      low: 1
+      low: 0
       high: 2
     init_z_dot:
       distrib: 'uniform'
-      low: -0.1
-      high: 0.1
+      low: -1
+      high: 1
     init_theta:
       distrib: 'uniform'
       low: -0.2
       high: 0.2
     init_theta_dot:
       distrib: 'uniform'
-      low: -0.1
-      high: 0.1
+      low: -1.5
+      high: 1.5
 
   task: stabilization
   task_info:
@@ -54,7 +54,7 @@ task_config:
 
   episode_len_sec: 6
   cost: rl_reward
-  obs_goal_horizon: 1
+  obs_goal_horizon: 0
 
   # RL Reward
   rew_state_weight: [1, 1, 1, 1, 1, 1]

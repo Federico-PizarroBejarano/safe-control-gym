@@ -2,7 +2,7 @@ safety_filter: nl_mpsc
 sf_config:
   # LQR controller parameters
   r_lin:
-    - 20
+    - 25
   q_lin:
     - 0.001
     - 0.05
@@ -24,7 +24,7 @@ sf_config:
     prior_prop_rand_info: null
 
   # Learning disturbance bounds
-  n_samples: 600
+  n_samples: 6000
 
   # Cost function
   cost_function: one_step_cost
@@ -32,5 +32,5 @@ sf_config:
   decay_factor: 0.85
 
   # Softening
-  soften_constraints: False
+  soften_constraints: True
   slack_cost: 250

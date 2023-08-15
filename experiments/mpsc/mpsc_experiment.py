@@ -46,7 +46,7 @@ reachable_state_randomization = {
             'high': 1},
         'init_z': {
             'distrib': 'uniform',
-            'low': 1,
+            'low': 0.3, #just so it does not crash into the floor
             'high': 2},
         'init_z_dot': {
             'distrib': 'uniform',
@@ -266,9 +266,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                              disturbance=None,
                              )
         safety_filter.learn(env=train_env)
-        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}{linear_suffix}.pkl')
+        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}{linear_suffix}.pkl')
     else:
-        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}_{task}{linear_suffix}.pkl')
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}{linear_suffix}.pkl')
 
     if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
         safety_filter.setup_optimizer()
@@ -373,7 +373,7 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
                          **config.sf_config)
     safety_filter.reset()
 
-    safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_{task}.pkl')
+    safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
 
     if config.sf_config.cost_function != Cost_Function.ONE_STEP_COST:
         raise ValueError('Currently starting point generation should only be done with one_step_cost.')
