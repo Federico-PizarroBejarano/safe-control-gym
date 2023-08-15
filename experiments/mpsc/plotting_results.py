@@ -711,11 +711,11 @@ def plot_model_comparisons(system, task, algo, data_extractor):
 
     labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'))
     if 'cert' not in data_extractor.__name__:
-        labels = sorted(labels + ['safe_ppo_cert'])
+        labels = labels + ['safe_ppo_cert']
     elif 'uncert' in data_extractor.__name__:
-        labels = sorted(labels + ['safe_ppo'])
+        labels = labels + ['safe_ppo']
     else:
-        labels = sorted(labels + ['safe_ppo'] + ['safe_ppo_cert'])
+        labels = labels + ['safe_ppo'] + ['safe_ppo_cert']
 
     data = []
 
@@ -797,8 +797,9 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_failed_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_failed_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)
+    if task_name == 'stab':
+        plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
+        plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)
 
     # mpsc_cost_horizon_num = 2
 

@@ -44,9 +44,3 @@ algo_config:
   eval_interval: 1000
   eval_save_best: True
   tensorboard: False
-
-  # safety filter
-  filter_train_actions: True
-  buffer_safe_action: False
-  penalize_sf_diff: True
-  use_safe_reset: True

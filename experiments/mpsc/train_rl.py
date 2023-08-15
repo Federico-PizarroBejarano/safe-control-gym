@@ -21,11 +21,6 @@ def train():
     config = fac.merge()
     config.algo_config['training'] = True
 
-    if config.algo == 'sac':
-        config.task_config.rew_exponential = False
-    else:
-        config.task_config.rew_exponential = True
-
     shutil.rmtree(config.output_dir, ignore_errors=True)
 
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'

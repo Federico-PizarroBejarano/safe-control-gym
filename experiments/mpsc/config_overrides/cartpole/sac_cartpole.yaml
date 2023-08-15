@@ -30,6 +30,6 @@ algo_config:
 
   # safety filter
   filter_train_actions: True
-  buffer_safe_action: False
   penalize_sf_diff: True
+  sf_penalty: 300
   use_safe_reset: True

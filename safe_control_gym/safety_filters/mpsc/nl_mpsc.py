@@ -834,7 +834,7 @@ class NL_MPSC(MPSC):
             X_GOAL = opti.parameter(self.horizon, nx)
 
         if self.soften_constraints:
-            slack = opti.variable(self.p, self.horizon)
+            slack = opti.variable(1, 1)
             slack_term = opti.variable(1, 1)
         else:
             slack = opti.variable(1,1)
@@ -856,8 +856,8 @@ class NL_MPSC(MPSC):
             for j in range(self.p):
                 tighten_by = self.c_js[j] * s_var[:, i + 1]
                 if self.soften_constraints:
-                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack[j,i]/(1000.0*self.L_size_sym[j]))
-                    opti.subject_to(slack[j,i] >= 0.0001)
+                    opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= slack)
+                    opti.subject_to(slack >= 0)
                 else:
                     opti.subject_to(self.L_x_sym[j, :] @ (z_var[:, i + 1] - self.X_mid) + self.L_u_sym[j, :] @ (v_var[:, i] - self.U_mid) - self.l_sym[j] + tighten_by <= 0)
 
@@ -865,15 +865,15 @@ class NL_MPSC(MPSC):
         if self.use_terminal_set:
             if self.integration_algo == 'LTI':
                 if self.soften_constraints:
-                    opti.subject_to(cs.vec(self.terminal_A @ z_var[:, -1] - self.terminal_b) <= slack_term/1000.0)
-                    opti.subject_to(slack_term >= 0.0001)
+                    opti.subject_to(cs.vec(self.terminal_A @ (z_var[:, -1] - self.X_mid) - self.terminal_b) <= slack_term)
+                    opti.subject_to(slack_term >= 0)
                 else:
-                    opti.subject_to(cs.vec(self.terminal_A @ z_var[:, -1] - self.terminal_b) <= 0)
+                    opti.subject_to(cs.vec(self.terminal_A @ (z_var[:, -1] - self.X_mid) - self.terminal_b) <= 0)
             elif self.integration_algo == 'rk4':
                 terminal_cost = (z_var[:, -1] - self.X_mid).T @ self.P_f @ (z_var[:, -1] - self.X_mid)
                 if self.soften_constraints:
-                    opti.subject_to(terminal_cost <= self.gamma**2 + slack_term/1000.0)
-                    opti.subject_to(slack_term >= 0.0001)
+                    opti.subject_to(terminal_cost <= self.gamma**2 + slack_term)
+                    opti.subject_to(slack_term >= 0)
                 else:
                     opti.subject_to(terminal_cost <= self.gamma**2)
         else:
@@ -914,9 +914,7 @@ class NL_MPSC(MPSC):
         # Cost (# eqn 5.a, note: using 2norm or sqrt makes this infeasible).
         cost = self.cost_function.get_cost(self.opti_dict)
         if self.soften_constraints:
-            for i in range(self.horizon):
-                for j in range(self.p):
-                    cost = cost + self.slack_cost * slack[j,i]
+            cost = cost + self.slack_cost * slack
             cost = cost + self.slack_cost * slack_term
         opti.minimize(cost)
         self.opti_dict['cost'] = cost

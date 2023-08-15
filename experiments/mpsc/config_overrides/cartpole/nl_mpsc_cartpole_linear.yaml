@@ -13,7 +13,7 @@ sf_config:
   horizon: 5
   warmstart: True
   integration_algo: LTI
-  use_terminal_set: True
+  use_terminal_set: False
 
   # Prior info
   prior_info:
@@ -31,4 +31,4 @@ sf_config:
 
   # Softening
   soften_constraints: True
-  slack_cost: 0.05
+  slack_cost: 200

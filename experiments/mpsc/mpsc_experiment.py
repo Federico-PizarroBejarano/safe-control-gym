@@ -204,11 +204,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     else:
         system = config.task
 
-    if config.algo == 'sac':
-        config.task_config.rew_exponential = False
-    else:
-        config.task_config.rew_exponential = True
-
     # Create an environment
     env_func = partial(make,
                        config.task,
