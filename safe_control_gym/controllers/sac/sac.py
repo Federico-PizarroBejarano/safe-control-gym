@@ -123,7 +123,7 @@ class SAC(BaseController):
             self.eval_env.close()
         self.logger.close()
 
-    def save(self, path, save_buffer=True):
+    def save(self, path, save_buffer=False):
         '''Saves model params and experiment state to checkpoint path.'''
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)

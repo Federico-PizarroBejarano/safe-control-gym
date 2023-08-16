@@ -13,6 +13,14 @@ ALGO='ppo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
+if [ "$3" ]; then
+  TASK=$3
+fi
+
+if [ "$2" ]; then
+  ALGO=$2
+fi
+
 # SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'
 

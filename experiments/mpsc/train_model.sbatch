@@ -23,10 +23,17 @@ ALGO='ppo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
+if [ "$6" ]; then
+  TASK=$6
+fi
+if [ "$5" ]; then
+  ALGO=$5
+fi
+
 # SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'
 
-if [ $1 = 'm_mpsf' ]; then
+if [ "$1" = 'm_mpsf' ]; then
     MPSC_COST='precomputed_cost'
     FILTER='True'
 elif [ "$1" = 'mpsf' ]; then
@@ -40,19 +47,19 @@ fi
 MPSC_COST_HORIZON=2
 DECAY_FACTOR=0.85
 
-if [ $2 = 'True' ]; then
+if [ "$2" = 'True' ]; then
     SAFE_RESET_TAG='_sr'
 else
     SAFE_RESET_TAG=''
 fi
 
-if [ $3 = 'True' ]; then
+if [ "$3" = 'True' ]; then
     EARLY_STOP_TAG='_es'
 else
     EARLY_STOP_TAG=''
 fi
 
-if [ $4 = 'True' ] && [ $1 != 'none' ]; then
+if [ "$4" = 'True' ] && [ "$1" != 'none' ]; then
     PENALIZE_SF_TAG='_pen'
 else
     PENALIZE_SF_TAG=''
@@ -102,4 +109,4 @@ python3 train_rl.py \
         algo_config.penalize_sf_diff=$4 \
         algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
 
-./mpsc_experiment.sh $TAG
+./mpsc_experiment.sh $TAG $ALGO $TASK
