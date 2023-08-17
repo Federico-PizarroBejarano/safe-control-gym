@@ -772,6 +772,9 @@ class NL_MPSC(MPSC):
         self.gamma = parameters['gamma']
         self.P_f = parameters['P_f']
         self.K_f = parameters['K_f']
+        self.model_bias = parameters['model_bias']
+
+        self.set_dynamics()
 
         if self.integration_algo == 'LTI' and self.use_terminal_set is True:
             self.terminal_A = parameters['terminal_A']
@@ -808,6 +811,7 @@ class NL_MPSC(MPSC):
         parameters['gamma'] = self.gamma
         parameters['P_f'] = self.P_f
         parameters['K_f'] = self.K_f
+        parameters['model_bias'] = self.model_bias
 
         if self.integration_algo == 'LTI' and self.use_terminal_set is True:
             parameters['terminal_A'] = self.terminal_A

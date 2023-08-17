@@ -14,7 +14,7 @@ algo_config:
   # runner args
   max_env_steps: 200000
   warm_up_steps: 1000
-  rollout_batch_size: 4
+  rollout_batch_size: 1
   num_workers: 1
   max_buffer_size: 1000000
   deque_size: 10
@@ -22,8 +22,14 @@ algo_config:
 
   # misc
   log_interval: 1000
-  save_interval: 1000
-  num_checkpoints: 10
+  save_interval: 10000
+  num_checkpoints: 0
   eval_interval: 1000
   eval_save_best: True
-  tensorboard: True
+  tensorboard: False
+
+  # safety filter
+  filter_train_actions: True
+  penalize_sf_diff: True
+  sf_penalty: 300
+  use_safe_reset: True

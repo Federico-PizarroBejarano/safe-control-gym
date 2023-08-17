@@ -13,7 +13,7 @@ sf_config:
 
   # MPC Parameters
   horizon: 5
-  warmstart: True
+  warmstart: False
   integration_algo: LTI
   use_terminal_set: False
 

@@ -54,6 +54,7 @@ class SAC(BaseController):
             self.env = VecRecordEpisodeStatistics(self.env, self.deque_size)
             self.eval_env = env_func(seed=seed * 111)
             self.eval_env = RecordEpisodeStatistics(self.eval_env, self.deque_size)
+            self.model = self.get_prior(self.eval_env, self.prior_info)
         else:
             # testing only
             self.env = env_func()
@@ -253,8 +254,11 @@ class SAC(BaseController):
                     applied_action = env.normalize_action(certified_action)
                 else:
                     self.safety_filter.setup_optimizer()
+                    certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                    if success:
+                        applied_action = env.normalize_action(certified_action)
 
-            action = np.atleast_1d(np.squeeze([applied_action]))
+            action = np.atleast_2d(np.squeeze([applied_action]))
             obs, rew, done, info = env.step(action)
             if self.penalize_sf_diff and success:
                 rew = np.log(rew)
@@ -317,8 +321,11 @@ class SAC(BaseController):
                 applied_action = self.env.envs[0].normalize_action(certified_action)
             else:
                 self.safety_filter.setup_optimizer()
+                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                if success:
+                    applied_action = self.env.envs[0].normalize_action(certified_action)
 
-        action = np.atleast_1d(np.squeeze([applied_action]))
+        action = np.atleast_2d(np.squeeze([applied_action]))
         next_obs, rew, done, info = self.env.step(action)
         if done[0] == True and self.use_safe_reset is True:
             next_obs, info = self.env_reset(self.env)
@@ -471,7 +478,7 @@ class SAC(BaseController):
             info (dict): The initial info.
         '''
         success = False
-        act = self.eval_env.symbolic.U_EQ
+        act = self.model.U_EQ
         obs, info = env.reset()
         if self.safety_filter is not None:
             self.safety_filter.reset_before_run()
