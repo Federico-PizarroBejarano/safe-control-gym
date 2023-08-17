@@ -1,48 +1,35 @@
 algo: safe_explorer_ppo
 algo_config:
   # model args
-  hidden_dim: 64
-  norm_obs: False
-  norm_reward: False
-  clip_obs: 10.0
-  clip_reward: 10.0
+  hidden_dim: 128
+
+  # loss args
+  use_gae: True
+  entropy_coef: 0.01
 
   # Safety layer args
   pretraining: True
   pretrained: null
-  constraint_hidden_dim: 100
+  constraint_hidden_dim: 128
   constraint_lr: 0.0001
   constraint_batch_size: 256
   constraint_steps_per_epoch: 3000
-  constraint_epochs: 200
+  constraint_epochs: 500
   constraint_eval_steps: 1500
   constraint_eval_interval: 5
   constraint_buffer_size: 1000000
-  constraint_slack: [0.01, 0.01, 0.01, 0.05, 0.01, 0.01, 0.01, 0.05]
-
-  # loss args
-  gamma: 0.99
-  use_gae: False
-  gae_lambda: 0.95
-  use_clipped_value: False
-  clip_param: 0.2
-  target_kl: 0.01
-  entropy_coef: 0.01
+  constraint_slack: 0.05
 
   # optim args
-  opt_epochs: 10
-  mini_batch_size: 64
-  actor_lr: 0.0003
+  opt_epochs: 20
+  mini_batch_size: 256
+  actor_lr: 0.001
   critic_lr: 0.001
-  max_grad_norm: 0.5
 
   # runner args
-  max_env_steps: 100000
-  num_workers: 1
+  max_env_steps: 500000
   rollout_batch_size: 4
-  rollout_steps: 100
-  deque_size: 10
-  eval_batch_size: 10
+  rollout_steps: 1000
 
   # misc
   log_interval: 10
@@ -50,7 +37,7 @@ algo_config:
   num_checkpoints: 0
   eval_interval: 10
   eval_save_best: True
-  tensorboard: False
+  tensorboard: True
 
   # safety filter
   filter_train_actions: False
