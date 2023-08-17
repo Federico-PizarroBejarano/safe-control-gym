@@ -163,7 +163,7 @@ regularization_parameters = {
 }
 
 
-def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None, model=None):
+def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None, model='none'):
     '''Main function to run MPSC experiments.
 
     Args:
@@ -218,10 +218,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
-        if model is None:
-            ctrl.load(f'{curr_path}/models/rl_models/{config.algo}_model_{system}_{task}.pt')
-        else:
-            ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/model_best.pt')
+        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/model_best.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -362,7 +359,7 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
-        ctrl.load(f'./models/rl_models/{config.algo}_model_{system}_{task}.pt')
+        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_best.pt')
 
         # Remove temporary files and directories
         shutil.rmtree('./temp', ignore_errors=True)
@@ -503,7 +500,7 @@ def run_uncertified_trajectory(n_episodes=10):
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
-        ctrl.load(f'./models/rl_models/{config.algo}_model_{system}_{task}.pt')
+        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_best.pt')
 
         # Remove temporary files and directories
         shutil.rmtree('./temp', ignore_errors=True)
@@ -574,11 +571,11 @@ def run_multiple_models(plot=True, model=None):
 
 
 if __name__ == '__main__':
-    # run(model='TEST')
+    # run()
     # run_uncertified_trajectory()
     # determine_feasible_starting_points(num_points=25, num_steps=25)
     # run_multiple(plot=False)
     if '--model=' in sys.argv:
-        run_multiple_models(plot=False, model='TEST')
+        run_multiple_models(plot=False, model='none')
     else:
         run_multiple_models(plot=False, model=sys.argv[-1].split('=')[1])

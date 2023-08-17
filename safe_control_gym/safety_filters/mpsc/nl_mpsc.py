@@ -864,9 +864,9 @@ class NL_MPSC(MPSC):
             opti.subject_to(z_var[:, i + 1] == next_state)
 
             # Lyapunov size increase
-            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + self.w_func(z_var[:, i], v_var[:, i]))
+            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + self.max_w) #self.w_func(z_var[:, i], v_var[:, i]))
             opti.subject_to(s_var[:, i] <= self.s_bar_f)
-            opti.subject_to(self.w_func(z_var[:, i], v_var[:, i]) <= self.max_w)
+            # opti.subject_to(self.w_func(z_var[:, i], v_var[:, i]) <= self.max_w)
 
             # Constraints
             for j in range(self.p):
