@@ -566,7 +566,7 @@ def run_multiple_models(plot=True, model=None):
                     'config': config,
                     'X_GOAL': X_GOAL}
 
-        with open(f'./results_mpsc/{system}/{task}/results_{system}_{task}_{config.algo}_{model}.pkl', 'wb') as f:
+        with open(f'./results_mpsc/{system}/{task}/{config.algo}/results_{system}_{task}_{config.algo}_{model}.pkl', 'wb') as f:
             pickle.dump(all_results, f)
 
 
