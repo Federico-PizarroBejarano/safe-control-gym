@@ -66,7 +66,7 @@ else
 fi
 
 TAG="$1${SAFE_RESET_TAG}${EARLY_STOP_TAG}${PENALIZE_SF_TAG}"
-echo $TAG
+echo $TAG $SYS $ALGO $TASK
 
 if [ "$SYS" = 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -83,7 +83,9 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
             ./config_overrides/${SYS}/${ALGO}_${SYS}_pretrain.yaml \
             ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
-        --seed 2
+        --seed 2 \
+        --kv_overrides \
+            task_config.init_state=None
 fi
 
 # Train the unsafe controller/agent.

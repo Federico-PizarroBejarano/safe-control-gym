@@ -30,7 +30,9 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
             ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         --output_dir ./ \
         --tag unsafe_rl_temp_data/ \
-        --seed 2
+        --seed 2 \
+        --kv_overrides \
+            task_config.init_state=None
 
     # Move the newly trained unsafe model.
     mv ./unsafe_rl_temp_data/seed2_*/model_latest.pt ./models/${ALGO}/${ALGO}_pretrain_${SYS}_${TASK}.pt
