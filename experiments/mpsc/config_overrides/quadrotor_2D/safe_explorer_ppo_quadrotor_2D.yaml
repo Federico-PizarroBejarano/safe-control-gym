@@ -10,8 +10,8 @@ algo_config:
   # Safety layer args
   pretraining: False
   pretrained: null
-  constraint_slack: 0.05
-  constraint_hidden_dim: 128
+  constraint_slack: [0.05, 0.05, 0.05, 0.05, 0.01, 0.01, 0.05, 0.05, 0.05, 0.05, 0.01, 0.01]
+  constraint_hidden_dim: 150
 
   # optim args
   opt_epochs: 20

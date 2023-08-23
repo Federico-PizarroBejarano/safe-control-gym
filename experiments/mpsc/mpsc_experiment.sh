@@ -13,12 +13,14 @@ ALGO='ppo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
+if [ "$2" ]; then
+  SYS=$2
+fi
 if [ "$3" ]; then
   TASK=$3
 fi
-
-if [ "$2" ]; then
-  ALGO=$2
+if [ "$4" ]; then
+  ALGO=$4
 fi
 
 # SAFETY_FILTER='linear_mpsc'

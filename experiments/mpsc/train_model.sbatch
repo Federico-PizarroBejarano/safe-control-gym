@@ -23,11 +23,14 @@ ALGO='ppo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
+if [ "$5" ]; then
+  SYS=$5
+fi
 if [ "$6" ]; then
   TASK=$6
 fi
-if [ "$5" ]; then
-  ALGO=$5
+if [ "$7" ]; then
+  ALGO=$7
 fi
 
 # SAFETY_FILTER='linear_mpsc'
@@ -111,4 +114,4 @@ python3 train_rl.py \
         algo_config.penalize_sf_diff=$4 \
         algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
 
-./mpsc_experiment.sh $TAG $ALGO $TASK
+./mpsc_experiment.sh $TAG $SYS $TASK $ALGO

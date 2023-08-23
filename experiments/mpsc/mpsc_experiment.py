@@ -383,15 +383,16 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
         test_env = env_func(init_state=init_state, randomized_init=False)
 
         uncert_experiment = BaseExperiment(test_env, ctrl)
-        cert_experiment = BaseExperiment(test_env, ctrl, safety_filter=safety_filter)
 
         _, uncert_metrics = uncert_experiment.run_evaluation(n_episodes=1)
         uncert_experiment.reset()
 
         if uncert_metrics['average_constraint_violation'] <= 5 \
             or uncert_metrics['average_length'] != config.task_config.ctrl_freq * config.task_config.episode_len_sec:
+            test_env.close()
             continue
 
+        cert_experiment = BaseExperiment(test_env, ctrl, safety_filter=safety_filter)
         cert_results, cert_metrics = cert_experiment.run_evaluation(n_steps=num_steps)
         cert_experiment.reset()
         test_env.close()
