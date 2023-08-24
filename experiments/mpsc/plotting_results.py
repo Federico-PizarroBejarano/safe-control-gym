@@ -1,6 +1,7 @@
 '''This script analyzes and plots the results from MPSC experiments.'''
 
 import os
+import sys
 import pickle
 from inspect import signature
 from collections import defaultdict
@@ -8,10 +9,12 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from scipy.signal import savgol_filter
 
 from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_content, get_discrete_derivative
+from safe_control_gym.utils.plotting import load_from_logs
 
 
 plot = False
@@ -95,8 +98,8 @@ def load_all_models(system, task, algo):
             all_results[model] = pickle.load(f)
 
     with open(f'./results_mpsc/{system}/{task}/safe_explorer_ppo/results_{system}_{task}_safe_explorer_ppo_none.pkl', 'rb') as f:
-            all_results['safe_ppo'] = pickle.load(f)
-            all_results['safe_ppo_cert'] = all_results['safe_ppo']
+        all_results['safe_ppo'] = pickle.load(f)
+        all_results['safe_ppo_cert'] = all_results['safe_ppo']
 
     return all_results
 
@@ -185,7 +188,7 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
         fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_{image_suffix}_m{mpsc_cost_horizon}.png', dpi=300)
-
+    plt.close()
 
 def plot_violations(system, task, mpsc_cost_horizon):
     '''Plots the constraint violations of every controller for a specific experiment.
@@ -236,6 +239,7 @@ def plot_violations(system, task, mpsc_cost_horizon):
         plt.show()
     if save_figs:
         fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
+    plt.close()
 
 
 def extract_magnitude_of_corrections(results_data):
@@ -252,6 +256,26 @@ def extract_magnitude_of_corrections(results_data):
     return magn_of_corrections
 
 
+def extract_percent_magnitude_of_corrections(results_data):
+    '''Extracts the percent magnitude of corrections from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        magn_of_corrections (list): The list of percent magnitude of corrections for all experiments.
+    '''
+
+    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((150,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((150,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    corr = [(norm_uncert[i] -  norm_cert[i]) for i in range(len(norm_cert))]
+    max_input = [np.maximum(np.linalg.norm(norm_uncert[i], axis=1), np.linalg.norm(norm_cert[i], axis=1)) for i in range(len(norm_cert))]
+    perc_change = [np.divide(np.linalg.norm(corr[i], axis=1), max_input[i]) for i in range(len(norm_cert))]
+    magn_of_corrections = [np.linalg.norm(elem) for elem in perc_change]
+
+    return magn_of_corrections
+
+
 def extract_max_correction(results_data):
     '''Extracts the max correction from an experiment's data.
 
@@ -262,6 +286,26 @@ def extract_max_correction(results_data):
         max_corrections (list): The list of max corrections for all experiments.
     '''
     max_corrections = [np.max(np.abs(mpsc_results['correction'][0])) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+
+    return max_corrections
+
+
+def extract_percent_max_correction(results_data):
+    '''Extracts the percent max correction from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        max_corrections (list): The list of percent max corrections for all experiments.
+    '''
+    N = len(results_data['cert_results']['state'][0])-1
+    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    corr = [(norm_uncert[i] -  norm_cert[i]) for i in range(len(norm_cert))]
+    max_input = [np.maximum(np.linalg.norm(norm_uncert[i], axis=1), np.linalg.norm(norm_cert[i], axis=1)) for i in range(len(norm_cert))]
+    perc_change = [np.divide(np.linalg.norm(corr[i], axis=1), max_input[i]) for i in range(len(norm_cert))]
+    max_corrections = [np.max(elem) for elem in perc_change]
 
     return max_corrections
 
@@ -693,6 +737,7 @@ def create_paper_plot(system, task, data_extractor):
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
         fig.savefig(f'./results_mpsc/{system}_{task}_{image_suffix}.png', dpi=300)
+    plt.close()
 
 
 def plot_model_comparisons(system, task, algo, data_extractor):
@@ -751,6 +796,87 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     if save_figs:
         image_suffix = data_extractor.__name__.replace('extract_', '')
         fig.savefig(f'./results_mpsc/{system}/{task}/{algo}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+    plt.close()
+
+
+def normalize_actions(actions):
+    '''Normalizes an array of actions.
+
+    Args:
+        actions (ndarray): The actions to be normalized.
+
+    Returns:
+        normalized_actions (ndarray): The normalized actions.
+    '''
+    if system_name == 'cartpole':
+        action_scale = 10.0
+        normalized_actions = actions/action_scale
+    elif system_name == 'quadrotor_2D':
+        hover_thrust = 0.1323
+        norm_act_scale = 0.1
+        normalized_actions = (actions / hover_thrust - 1.0) / norm_act_scale
+    else:
+        hover_thrust = 0.06615
+        norm_act_scale = 0.1
+        normalized_actions = (actions / hover_thrust - 1.0) / norm_act_scale
+
+    return normalized_actions
+
+
+def plot_all_logs(system, task, algo):
+    '''Plots comparative plots of all the logs.
+
+    Args:
+        system (str): The system to be controlled.
+        task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+    '''
+    all_results = {}
+
+    for model in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'):
+        all_results[model] = load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/logs/')
+
+    all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/{system}/{task}/safe_explorer_ppo/none/logs/')
+
+    for key in all_results['none'].keys():
+        plot_log(system, task, algo, key, all_results)
+
+
+def plot_log(system, task, algo, key, all_results):
+    '''Plots a comparative plot of the log 'key'.
+
+    Args:
+        system (str): The system to be controlled.
+        task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+        key (str): The name of the log to be plotted.
+        all_results (dict): A dictionary of all the logged results for all models.
+    '''
+    fig = plt.figure(figsize=(16.0, 10.0))
+    ax = fig.add_subplot(111)
+
+    labels = sorted(all_results.keys())
+
+    colors = plt.colormaps['tab20'].colors
+
+    for i, model in enumerate(labels):
+        if key == 'loss/critic_loss' and model == 'safe_ppo':
+            continue
+        y = savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
+        ax.plot(all_results[model][key][1], y, label=model, color=colors[i])
+
+    ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
+    ax.legend()
+
+    fig.tight_layout()
+    ax.yaxis.grid(True)
+
+    if plot is True:
+        plt.show()
+    if save_figs:
+        image_suffix = key.replace('/', '__')
+        fig.savefig(f'./results_mpsc/{system}/{task}/{algo}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+    plt.close()
 
 
 if __name__ == '__main__':
@@ -782,8 +908,16 @@ if __name__ == '__main__':
     system_name = 'cartpole'
     task_name = 'stab'
     algo_name = 'ppo'
+    if len(sys.argv) == 4:
+        system_name = sys.argv[1]
+        task_name = sys.argv[2]
+        algo_name = sys.argv[3]
+
+    plot_all_logs(system_name, task_name, algo_name)
     plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_percent_magnitude_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_percent_max_correction)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_cert)
