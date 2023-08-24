@@ -1,5 +1,5 @@
 #!/bin/bash
-for SYS in cartpole; do
+for SYS in cartpole quadrotor_2D quadrotor_3D; do
     for ALGO in ppo sac; do
         for TASK in stab track; do
             for SF in none mpsf; do

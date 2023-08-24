@@ -443,5 +443,6 @@ class PPO(BaseController):
                 _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if not success:
                     self.safety_filter.setup_optimizer()
+                    _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
 
         return obs, info
