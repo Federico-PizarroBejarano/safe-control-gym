@@ -115,3 +115,4 @@ python3 train_rl.py \
         algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
 
 ./mpsc_experiment.sh $TAG $SYS $TASK $ALGO
+# python plotting_results.py $SYS $TASK $ALGO

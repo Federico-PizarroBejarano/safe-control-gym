@@ -8,10 +8,17 @@ algo_config:
   entropy_coef: 0.01
 
   # Safety layer args
-  pretraining: False
+  pretraining: True
   pretrained: null
-  constraint_slack: [0.05, 0.05, 0.05, 0.05, 0.01, 0.01, 0.05, 0.05, 0.05, 0.05, 0.01, 0.01]
   constraint_hidden_dim: 150
+  constraint_lr: 0.0001
+  constraint_batch_size: 256
+  constraint_steps_per_epoch: 3000
+  constraint_epochs: 500
+  constraint_eval_steps: 1500
+  constraint_eval_interval: 5
+  constraint_buffer_size: 1000000
+  constraint_slack: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
 
   # optim args
   opt_epochs: 20
@@ -25,10 +32,10 @@ algo_config:
   rollout_steps: 1000
 
   # misc
-  log_interval: 1000
-  save_interval: 10000
+  log_interval: 10
+  save_interval: 10
   num_checkpoints: 0
-  eval_interval: 1000
+  eval_interval: 10
   eval_save_best: True
   tensorboard: True
 
