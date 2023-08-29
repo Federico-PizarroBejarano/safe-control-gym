@@ -236,16 +236,16 @@ class PPO(BaseController):
 
             # Adding safety filter
             success = False
-            if self.safety_filter is not None and self.filter_train_actions is True:
+            if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
                 physical_action = env.denormalize_action(action)
                 unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
+                if success and self.filter_train_actions is True:
                     action = env.normalize_action(certified_action)
-                else:
+                elif not success:
                     self.safety_filter.setup_optimizer()
                     certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                    if success:
+                    if success and self.filter_train_actions is True:
                         action = env.normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))
@@ -297,16 +297,16 @@ class PPO(BaseController):
 
             # Adding safety filter
             success = False
-            if self.safety_filter is not None and self.filter_train_actions is True:
+            if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
                 physical_action = self.env.envs[0].denormalize_action(action)
                 unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
+                if success and self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
-                else:
+                elif not success:
                     self.safety_filter.setup_optimizer()
                     certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                    if success:
+                    if success and self.filter_train_actions is True:
                         action = self.env.envs[0].normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))

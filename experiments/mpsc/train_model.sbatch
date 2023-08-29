@@ -62,7 +62,7 @@ else
     EARLY_STOP_TAG=''
 fi
 
-if [ "$4" = 'True' ] && [ "$1" != 'none' ]; then
+if [ "$4" = 'True' ]; then
     PENALIZE_SF_TAG='_pen'
 else
     PENALIZE_SF_TAG=''
