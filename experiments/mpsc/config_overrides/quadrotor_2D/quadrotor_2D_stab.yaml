@@ -52,7 +52,7 @@ task_config:
     M: 0.027
     Iyy: 1.4e-05
 
-  episode_len_sec: 6
+  episode_len_sec: 5
   cost: rl_reward
   obs_goal_horizon: 0
 

@@ -266,8 +266,9 @@ def extract_percent_magnitude_of_corrections(results_data):
         magn_of_corrections (list): The list of percent magnitude of corrections for all experiments.
     '''
 
-    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((150,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((150,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    N = len(results_data['cert_results']['state'][0])-1
+    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
     corr = [(norm_uncert[i] -  norm_cert[i]) for i in range(len(norm_cert))]
     max_input = [np.maximum(np.linalg.norm(norm_uncert[i], axis=1), np.linalg.norm(norm_cert[i], axis=1)) for i in range(len(norm_cert))]
     perc_change = [np.divide(np.linalg.norm(corr[i], axis=1), max_input[i]) for i in range(len(norm_cert))]
