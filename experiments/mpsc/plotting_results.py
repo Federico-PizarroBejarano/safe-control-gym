@@ -9,7 +9,7 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from scipy.signal import savgol_filter
+# from scipy.signal import savgol_filter
 
 from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.envs.benchmark_env import Task, Environment
@@ -862,7 +862,7 @@ def plot_log(system, task, algo, key, all_results):
     for i, model in enumerate(labels):
         if key == 'loss/critic_loss' and model == 'safe_ppo':
             continue
-        y = savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
+        y = all_results[model][key][3] #savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
         ax.plot(all_results[model][key][1], y, label=model, color=colors[i])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)

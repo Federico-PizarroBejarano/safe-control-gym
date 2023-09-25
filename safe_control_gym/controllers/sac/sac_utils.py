@@ -32,6 +32,7 @@ class SACAgent:
                  actor_lr=0.001,
                  critic_lr=0.001,
                  entropy_lr=0.001,
+                 activation='relu',
                  **kwargs):
         # params
         self.obs_space = obs_space
@@ -41,8 +42,10 @@ class SACAgent:
         self.tau = tau
         self.use_entropy_tuning = use_entropy_tuning
 
+        self.activation = activation
+
         # model
-        self.ac = MLPActorCritic(obs_space, act_space, hidden_dims=[hidden_dim] * 2, activation='relu')
+        self.ac = MLPActorCritic(obs_space, act_space, hidden_dims=[hidden_dim] * 2, activation=self.activation)
         self.log_alpha = torch.tensor(np.log(init_temperature))
 
         if self.use_entropy_tuning:

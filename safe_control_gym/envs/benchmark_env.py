@@ -512,9 +512,14 @@ class BenchmarkEnv(gym.Env, ABC):
             info['constraint_violation'] = 0
 
         # Apply penalized reward when close to constraint violation
-        # if self.COST == Cost.RL_REWARD:
-        #     if self.constraints is not None and self.use_constraint_penalty and self.constraints.is_almost_active(self, c_value=c_value):
-        #         rew += self.constraint_penalty
+        if self.COST == Cost.RL_REWARD:
+            if self.constraints is not None and self.use_constraint_penalty and self.constraints.is_violated(self, c_value=c_value):
+                if self.rew_exponential:
+                    rew = np.log(rew)
+                    rew += self.constraint_penalty
+                    rew = np.exp(rew)
+                else:
+                    rew += self.constraint_penalty
 
         # Terminate when reaching time limit,
         # but distinguish between done due to true termination or time limit reached

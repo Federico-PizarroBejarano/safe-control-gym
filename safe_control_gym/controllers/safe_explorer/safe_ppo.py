@@ -121,7 +121,8 @@ class SafeExplorerPPO(BaseController):
         self.logger.close()
 
     def save(self,
-             path
+             path,
+             save_buffer=False
              ):
         '''Saves model params and experiment state to checkpoint path.'''
         path_dir = os.path.dirname(path)
@@ -132,7 +133,7 @@ class SafeExplorerPPO(BaseController):
             'obs_normalizer': self.obs_normalizer.state_dict(),
             'reward_normalizer': self.reward_normalizer.state_dict(),
         }
-        if self.training:
+        if self.training and save_buffer:
             exp_state = {
                 'total_steps': self.total_steps,
                 'obs': self.obs,
@@ -182,12 +183,12 @@ class SafeExplorerPPO(BaseController):
             # Checkpoint.
             if self.total_steps >= final_step or (self.save_interval and self.total_steps % self.save_interval == 0):
                 # Latest/final checkpoint.
-                self.save(self.checkpoint_path)
+                self.save(self.checkpoint_path, save_buffer=False)
                 self.logger.info(f'Checkpoint | {self.checkpoint_path}')
             if self.num_checkpoints and self.total_steps % (final_step // self.num_checkpoints) == 0:
                 # Intermediate checkpoint.
                 path = os.path.join(self.output_dir, 'checkpoints', f'model_{self.total_steps}.pt')
-                self.save(path)
+                self.save(path, save_buffer=True)
             # Evaluation.
             if self.eval_interval and self.total_steps % self.eval_interval == 0:
                 if self.pretraining:
@@ -205,7 +206,7 @@ class SafeExplorerPPO(BaseController):
                     eval_best_score = getattr(self, 'eval_best_score', -np.infty)
                     if self.eval_save_best and eval_best_score < eval_score:
                         self.eval_best_score = eval_score
-                        self.save(os.path.join(self.output_dir, 'model_best.pt'))
+                        self.save(os.path.join(self.output_dir, 'model_best.pt'), save_buffer=False)
             # Logging.
             if self.log_interval and self.total_steps % self.log_interval == 0:
                 self.log_step(results)

@@ -68,7 +68,15 @@ else
     PENALIZE_SF_TAG=''
 fi
 
-TAG="$1${SAFE_RESET_TAG}${EARLY_STOP_TAG}${PENALIZE_SF_TAG}"
+if [ "$8" = True ]; then
+    CONSTR_PEN='True'
+    CONSTR_PEN_TAG='_cpen'
+else
+    CONSTR_PEN='False'
+    CONSTR_PEN_TAG=''
+fi
+
+TAG="$1${SAFE_RESET_TAG}${EARLY_STOP_TAG}${PENALIZE_SF_TAG}${CONSTR_PEN_TAG}"
 echo $TAG $SYS $ALGO $TASK
 
 if [ "$SYS" = 'cartpole' ]; then
@@ -104,6 +112,7 @@ python3 train_rl.py \
     --seed 2 \
     --kv_overrides \
         task_config.init_state=None \
+        task_config.use_constraint_penalty=${CONSTR_PEN} \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \
