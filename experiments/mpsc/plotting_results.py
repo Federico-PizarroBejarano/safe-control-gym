@@ -324,6 +324,19 @@ def extract_number_of_corrections(results_data):
     return num_corrections
 
 
+def extract_feasible_iterations(results_data):
+    '''Extracts the number of feasible iterations from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        feasible_iterations (list): The list of the number of feasible iterations for all experiments.
+    '''
+    feasible_iterations = [np.sum(mpsc_results['feasible'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    return feasible_iterations
+
+
 def extract_rmse(results_data, certified=True):
     '''Extracts the RMSEs from an experiment's data.
 
@@ -932,6 +945,7 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_failed_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_failed_uncert)
+    plot_model_comparisons(system_name, task_name, algo_name, extract_feasible_iterations)
     if task_name == 'stab':
         plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
         plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)
