@@ -52,6 +52,8 @@ python3 ../../safe_control_gym/experiments/train_rl_controller.py \
     --tag unsafe_rl_temp_data/ \
     --seed 2 \
     --kv_overrides \
+        task_config.init_state=None \
+        task_config.randomized_init=True \
         algo_config.pretrained=./models/${ALGO}/${ALGO}_pretrain_${SYS}_${TASK}.pt
 
 # Move the newly trained unsafe model.

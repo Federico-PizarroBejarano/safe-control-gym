@@ -16,153 +16,6 @@ from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, high_
 from experiments.mpsc.plotting_results import plot_trajectories
 
 
-reachable_state_randomization = {
-    'cartpole': {
-        'init_x': {
-            'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
-        'init_x_dot': {
-            'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
-        'init_theta': {
-            'distrib': 'uniform',
-            'low': -0.16,
-            'high': 0.16},
-        'init_theta_dot': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1}
-    },
-    'quadrotor_2D': {
-        'init_x': {
-            'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
-        'init_x_dot': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
-        'init_z': {
-            'distrib': 'uniform',
-            'low': 0.3, #just so it does not crash into the floor
-            'high': 2},
-        'init_z_dot': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
-        'init_theta': {
-            'distrib': 'uniform',
-            'low': -0.2,
-            'high': 0.2},
-        'init_theta_dot': {
-            'distrib': 'uniform',
-            'low': -1.5,
-            'high': 1.5}
-    },
-    'quadrotor_3D': {
-        'init_x': {
-            'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
-        'init_x_dot': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
-        'init_y': {
-            'distrib': 'uniform',
-            'low': -2,
-            'high': 2},
-        'init_y_dot': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
-        'init_z': {
-            'distrib': 'uniform',
-            'low': 1,
-            'high': 2},
-        'init_z_dot': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
-        'init_phi': {
-            'distrib': 'uniform',
-            'low': -0.2,
-            'high': 0.2},
-        'init_theta': {
-            'distrib': 'uniform',
-            'low': -0.2,
-            'high': 0.2},
-        'init_psi': {
-            'distrib': 'uniform',
-            'low': -0.2,
-            'high': 0.2},
-        'init_p': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
-        'init_q': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1},
-        'init_r': {
-            'distrib': 'uniform',
-            'low': -1,
-            'high': 1}
-    },
-}
-
-regularization_parameters = {
-    'cartpole': {
-        'stab': {
-            'lqr': 0.0,
-            'ppo': 0.125,
-            'sac': 0.07,
-            'safe_explorer_ppo': 0.125,
-        },
-        'track': {
-            'lqr': 0.0,
-            'ppo': 0.01,
-            'sac': 1000.0,
-            'safe_explorer_ppo': 0.01,
-        },
-    },
-    'quadrotor_2D': {
-        'stab': {
-            'lqr': 0.0,
-            'pid': 2.5,
-            'ppo': 1.0,
-            'sac': 1.0,
-            'safe_explorer_ppo': 1.0,
-        },
-        'track': {
-            'lqr': 0.0,
-            'pid': 10000.0,
-            'ppo': 10000.0,
-            'sac': 100.0,
-            'safe_explorer_ppo': 10000.0,
-        },
-    },
-    'quadrotor_3D': {
-        'stab': {
-            'lqr': 15.0,
-            'pid': 10000.0,
-            'ppo': 100.0,
-            'sac': 100.0,
-            'safe_explorer_ppo': 100.0,
-        },
-        'track': {
-            'lqr': 1000000.0,
-            'pid': 10000.0,
-            'ppo': 100.0,
-            'sac': 100.0,
-            'safe_explorer_ppo': 100.0,
-        },
-    }
-}
-
-
 def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None, model='none'):
     '''Main function to run MPSC experiments.
 
@@ -256,7 +109,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     if training is True:
         train_env = env_func(randomized_init=True,
-                             init_state_randomization_info=reachable_state_randomization[system],
                              init_state=None,
                              cost='quadratic',
                              normalized_rl_action_space=False,
@@ -340,16 +192,8 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
     env_func = partial(make,
                        config.task,
                        **config.task_config)
-    state_randomization = reachable_state_randomization[system]
-    if system == 'quadrotor_3D':
-        for state in state_randomization.keys():
-            if 'x' not in state and 'y' not in state and 'z' not in state:
-                state_randomization[state]['low'] = 0.1 * state_randomization[state]['low']
-                state_randomization[state]['high'] = 0.1 * state_randomization[state]['high']
-            else:
-                state_randomization[state]['low'] = 0.5 * state_randomization[state]['low']
-                state_randomization[state]['high'] = 0.5 * state_randomization[state]['high']
-    generator_env = env_func(init_state=None, randomized_init=True, init_state_randomization_info=state_randomization)
+
+    generator_env = env_func(init_state=None, randomized_init=True)
 
     # Setup controller.
     ctrl = make(config.algo,
