@@ -2,11 +2,10 @@
 
 import numpy as np
 
-from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 from safe_control_gym.controllers.pid.pid import PID
-from safe_control_gym.controllers.ppo.ppo import PPO
 from safe_control_gym.envs.benchmark_env import Environment
 from safe_control_gym.envs.env_wrappers.vectorized_env.vec_env import VecEnv
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 
 
 class PRECOMPUTED_COST(MPSC_COST):
@@ -108,9 +107,9 @@ class PRECOMPUTED_COST(MPSC_COST):
             extended_obs = self.env.extend_obs(obs, next_step + 1)
 
             info = {
-                    'current_step': next_step,
-                    'constraint_values': np.concatenate([self.get_constraint_value(con, obs) for con in self.env.constraints.state_constraints])
-                   }
+                'current_step': next_step,
+                'constraint_values': np.concatenate([self.get_constraint_value(con, obs) for con in self.env.constraints.state_constraints])
+            }
             if self.uncertified_controller.training:
                 action = self.uncertified_controller.select_action(obs=extended_obs, info=info, training=self.uncertified_controller.training)
             else:

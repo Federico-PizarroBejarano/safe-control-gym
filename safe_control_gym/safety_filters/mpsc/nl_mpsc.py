@@ -13,17 +13,18 @@ Based on
 
 import pickle
 
-import numpy as np
 import casadi as cs
 import cvxpy as cp
+import numpy as np
 from pytope import Polytope
-from scipy.linalg import sqrtm, solve_discrete_are
+from scipy.linalg import solve_discrete_are, sqrtm
 
-from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
-from safe_control_gym.controllers.mpc.mpc_utils import rk_discrete, discretize_linear_system
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function #, get_error_parameters, error_function
+from safe_control_gym.controllers.mpc.mpc_utils import discretize_linear_system, rk_discrete
+from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.safety_filters.cbf.cbf_utils import cartesian_product
-from safe_control_gym.envs.benchmark_env import Task, Environment
+from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import \
+    Cost_Function  # , get_error_parameters, error_function
 
 
 class NL_MPSC(MPSC):
@@ -86,7 +87,7 @@ class NL_MPSC(MPSC):
 
         self.L_x = np.vstack((L_x, np.zeros((p_u, self.n))))
         self.L_u = np.vstack((np.zeros((p_x, self.m)), L_u))
-        self.l = np.concatenate([l_x, l_u])
+        self.l_xu = np.concatenate([l_x, l_u])
 
     def set_dynamics(self):
         '''Compute the discrete dynamics.'''
@@ -179,7 +180,7 @@ class NL_MPSC(MPSC):
             self.Bd = cs.Function('Bd', [x_sym, u_sym, w_sym], [cs.jacobian(self.disc_f(x_sym, u_sym, w_sym), u_sym)], ['x', 'u', 'w'], ['Bd'])
         elif self.integration_algo == 'LTI':
             self.Ed = np.diag(self.max_w_per_dim)
-            self.Ec = self.Ed/self.dt
+            self.Ec = self.Ed / self.dt
 
             self.f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [self.Ac(x_sym, u_sym, w_sym) @ x_sym + self.Bc(x_sym, u_sym, w_sym) @ u_sym + self.Ec @ w_sym], ['x', 'u', 'w'], ['disc_f'])
             self.disc_f = cs.Function('disc_f', [x_sym, u_sym, w_sym], [self.Ad(x_sym, u_sym, w_sym) @ x_sym + self.Bd(x_sym, u_sym, w_sym) @ u_sym + self.Ed @ w_sym], ['x', 'u', 'w'], ['disc_f'])
@@ -191,7 +192,7 @@ class NL_MPSC(MPSC):
         self.L_u_sym = cs.MX(self.L_u)
         self.L_size = np.sum(np.abs(self.L_x), axis=1) + np.sum(np.abs(self.L_u), axis=1)
         self.L_size_sym = cs.MX(self.L_size)
-        self.l_sym = cs.MX(self.l)
+        self.l_sym = cs.MX(self.l_xu)
         self.setup_optimizer()
 
     def get_error_function(self, env):
@@ -228,14 +229,14 @@ class NL_MPSC(MPSC):
 
         w = w - np.mean(w, axis=0)
         normed_w = np.linalg.norm(w, axis=1)
-        self.max_w_per_dim = np.minimum(np.max(w, axis=0), np.mean(w, axis=0) + 3*np.std(w, axis=0))
-        self.max_w = min(np.max(normed_w), np.mean(normed_w) + 3*np.std(normed_w))
+        self.max_w_per_dim = np.minimum(np.max(w, axis=0), np.mean(w, axis=0) + 3 * np.std(w, axis=0))
+        self.max_w = min(np.max(normed_w), np.mean(normed_w) + 3 * np.std(normed_w))
 
         print('MAX ERROR:', np.max(normed_w))
-        print('STD ERROR:', np.mean(normed_w) + 3*np.std(normed_w))
+        print('STD ERROR:', np.mean(normed_w) + 3 * np.std(normed_w))
         print('MEAN ERROR:', np.mean(normed_w))
         print('MAX ERROR PER DIM:', np.max(w, axis=0))
-        print('STD ERROR PER DIM:', np.mean(w, axis=0) + 3*np.std(w, axis=0))
+        print('STD ERROR PER DIM:', np.mean(w, axis=0) + 3 * np.std(w, axis=0))
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
 
         # if self.integration_algo == 'LTI':
@@ -375,8 +376,8 @@ class NL_MPSC(MPSC):
             l (ndarray): Whether the constraint is active.
         '''
 
-        L = []
-        l = []
+        Limit = []
+        limit_active = []
 
         Z_mid = (constraint.upper_bounds + constraint.lower_bounds) / 2.0
         Z_limits = np.array([[constraint.upper_bounds[i] - Z_mid[i], constraint.lower_bounds[i] - Z_mid[i]] for i in range(constraint.upper_bounds.shape[0])])
@@ -387,23 +388,23 @@ class NL_MPSC(MPSC):
         for constraint_id in range(0, dim):
             if Z_limits[constraint_id, 0] != -float('inf'):
                 if Z_limits[constraint_id, 0] == 0:
-                    l += [0]
-                    L += [-eye_dim[constraint_id, :]]
+                    limit_active += [0]
+                    Limit += [-eye_dim[constraint_id, :]]
                 else:
-                    l += [1]
+                    limit_active += [1]
                     factor = 1 / Z_limits[constraint_id, 0]
-                    L += [factor * eye_dim[constraint_id, :]]
+                    Limit += [factor * eye_dim[constraint_id, :]]
 
             if Z_limits[constraint_id, 1] != float('inf'):
                 if Z_limits[constraint_id, 1] == 0:
-                    l += [0]
-                    L += [eye_dim[constraint_id, :]]
+                    limit_active += [0]
+                    Limit += [eye_dim[constraint_id, :]]
                 else:
-                    l += [1]
+                    limit_active += [1]
                     factor = 1 / Z_limits[constraint_id, 1]
-                    L += [factor * eye_dim[constraint_id, :]]
+                    Limit += [factor * eye_dim[constraint_id, :]]
 
-        return Z_mid, np.array(L), np.array(l)
+        return Z_mid, np.array(Limit), np.array(limit_active)
 
     def setup_tube_optimization(self, lamb):
         '''Sets up the optimization to find the lyapunov function.
@@ -636,8 +637,8 @@ class NL_MPSC(MPSC):
         for i in range(self.n):
             tighten_by_max = self.c_js[i * 2] * self.s_bar_f
             tighten_by_min = self.c_js[i * 2 + 1] * self.s_bar_f
-            max_bounds[i] = 1.0 / self.L_x[i * 2, i] * (self.l[i * 2] - tighten_by_max)
-            min_bounds[i] = 1.0 / self.L_x[i * 2 + 1, i] * (self.l[i * 2 + 1] - tighten_by_min)
+            max_bounds[i] = 1.0 / self.L_x[i * 2, i] * (self.l_xu[i * 2] - tighten_by_max)
+            min_bounds[i] = 1.0 / self.L_x[i * 2 + 1, i] * (self.l_xu[i * 2 + 1] - tighten_by_min)
 
         if np.any(terminal_max > max_bounds) or np.any(terminal_min < min_bounds):
             raise ValueError('Terminal set is not constrained within the constraint set.')
@@ -655,8 +656,8 @@ class NL_MPSC(MPSC):
         for i in range(self.m):
             tighten_by_max = self.c_js[self.n * 2 + i * 2] * self.s_bar_f
             tighten_by_min = self.c_js[self.n * 2 + i * 2 + 1] * self.s_bar_f
-            max_bounds[i] = 1.0 / self.L_u[self.n * 2 + i * 2, i] * (self.l[self.n * 2 + i * 2] - tighten_by_max)
-            min_bounds[i] = 1.0 / self.L_u[self.n * 2 + i * 2 + 1, i] * (self.l[self.n * 2 + i * 2 + 1] - tighten_by_min)
+            max_bounds[i] = 1.0 / self.L_u[self.n * 2 + i * 2, i] * (self.l_xu[self.n * 2 + i * 2] - tighten_by_max)
+            min_bounds[i] = 1.0 / self.L_u[self.n * 2 + i * 2 + 1, i] * (self.l_xu[self.n * 2 + i * 2 + 1] - tighten_by_min)
 
         if np.any(max_input + self.u_r > max_bounds + self.U_mid) or np.any(-max_input + self.u_r < min_bounds + self.U_mid):
             raise ValueError(f'Terminal controller causes inputs (max_input: {-max_input+self.u_r[0]}/{max_input+self.u_r[0]}) outside of input constraints (constraints: {min_bounds[0] + self.U_mid[0]}/{max_bounds[0] + self.U_mid[0]}).')
@@ -708,7 +709,7 @@ class NL_MPSC(MPSC):
 
                 # Testing condition 29d
                 for j in range(self.p):
-                    constraint_satisfaction = self.L_x[j, :] @ (state - self.X_mid) + self.L_u[j, :] @ (stable_input - self.U_mid) - self.l[j] + self.c_js[j] * self.s_bar_f <= 0
+                    constraint_satisfaction = self.L_x[j, :] @ (state - self.X_mid) + self.L_u[j, :] @ (stable_input - self.U_mid) - self.l_xu[j] + self.c_js[j] * self.s_bar_f <= 0
                     if not constraint_satisfaction:
                         failed_29d += 1
                         failed = True
@@ -760,10 +761,10 @@ class NL_MPSC(MPSC):
         self.w_bar = parameters['w_bar']
         self.max_w = parameters['max_w']
         # self.error_parameters = parameters['error_parameters']
-        if self.integration_algo == 'LTI':
-            num_stds = 2
-        else:
-            num_stds = 3
+        # if self.integration_algo == 'LTI':
+        #     num_stds = 2
+        # else:
+        #     num_stds = 3
         # def w_func(state, action):
         #     input_vec = cs.horzcat(state.T, action.T)
         #     return error_function(*self.error_parameters, num_stds, input_vec)
@@ -784,7 +785,7 @@ class NL_MPSC(MPSC):
         self.L_u_sym = cs.MX(self.L_u)
         self.L_size = np.sum(np.abs(self.L_x), axis=1) + np.sum(np.abs(self.L_u), axis=1)
         self.L_size_sym = cs.MX(self.L_size)
-        self.l_sym = cs.MX(self.l)
+        self.l_sym = cs.MX(self.l_xu)
 
         self.setup_optimizer()
 
@@ -853,7 +854,7 @@ class NL_MPSC(MPSC):
             slack = opti.variable(1, 1)
             slack_term = opti.variable(1, 1)
         else:
-            slack = opti.variable(1,1)
+            slack = opti.variable(1, 1)
             slack_term = opti.variable(1, 1)
             opti.subject_to(slack == 0)
             opti.subject_to(slack_term == 0)
@@ -864,7 +865,7 @@ class NL_MPSC(MPSC):
             opti.subject_to(z_var[:, i + 1] == next_state)
 
             # Lyapunov size increase
-            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + self.max_w) #self.w_func(z_var[:, i], v_var[:, i]))
+            opti.subject_to(s_var[:, i + 1] == self.rho * s_var[:, i] + self.max_w)  # self.w_func(z_var[:, i], v_var[:, i]))
             opti.subject_to(s_var[:, i] <= self.s_bar_f)
             # opti.subject_to(self.w_func(z_var[:, i], v_var[:, i]) <= self.max_w)
 

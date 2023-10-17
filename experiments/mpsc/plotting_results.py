@@ -1,20 +1,21 @@
 '''This script analyzes and plots the results from MPSC experiments.'''
 
 import os
-import sys
 import pickle
-from inspect import signature
+import sys
 from collections import defaultdict
+from inspect import signature
 
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib as mpl
-# from scipy.signal import savgol_filter
+import matplotlib.pyplot as plt
+import numpy as np
 
+from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.experiments.base_experiment import MetricExtractor
-from safe_control_gym.envs.benchmark_env import Task, Environment
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import high_frequency_content, get_discrete_derivative
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative, high_frequency_content
 from safe_control_gym.utils.plotting import load_from_logs
+
+# from scipy.signal import savgol_filter
 
 
 plot = False
@@ -190,6 +191,7 @@ def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
         fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_{image_suffix}_m{mpsc_cost_horizon}.png', dpi=300)
     plt.close()
 
+
 def plot_violations(system, task, mpsc_cost_horizon):
     '''Plots the constraint violations of every controller for a specific experiment.
 
@@ -266,10 +268,10 @@ def extract_percent_magnitude_of_corrections(results_data):
         magn_of_corrections (list): The list of percent magnitude of corrections for all experiments.
     '''
 
-    N = len(results_data['cert_results']['state'][0])-1
-    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    corr = [(norm_uncert[i] -  norm_cert[i]) for i in range(len(norm_cert))]
+    N = len(results_data['cert_results']['state'][0]) - 1
+    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    corr = [(norm_uncert[i] - norm_cert[i]) for i in range(len(norm_cert))]
     max_input = [np.maximum(np.linalg.norm(norm_uncert[i], axis=1), np.linalg.norm(norm_cert[i], axis=1)) for i in range(len(norm_cert))]
     perc_change = [np.divide(np.linalg.norm(corr[i], axis=1), max_input[i]) for i in range(len(norm_cert))]
     magn_of_corrections = [np.linalg.norm(elem) for elem in perc_change]
@@ -300,10 +302,10 @@ def extract_percent_max_correction(results_data):
     Returns:
         max_corrections (list): The list of percent max corrections for all experiments.
     '''
-    N = len(results_data['cert_results']['state'][0])-1
-    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N,-1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    corr = [(norm_uncert[i] -  norm_cert[i]) for i in range(len(norm_cert))]
+    N = len(results_data['cert_results']['state'][0]) - 1
+    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    corr = [(norm_uncert[i] - norm_cert[i]) for i in range(len(norm_cert))]
     max_input = [np.maximum(np.linalg.norm(norm_uncert[i], axis=1), np.linalg.norm(norm_cert[i], axis=1)) for i in range(len(norm_cert))]
     perc_change = [np.divide(np.linalg.norm(corr[i], axis=1), max_input[i]) for i in range(len(norm_cert))]
     max_corrections = [np.max(elem) for elem in perc_change]
@@ -795,7 +797,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))
 
     cm = mpl.colormaps['inferno']
-    colors = [cm(i/len(labels)) for i in range(1, len(labels)+1)]
+    colors = [cm(i / len(labels)) for i in range(1, len(labels) + 1)]
     for patch, color in zip(bplot['boxes'], colors):
         patch.set_facecolor(color)
 
@@ -824,7 +826,7 @@ def normalize_actions(actions):
     '''
     if system_name == 'cartpole':
         action_scale = 10.0
-        normalized_actions = actions/action_scale
+        normalized_actions = actions / action_scale
     elif system_name == 'quadrotor_2D':
         hover_thrust = 0.1323
         norm_act_scale = 0.1
@@ -876,7 +878,7 @@ def plot_log(system, task, algo, key, all_results):
     for i, model in enumerate(labels):
         if key == 'loss/critic_loss' and model == 'safe_ppo':
             continue
-        y = all_results[model][key][3] #savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
+        y = all_results[model][key][3]  # savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
         ax.plot(all_results[model][key][1], y, label=model, color=colors[i])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
@@ -896,28 +898,50 @@ def plot_log(system, task, algo, key, all_results):
 if __name__ == '__main__':
     ordered_costs = ['one_step', 'regularized', 'precomputed']
 
-    def extract_rate_of_change_of_inputs(results_data, certified=True): return extract_rate_of_change(results_data, certified, order=1, mode='input')
+    def extract_rate_of_change_of_inputs(results_data, certified=True):
+        return extract_rate_of_change(results_data, certified, order=1, mode='input')
 
-    def extract_roc_cert(results_data, certified=True): return extract_rate_of_change_of_inputs(results_data, certified)
-    def extract_roc_uncert(results_data, certified=False): return extract_rate_of_change_of_inputs(results_data, certified)
+    def extract_roc_cert(results_data, certified=True):
+        return extract_rate_of_change_of_inputs(results_data, certified)
 
-    def extract_rmse_cert(results_data, certified=True): return extract_rmse(results_data, certified)
-    def extract_rmse_uncert(results_data, certified=False): return extract_rmse(results_data, certified)
+    def extract_roc_uncert(results_data, certified=False):
+        return extract_rate_of_change_of_inputs(results_data, certified)
 
-    def extract_constraint_violations_cert(results_data, certified=True): return extract_constraint_violations(results_data, certified)
-    def extract_constraint_violations_uncert(results_data, certified=False): return extract_constraint_violations(results_data, certified)
+    def extract_rmse_cert(results_data, certified=True):
+        return extract_rmse(results_data, certified)
 
-    def extract_reward_cert(results_data, certified=True): return extract_reward(results_data, certified)
-    def extract_reward_uncert(results_data, certified=False): return extract_reward(results_data, certified)
+    def extract_rmse_uncert(results_data, certified=False):
+        return extract_rmse(results_data, certified)
 
-    def extract_final_dist_cert(results_data, certified=True): return extract_final_dist(results_data, certified)
-    def extract_final_dist_uncert(results_data, certified=False): return extract_final_dist(results_data, certified)
+    def extract_constraint_violations_cert(results_data, certified=True):
+        return extract_constraint_violations(results_data, certified)
 
-    def extract_failed_cert(results_data, certified=True): return extract_failed(results_data, certified)
-    def extract_failed_uncert(results_data, certified=False): return extract_failed(results_data, certified)
+    def extract_constraint_violations_uncert(results_data, certified=False):
+        return extract_constraint_violations(results_data, certified)
 
-    def extract_length_cert(results_data, certified=True): return extract_length(results_data, certified)
-    def extract_length_uncert(results_data, certified=False): return extract_length(results_data, certified)
+    def extract_reward_cert(results_data, certified=True):
+        return extract_reward(results_data, certified)
+
+    def extract_reward_uncert(results_data, certified=False):
+        return extract_reward(results_data, certified)
+
+    def extract_final_dist_cert(results_data, certified=True):
+        return extract_final_dist(results_data, certified)
+
+    def extract_final_dist_uncert(results_data, certified=False):
+        return extract_final_dist(results_data, certified)
+
+    def extract_failed_cert(results_data, certified=True):
+        return extract_failed(results_data, certified)
+
+    def extract_failed_uncert(results_data, certified=False):
+        return extract_failed(results_data, certified)
+
+    def extract_length_cert(results_data, certified=True):
+        return extract_length(results_data, certified)
+
+    def extract_length_uncert(results_data, certified=False):
+        return extract_length(results_data, certified)
 
     system_name = 'cartpole'
     task_name = 'stab'

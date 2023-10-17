@@ -2,21 +2,21 @@
 
 import pickle
 from enum import Enum
-from itertools import product
 from functools import partial
+from itertools import product
 
 import cvxpy as cp
 import numpy as np
 import pytope as pt
 from scipy.fftpack import fft, fftfreq
 from scipy.optimize import minimize
+from sklearn.linear_model import BayesianRidge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
-from sklearn.linear_model import BayesianRidge
 
-from safe_control_gym.envs.constraints import BoundedConstraint, LinearConstraint
-from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain
+from safe_control_gym.envs.benchmark_env import Environment, Task
+from safe_control_gym.envs.constraints import BoundedConstraint, LinearConstraint
 
 
 class Cost_Function(str, Enum):
@@ -321,8 +321,8 @@ def error_function(powers, means, stds, coefs, intercept, sigmas, alpha, num_std
     final_val = 0
     scaled_vec = []
     for i, val in enumerate(transformed_vec):
-        val = (val-means[i])/stds[i]
-        final_val += val*coefs[i]
+        val = (val - means[i]) / stds[i]
+        final_val += val * coefs[i]
         scaled_vec.append(val)
 
     final_val += intercept
@@ -330,4 +330,4 @@ def error_function(powers, means, stds, coefs, intercept, sigmas, alpha, num_std
     sigmas_squared_data = sum(np.dot(scaled_vec, sigmas) * scaled_vec)
     final_std = np.sqrt(sigmas_squared_data + (1.0 / alpha))
 
-    return final_val + final_std*num_stds
+    return final_val + final_std * num_stds

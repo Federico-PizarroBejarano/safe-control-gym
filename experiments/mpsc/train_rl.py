@@ -7,15 +7,19 @@ from functools import partial
 import munch
 import yaml
 
+from safe_control_gym.envs.benchmark_env import Environment
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.utils.configuration import ConfigFactory
+from safe_control_gym.utils.plotting import plot_from_logs
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import mkdirs, set_device_from_config, set_seed_from_config
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
-from safe_control_gym.envs.benchmark_env import Task, Environment
-from safe_control_gym.utils.plotting import plot_from_logs
 
 
 def train():
+    '''Training template.
+
+    TODO: Add restore functionality
+    '''
     # Create the configuration dictionary.
     fac = ConfigFactory()
     config = fac.merge()
@@ -23,7 +27,6 @@ def train():
 
     shutil.rmtree(config.output_dir, ignore_errors=True)
 
-    task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:
         system = f'quadrotor_{str(config.task_config.quad_type)}D'
     else:
@@ -51,8 +54,8 @@ def train():
     # Setup MPSC.
     if config.algo_config.filter_train_actions or config.algo_config.penalize_sf_diff or config.algo_config.use_safe_reset:
         safety_filter = make(config.safety_filter,
-                            env_func,
-                            **config.sf_config)
+                             env_func,
+                             **config.sf_config)
         safety_filter.reset()
 
         if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:

@@ -1,10 +1,10 @@
 '''LQR Cost Function for Smooth MPSC.'''
 
-import numpy as np
 import casadi as cs
+import numpy as np
 
-from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 from safe_control_gym.envs.benchmark_env import Task
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 
 
 class LQR_COST(MPSC_COST):

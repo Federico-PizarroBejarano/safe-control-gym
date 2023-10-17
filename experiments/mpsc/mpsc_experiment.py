@@ -1,19 +1,20 @@
 '''This script tests the MPSC safety filter implementation.'''
 
-import sys
 import os
 import pickle
 import shutil
+import sys
 from functools import partial
 
 import numpy as np
 
-from safe_control_gym.experiments.base_experiment import BaseExperiment, MetricExtractor
-from safe_control_gym.utils.registration import make
-from safe_control_gym.utils.configuration import ConfigFactory
-from safe_control_gym.envs.benchmark_env import Task, Cost, Environment
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, high_frequency_content, get_discrete_derivative, approximate_LQR_gain
 from experiments.mpsc.plotting_results import plot_trajectories
+from safe_control_gym.envs.benchmark_env import Cost, Environment, Task
+from safe_control_gym.experiments.base_experiment import BaseExperiment, MetricExtractor
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import (Cost_Function, get_discrete_derivative,
+                                                             high_frequency_content)
+from safe_control_gym.utils.configuration import ConfigFactory
+from safe_control_gym.utils.registration import make
 
 
 def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None, model='none'):
@@ -87,20 +88,11 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                          **config.sf_config)
     safety_filter.reset()
 
-    if config.sf_config.cost_function == Cost_Function.LQR_COST:
-        if config.algo == 'lqr':
-            safety_filter.cost_function.gain = ctrl.gain
-        else:
-            safety_filter.cost_function.gain = approximate_LQR_gain(env, ctrl, config, curr_path)
-    elif config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
+    if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
         safety_filter.cost_function.uncertified_controller = ctrl
         safety_filter.cost_function.output_dir = curr_path
         if config.algo == 'pid':
             ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
-    elif config.sf_config.cost_function == Cost_Function.LEARNED_COST:
-        safety_filter.cost_function.uncertified_controller = ctrl
-        safety_filter.cost_function.regularization_const = regularization_parameters[system][task][config.algo]
-        safety_filter.cost_function.learn_policy(path=f'{curr_path}/models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl')
 
     if config.sf_config.integration_algo == 'LTI':
         linear_suffix = '_linear'
@@ -118,9 +110,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}{linear_suffix}.pkl')
     else:
         safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}{linear_suffix}.pkl')
-
-    if config.sf_config.cost_function == Cost_Function.LEARNED_COST:
-        safety_filter.setup_optimizer()
 
     # Run with safety filter
     experiment = BaseExperiment(env, ctrl, safety_filter=safety_filter)
@@ -232,7 +221,7 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
         uncert_experiment.reset()
 
         if uncert_metrics['average_constraint_violation'] <= 5 \
-            or uncert_metrics['average_length'] != config.task_config.ctrl_freq * config.task_config.episode_len_sec:
+                or uncert_metrics['average_length'] != config.task_config.ctrl_freq * config.task_config.episode_len_sec:
             test_env.close()
             continue
 
@@ -405,11 +394,11 @@ def run_multiple_models(plot=True, model=None):
         cert_metrics = met.compute_metrics(data=all_cert_results)
 
         all_results = {'uncert_results': all_uncert_results,
-                    'uncert_metrics': uncert_metrics,
-                    'cert_results': all_cert_results,
-                    'cert_metrics': cert_metrics,
-                    'config': config,
-                    'X_GOAL': X_GOAL}
+                       'uncert_metrics': uncert_metrics,
+                       'cert_results': all_cert_results,
+                       'cert_metrics': cert_metrics,
+                       'config': config,
+                       'X_GOAL': X_GOAL}
 
         with open(f'./results_mpsc/{system}/{task}/{config.algo}/results_{system}_{task}_{config.algo}_{model}.pkl', 'wb') as f:
             pickle.dump(all_results, f)
