@@ -26,11 +26,11 @@ fi
 # SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'
 
-# MPSC_COST='one_step_cost'
+MPSC_COST='one_step_cost'
 # MPSC_COST='constant_cost'
 # MPSC_COST='regularized_cost'
 # MPSC_COST='lqr_cost'
-MPSC_COST='precomputed_cost'
+# MPSC_COST='precomputed_cost'
 # MPSC_COST='learned_cost'
 
 MPSC_COST_HORIZON=2

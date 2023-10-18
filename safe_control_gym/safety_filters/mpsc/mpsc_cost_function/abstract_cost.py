@@ -10,7 +10,7 @@ class MPSC_COST(ABC):
 
     def __init__(self,
                  env: BenchmarkEnv = None,
-                 mpsc_cost_horizon: int = 5,
+                 mpsc_cost_horizon: int = 1,
                  decay_factor: float = 0.85,
                  ):
         '''Initialize the MPSC Cost.

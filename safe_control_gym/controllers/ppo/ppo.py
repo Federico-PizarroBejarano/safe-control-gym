@@ -304,11 +304,11 @@ class PPO(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
-                elif not success:
-                    self.safety_filter.setup_optimizer()
-                    certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                    if success and self.filter_train_actions is True:
-                        action = self.env.envs[0].normalize_action(certified_action)
+                # elif not success:
+                #     self.safety_filter.setup_optimizer()
+                #     certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                #     if success and self.filter_train_actions is True:
+                #         action = self.env.envs[0].normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))
             next_obs, rew, done, info = self.env.step(action)
@@ -435,15 +435,15 @@ class PPO(BaseController):
 
         if self.use_safe_reset is True and self.safety_filter is not None:
 
-            while success is not True or np.any(self.safety_filter.slack_prev > 10e-6):
+            while success is not True:  # or np.any(self.safety_filter.slack_prev > 10e-6):
                 obs, info = env.reset()
                 info['current_step'] = 1
                 physical_action = self.env.envs[0].denormalize_action(act)
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
                 _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if not success:
-                    self.safety_filter.setup_optimizer()
-                    _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                # if not success:
+                #     self.safety_filter.setup_optimizer()
+                #     _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
 
         return obs, info

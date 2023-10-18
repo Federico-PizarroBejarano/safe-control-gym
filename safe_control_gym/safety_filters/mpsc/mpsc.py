@@ -40,6 +40,7 @@ class MPSC(BaseSafetyFilter, ABC):
                  cost_function: Cost_Function = Cost_Function.ONE_STEP_COST,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
+                 use_acados: bool = False,
                  **kwargs
                  ):
         '''Initialize the MPSC.
@@ -97,6 +98,7 @@ class MPSC(BaseSafetyFilter, ABC):
 
         if cost_function == Cost_Function.ONE_STEP_COST:
             self.cost_function = ONE_STEP_COST()
+            self.mpsc_cost_horizon = 1
             self.cost_function.mpsc_cost_horizon = 1
         elif cost_function == Cost_Function.CONSTANT_COST:
             self.cost_function = CONSTANT_COST(self.env, mpsc_cost_horizon, decay_factor)
@@ -116,9 +118,21 @@ class MPSC(BaseSafetyFilter, ABC):
         '''Compute the dynamics.'''
         raise NotImplementedError
 
-    @abstractmethod
     def setup_optimizer(self):
         '''Setup the certifying MPC problem.'''
+        if self.use_acados:
+            self.setup_acados_optimizer()
+        else:
+            self.setup_casadi_optimizer()
+
+    @abstractmethod
+    def setup_casadi_optimizer(self):
+        '''Setup the certifying MPC problem using CasADi.'''
+        raise NotImplementedError
+
+    @abstractmethod
+    def setup_acados_optimizer(self):
+        '''Setup the certifying MPC problem using ACADOS.'''
         raise NotImplementedError
 
     def before_optimization(self, obs):
@@ -146,6 +160,28 @@ class MPSC(BaseSafetyFilter, ABC):
             feasible (bool): Whether the safety filtering was feasible or not.
         '''
 
+        if self.use_acados:
+            action, feasible = self.solve_acados_optimization(obs, uncertified_action, iteration)
+        else:
+            action, feasible = self.solve_casadi_optimization(obs, uncertified_action, iteration)
+        return action, feasible
+
+    def solve_casadi_optimization(self,
+                                  obs,
+                                  uncertified_action,
+                                  iteration=None,
+                                  ):
+        '''Solve the MPC optimization problem for a given observation and uncertified input.
+
+        Args:
+            obs (ndarray): Current state/observation.
+            uncertified_action (ndarray): The uncertified_controller's action.
+            iteration (int): The current iteration, used for trajectory tracking.
+
+        Returns:
+            action (ndarray): The certified action.
+            feasible (bool): Whether the safety filtering was feasible or not.
+        '''
         opti_dict = self.opti_dict
         opti = opti_dict['opti']
         z_var = opti_dict['z_var']
@@ -188,6 +224,54 @@ class MPSC(BaseSafetyFilter, ABC):
             feasible = True
         except Exception as e:
             print('Error Return Status:', opti.debug.return_status())
+            print(e)
+            feasible = False
+            action = None
+        return action, feasible
+
+    def solve_acados_optimization(self,
+                                  obs,
+                                  uncertified_action,
+                                  iteration=None,
+                                  ):
+        '''Solve the MPC optimization problem for a given observation and uncertified input.
+
+        Args:
+            obs (ndarray): Current state/observation.
+            uncertified_action (ndarray): The uncertified_controller's action.
+            iteration (int): The current iteration, used for trajectory tracking.
+
+        Returns:
+            action (ndarray): The certified action.
+            feasible (bool): Whether the safety filtering was feasible or not.
+        '''
+
+        ocp_solver = self.ocp_solver
+        ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.squeeze(uncertified_action))))
+
+        if isinstance(self.cost_function, PRECOMPUTED_COST):
+            uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
+
+            for stage in range(1, self.mpsc_cost_horizon):
+                ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx)), uncert_input_traj[:, stage])))
+
+        # Solve the optimization problem.
+        try:
+            action = ocp_solver.solve_for_x0(x0_bar=obs)
+            self.cost_prev = ocp_solver.get_cost()
+            x_val = np.zeros((self.horizon + 1, self.model.nx))
+            u_val = np.zeros((self.horizon, self.model.nu))
+            for i in range(self.horizon):
+                x_val[i, :] = ocp_solver.get(i, 'x')
+                u_val[i, :] = ocp_solver.get(i, 'u')
+            x_val[self.horizon, :] = ocp_solver.get(self.horizon, 'x')
+            self.z_prev = x_val.T
+            self.v_prev = u_val.T
+            # Take the first one from solved action sequence.
+            self.prev_action = action
+            feasible = True
+        except Exception as e:
+            print('Error Return Status:', ocp_solver.status)
             print(e)
             feasible = False
             action = None

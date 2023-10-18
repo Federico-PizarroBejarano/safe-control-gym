@@ -16,8 +16,10 @@ import pickle
 import casadi as cs
 import cvxpy as cp
 import numpy as np
+from acados_template import AcadosOcp, AcadosOcpSolver
+from acados_template.acados_model import AcadosModel
 from pytope import Polytope
-from scipy.linalg import solve_discrete_are, sqrtm
+from scipy.linalg import block_diag, solve_discrete_are, sqrtm
 
 from safe_control_gym.controllers.mpc.mpc_utils import discretize_linear_system, rk_discrete
 from safe_control_gym.envs.benchmark_env import Environment, Task
@@ -821,7 +823,7 @@ class NL_MPSC(MPSC):
         with open(path, 'wb') as f:
             pickle.dump(parameters, f)
 
-    def setup_optimizer(self):
+    def setup_casadi_optimizer(self):
         '''Setup the certifying MPC problem.'''
 
         # Horizon parameter.
@@ -935,3 +937,127 @@ class NL_MPSC(MPSC):
             cost = cost + self.slack_cost * slack_term
         opti.minimize(cost)
         self.opti_dict['cost'] = cost
+
+    def setup_acados_optimizer(self):
+        '''setup_optimizer_acados'''
+        # create ocp object to formulate the OCP
+        ocp = AcadosOcp()
+
+        # Setup model
+        model = AcadosModel()
+        model.x = self.model.x_sym
+        model.u = self.model.u_sym
+        model.f_expl_expr = self.model.x_dot
+
+        if self.env.NAME == Environment.CARTPOLE:
+            x1_dot = cs.MX.sym('x1_dot')
+            v_dot = cs.MX.sym('v_dot')
+            theta1_dot = cs.MX.sym('theta1_dot')
+            dtheta_dot = cs.MX.sym('dtheta_dot')
+            xdot = cs.vertcat(x1_dot, v_dot, theta1_dot, dtheta_dot)
+        elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
+            x1_dot = cs.MX.sym('x1_dot')
+            vx_dot = cs.MX.sym('vx_dot')
+            z1_dot = cs.MX.sym('z1_dot')
+            vz_dot = cs.MX.sym('vz_dot')
+            theta1_dot = cs.MX.sym('theta1_dot')
+            dtheta_dot = cs.MX.sym('dtheta_dot')
+            xdot = cs.vertcat(x1_dot, vx_dot, z1_dot, vz_dot, theta1_dot, dtheta_dot)
+        else:
+            x1_dot = cs.MX.sym('x1_dot')
+            vx_dot = cs.MX.sym('vx_dot')
+            y1_dot = cs.MX.sym('y1_dot')
+            vy_dot = cs.MX.sym('vy_dot')
+            z1_dot = cs.MX.sym('z1_dot')
+            vz_dot = cs.MX.sym('vz_dot')
+            phi1_dot = cs.MX.sym('phi1_dot')  # Roll
+            theta1_dot = cs.MX.sym('theta1_dot')  # Pitch
+            psi1_dot = cs.MX.sym('psi1_dot')  # Yaw
+            p1_body_dot = cs.MX.sym('p1_body_dot')  # Body frame roll rate
+            q1_body_dot = cs.MX.sym('q1_body_dot')  # body frame pith rate
+            r1_body_dot = cs.MX.sym('r1_body_dot')  # body frame yaw rate
+            xdot = cs.vertcat(x1_dot, vx_dot, y1_dot, vy_dot, z1_dot, vz_dot, phi1_dot, theta1_dot, psi1_dot, p1_body_dot, q1_body_dot, r1_body_dot)
+
+        model.xdot = xdot
+        model.f_impl_expr = model.xdot - model.f_expl_expr
+        model.name = 'mpsf'
+        ocp.model = model
+
+        nx, nu = self.model.nx, self.model.nu
+        ny = nx + nu
+
+        ocp.dims.N = self.horizon
+
+        # set cost module
+        ocp.cost.cost_type = 'LINEAR_LS'
+        ocp.cost.cost_type_e = 'LINEAR_LS'
+
+        Q_mat = np.diag([0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1]) * 0  # .0001
+        ocp.cost.W_e = np.diag([0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1]) * 0.0001
+        R_mat = np.eye(nu)
+        ocp.cost.W = block_diag(Q_mat, R_mat)
+
+        ocp.cost.Vx = np.zeros((ny, nx))
+        ocp.cost.Vx[:nx, :] = np.eye(nx)
+        ocp.cost.Vu = np.zeros((ny, nu))
+        ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
+        ocp.cost.Vx_e = np.eye(nx)
+
+        ocp.model.cost_y_expr = cs.vertcat(model.x, model.u)
+        ocp.model.cost_y_expr_e = model.x
+
+        # Updated on each iteration
+        ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
+        ocp.cost.yref_e = self.model.X_EQ
+
+        # set constraints
+        ocp.constraints.constr_type = 'BGH'
+        ocp.constraints.constr_type_e = 'BGH'
+
+        ocp.constraints.x0 = self.model.X_EQ
+        ocp.constraints.C = self.L_x
+        ocp.constraints.D = self.L_u
+        ocp.constraints.lg = -1000 * np.ones((self.p))
+        ocp.constraints.ug = np.zeros((self.p))
+
+        # Slack
+        ocp.constraints.Jsg = np.eye(self.p)
+        ocp.cost.Zu = 0.1 * np.array([self.slack_cost] * self.p) / self.p
+        ocp.cost.Zl = 0.1 * np.array([self.slack_cost] * self.p) / self.p
+        ocp.cost.zu = 0.1 * np.array([self.slack_cost] * self.p) / self.p
+        ocp.cost.zl = 0.1 * np.array([self.slack_cost] * self.p) / self.p
+
+        # Options
+        ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
+        ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
+        ocp.solver_options.hpipm_mode = 'BALANCE'
+        ocp.solver_options.integrator_type = 'ERK'
+        # ocp.solver_options.sim_method_newton_iter = 3
+        ocp.solver_options.nlp_solver_type = 'SQP_RTI'
+        ocp.solver_options.nlp_solver_max_iter = 10
+        # ocp.solver_options.nlp_solver_step_length = 1.0
+
+        # set prediction horizon
+        ocp.solver_options.tf = self.dt * self.horizon
+
+        solver_json = 'acados_ocp_cartpole.json'
+        ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json)
+
+        for stage in range(self.mpsc_cost_horizon):
+            ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)
+
+        for stage in range(self.mpsc_cost_horizon, self.horizon):
+            ocp_solver.cost_set(stage, 'W', 0.1 * ocp.cost.W)
+
+        s_var = np.zeros((self.horizon + 1))
+        g = np.zeros((self.horizon, self.p))
+
+        for i in range(self.horizon):
+            s_var[i + 1] = self.rho * s_var[i] + self.max_w
+            for j in range(self.p):
+                tighten_by = self.c_js[j] * s_var[i + 1]
+                g[i, j] = (self.l_xu[j] - tighten_by)
+            g[i, :] += (self.L_x @ self.X_mid) + (self.L_u @ self.U_mid)
+            ocp_solver.constraints_set(i, 'ug', g[i, :])
+
+        self.ocp_solver = ocp_solver

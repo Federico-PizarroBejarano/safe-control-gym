@@ -18,10 +18,11 @@ sf_config:
     - 1
 
   # MPC Parameters
+  use_acados: True
   horizon: 20
   warmstart: True
   integration_algo: rk4
-  use_terminal_set: True
+  use_terminal_set: False
 
   # Prior info
   prior_info:
