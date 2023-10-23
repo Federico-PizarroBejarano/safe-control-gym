@@ -247,7 +247,7 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
 
         ocp_solver = self.ocp_solver
-        ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.squeeze(uncertified_action))))
+        ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.atleast_1d(np.squeeze(uncertified_action)))))
 
         if isinstance(self.cost_function, PRECOMPUTED_COST):
             uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
@@ -259,6 +259,7 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             action = ocp_solver.solve_for_x0(x0_bar=obs)
             self.cost_prev = ocp_solver.get_cost()
+            self.slack_prev = ocp_solver.get(0, 'su')
             x_val = np.zeros((self.horizon + 1, self.model.nx))
             u_val = np.zeros((self.horizon, self.model.nu))
             for i in range(self.horizon):

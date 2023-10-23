@@ -992,8 +992,8 @@ class NL_MPSC(MPSC):
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
 
-        Q_mat = np.diag([0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1]) * 0  # .0001
-        ocp.cost.W_e = np.diag([0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1]) * 0.0001
+        Q_mat = np.zeros((nx, nx))
+        ocp.cost.W_e = np.zeros((nx, nx))
         R_mat = np.eye(nu)
         ocp.cost.W = block_diag(Q_mat, R_mat)
 
@@ -1022,32 +1022,30 @@ class NL_MPSC(MPSC):
 
         # Slack
         ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = 0.1 * np.array([self.slack_cost] * self.p) / self.p
-        ocp.cost.Zl = 0.1 * np.array([self.slack_cost] * self.p) / self.p
-        ocp.cost.zu = 0.1 * np.array([self.slack_cost] * self.p) / self.p
-        ocp.cost.zl = 0.1 * np.array([self.slack_cost] * self.p) / self.p
+        ocp.cost.Zu = np.array([0.5] * self.p)
+        ocp.cost.Zl = np.array([0.5] * self.p)
+        ocp.cost.zu = np.array([0.5] * self.p)
+        ocp.cost.zl = np.array([0.5] * self.p)
 
         # Options
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
         ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
         ocp.solver_options.hpipm_mode = 'BALANCE'
         ocp.solver_options.integrator_type = 'ERK'
-        # ocp.solver_options.sim_method_newton_iter = 3
         ocp.solver_options.nlp_solver_type = 'SQP_RTI'
         ocp.solver_options.nlp_solver_max_iter = 10
-        # ocp.solver_options.nlp_solver_step_length = 1.0
 
         # set prediction horizon
         ocp.solver_options.tf = self.dt * self.horizon
 
-        solver_json = 'acados_ocp_cartpole.json'
-        ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json)
+        solver_json = 'acados_ocp_mpsf.json'
+        ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
 
         for stage in range(self.mpsc_cost_horizon):
             ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)
 
         for stage in range(self.mpsc_cost_horizon, self.horizon):
-            ocp_solver.cost_set(stage, 'W', 0.1 * ocp.cost.W)
+            ocp_solver.cost_set(stage, 'W', 0 * ocp.cost.W)
 
         s_var = np.zeros((self.horizon + 1))
         g = np.zeros((self.horizon, self.p))

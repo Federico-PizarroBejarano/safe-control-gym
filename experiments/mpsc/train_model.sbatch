@@ -2,11 +2,11 @@
 #SBATCH --job-name=safe_control_gym_train_rl_%j
 #SBATCH --output=/h/pizarrob/safe-control-gym/experiments/mpsc/temp-data/mpsf_reset_%j.out
 #SBATCH --error=/h/pizarrob/safe-control-gym/experiments/mpsc/temp-data/mpsf_reset_%j.err
-#SBATCH --partition=t4v2,rtx6000,a40
-#SBATCH -t 0-12:00
+#SBATCH --partition=cpu
+#SBATCH -t 12:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=16G
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:0
 #SBATCH --qos=normal
 
 SYS='cartpole'
