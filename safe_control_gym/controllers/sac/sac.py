@@ -234,7 +234,7 @@ class SAC(BaseController):
                 env.add_tracker('constraint_values', 0, mode='queue')
                 env.add_tracker('mse', 0, mode='queue')
 
-        obs, info = self.env_reset(env)
+        obs, info = env.reset()
         true_obs = obs
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
@@ -254,11 +254,6 @@ class SAC(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     applied_action = env.normalize_action(certified_action)
-                elif not success:
-                    self.safety_filter.setup_optimizer()
-                    certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                    if success and self.filter_train_actions is True:
-                        applied_action = env.normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([applied_action]))
             obs, rew, done, info = env.step(action)
@@ -278,7 +273,7 @@ class SAC(BaseController):
                 assert 'episode' in info
                 ep_returns.append(total_return)
                 ep_lengths.append(info['episode']['l'])
-                obs, info = self.env_reset(env)
+                obs, info = env.reset()
                 total_return = 0
             true_obs = obs
             obs = self.obs_normalizer(obs)
@@ -321,11 +316,6 @@ class SAC(BaseController):
             certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
             if success and self.filter_train_actions is True:
                 applied_action = self.env.envs[0].normalize_action(certified_action)
-            elif not success:
-                self.safety_filter.setup_optimizer()
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success and self.filter_train_actions is True:
-                    applied_action = self.env.envs[0].normalize_action(certified_action)
 
         action = np.atleast_2d(np.squeeze([applied_action]))
         next_obs, rew, done, info = self.env.step(action)
@@ -486,16 +476,12 @@ class SAC(BaseController):
             self.safety_filter.reset_before_run()
 
         if self.use_safe_reset is True and self.safety_filter is not None:
-
-            while success is not True or np.any(self.safety_filter.slack_prev > 10e-6):
+            while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
                 obs, info = env.reset()
                 info['current_step'] = 1
                 physical_action = self.env.envs[0].denormalize_action(act)
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
                 _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if not success:
-                    self.safety_filter.setup_optimizer()
-                    _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
 
         return obs, info

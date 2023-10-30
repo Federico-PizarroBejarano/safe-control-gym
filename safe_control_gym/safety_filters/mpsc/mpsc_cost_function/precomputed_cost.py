@@ -110,10 +110,8 @@ class PRECOMPUTED_COST(MPSC_COST):
                 'current_step': next_step,
                 'constraint_values': np.concatenate([self.get_constraint_value(con, obs) for con in self.env.constraints.state_constraints])
             }
-            if self.uncertified_controller.training:
-                action = self.uncertified_controller.select_action(obs=extended_obs, info=info, training=self.uncertified_controller.training)
-            else:
-                action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
+
+            action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
 
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 if self.env.NAME == Environment.CARTPOLE:

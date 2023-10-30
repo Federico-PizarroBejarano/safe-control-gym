@@ -259,10 +259,11 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             action = ocp_solver.solve_for_x0(x0_bar=obs)
             self.cost_prev = ocp_solver.get_cost()
-            self.slack_prev = ocp_solver.get(0, 'su')
+            self.slack_prev = np.zeros((self.horizon, self.p))
             x_val = np.zeros((self.horizon + 1, self.model.nx))
             u_val = np.zeros((self.horizon, self.model.nu))
             for i in range(self.horizon):
+                self.slack_prev[i, :] = ocp_solver.get(i, 'su')
                 x_val[i, :] = ocp_solver.get(i, 'x')
                 u_val[i, :] = ocp_solver.get(i, 'u')
             x_val[self.horizon, :] = ocp_solver.get(self.horizon, 'x')
