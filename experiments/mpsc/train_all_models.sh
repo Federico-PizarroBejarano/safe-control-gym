@@ -2,7 +2,7 @@
 for SYS in quadrotor_3D; do
     for ALGO in ppo; do
         for TASK in track; do
-            for SF in mpsf; do
+            for SF in none mpsf; do
                 for SAFE_RESET in True False; do
                     for EARLY_STOP in True False; do
                         for PENALIZE_SF in True False; do

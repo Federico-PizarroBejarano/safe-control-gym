@@ -17,6 +17,7 @@ algo_config:
   max_env_steps: 1000000
   rollout_batch_size: 1
   rollout_steps: 1000
+  eval_batch_size: 25
 
   # misc
   log_interval: 10000

@@ -243,6 +243,8 @@ class PPO(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     action = env.normalize_action(certified_action)
+                else:
+                    self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
             obs, rew, done, info = env.step(action)
@@ -299,6 +301,8 @@ class PPO(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
+                else:
+                    self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
             next_obs, rew, done, info = self.env.step(action)

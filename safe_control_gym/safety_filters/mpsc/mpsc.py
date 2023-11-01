@@ -273,8 +273,8 @@ class MPSC(BaseSafetyFilter, ABC):
             self.prev_action = action
             feasible = True
         except Exception as e:
-            print('Error Return Status:', ocp_solver.status)
-            print(e)
+            # print('Error Return Status:', ocp_solver.status)
+            # print(e)
             feasible = False
             action = None
         return action, feasible
