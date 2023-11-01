@@ -72,7 +72,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/model_best.pt')
+        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/model_latest.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
