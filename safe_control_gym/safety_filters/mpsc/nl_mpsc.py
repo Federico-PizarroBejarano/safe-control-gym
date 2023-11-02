@@ -1038,7 +1038,7 @@ class NL_MPSC(MPSC):
         ocp.solver_options.tf = self.dt * self.horizon
 
         solver_json = 'acados_ocp_mpsf.json'
-        ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=False, build=False)
+        ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
 
         for stage in range(self.mpsc_cost_horizon):
             ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)

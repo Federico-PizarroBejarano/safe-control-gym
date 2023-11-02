@@ -192,7 +192,7 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
-        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_best.pt')
+        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_latest.pt')
 
         # Remove temporary files and directories
         shutil.rmtree('./temp', ignore_errors=True)
@@ -334,7 +334,7 @@ def run_uncertified_trajectory(n_episodes=10):
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
         # Load state_dict from trained.
-        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_best.pt')
+        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_latest.pt')
 
         # Remove temporary files and directories
         shutil.rmtree('./temp', ignore_errors=True)
