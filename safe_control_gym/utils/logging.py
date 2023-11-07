@@ -3,6 +3,7 @@
 import logging
 import os
 from collections import defaultdict
+import time
 
 import imageio
 import numpy as np
@@ -16,7 +17,7 @@ class StdoutLogger:
         logger = logging.getLogger(logger_name)
         formatter = logging.Formatter('%(asctime)s : %(message)s')
         # Log to file ('w' to overwrite, 'a' to keep appending).
-        log_file = os.path.join(log_dir, 'std_out.txt')
+        log_file = os.path.join(log_dir, f'std_out_{time.time()}.txt')
         file_handler = logging.FileHandler(log_file, mode='a')
         file_handler.setFormatter(formatter)
         # Log to std out.
@@ -113,7 +114,7 @@ class ExperimentLogger:
 
     def __init__(self,
                  log_dir,
-                 log_std_out=True,
+                 log_std_out=False,
                  log_file_out=False,
                  use_tensorboard=False
                  ):
@@ -126,21 +127,22 @@ class ExperimentLogger:
             use_tensorboard (bool): if to use tensorboard.
         '''
         self.log_dir = log_dir
-        os.makedirs(log_dir, exist_ok=True)
+        if log_std_out or log_file_out or use_tensorboard:
+            os.makedirs(self.log_dir, exist_ok=True)
         # Container for a log period.
         self.stats_buffer = defaultdict(list)
         # Terminal logging.
         self.log_std_out = log_std_out
-        if log_std_out:
-            self.std_out_logger = StdoutLogger('Benchmark', log_dir)
+        if self.log_std_out:
+            self.std_out_logger = StdoutLogger('Benchmark', self.log_dir)
         # Text file logging.
         self.log_file_out = log_file_out
-        if log_file_out:
-            self.file_logger = FileLogger(log_dir)
+        if self.log_file_out:
+            self.file_logger = FileLogger(self.log_dir)
         # Tensorboard logging.
         self.use_tensorboard = use_tensorboard
-        if use_tensorboard:
-            self.tb_logger = SummaryWriter(log_dir=log_dir)
+        if self.use_tensorboard:
+            self.tb_logger = SummaryWriter(log_dir=self.log_dir)
 
     def load(self, step):
         '''Resume from experiment, but ignores any logs after `step`.'''
