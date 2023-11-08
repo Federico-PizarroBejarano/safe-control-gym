@@ -778,6 +778,8 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     else:
         labels = labels + ['safe_ppo'] + ['safe_ppo_cert']
 
+    labels = [label for label in labels if '_es' not in label]
+
     data = []
 
     for model in labels:
@@ -872,6 +874,7 @@ def plot_log(system, task, algo, key, all_results):
     ax = fig.add_subplot(111)
 
     labels = sorted(all_results.keys())
+    labels = [label for label in labels if '_es' not in label]
 
     colors = plt.colormaps['tab20'].colors
 
