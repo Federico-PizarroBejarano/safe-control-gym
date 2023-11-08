@@ -30,5 +30,5 @@ algo_config:
   # safety filter
   filter_train_actions: True
   penalize_sf_diff: True
-  sf_penalty: 300
+  sf_penalty: 150
   use_safe_reset: True
