@@ -153,24 +153,17 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     return env.X_GOAL, uncert_results, uncert_metrics, cert_results, cert_metrics
 
 
-def determine_feasible_starting_points(num_points=100, num_steps=25):
+def determine_feasible_starting_points(num_points=100):
     '''Calculates feasible starting points for a system and task.
 
     Args:
         num_points (int): The number of points to generate.
-        num_steps (int): The number of certified steps to check.
     '''
 
     # Define arguments.
     fac = ConfigFactory()
     config = fac.merge()
-    config.algo_config['training'] = False
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
-        config.task_config['cost'] = Cost.RL_REWARD
-        config.task_config['normalized_rl_action_space'] = True
-    else:
-        config.task_config['cost'] = Cost.QUADRATIC
-        config.task_config['normalized_rl_action_space'] = False
+    config.sf_config.cost_function='one_step_cost'
 
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:
@@ -184,19 +177,6 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
 
     generator_env = env_func(init_state=None, randomized_init=True)
 
-    # Setup controller.
-    ctrl = make(config.algo,
-                env_func,
-                **config.algo_config,
-                output_dir='./temp')
-
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
-        # Load state_dict from trained.
-        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_latest.pt')
-
-        # Remove temporary files and directories
-        shutil.rmtree('./temp', ignore_errors=True)
-
     # Setup MPSC.
     safety_filter = make(config.safety_filter,
                          env_func,
@@ -205,43 +185,27 @@ def determine_feasible_starting_points(num_points=100, num_steps=25):
 
     safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
 
-    if config.sf_config.cost_function != Cost_Function.ONE_STEP_COST:
-        raise ValueError('Currently starting point generation should only be done with one_step_cost.')
-
     starting_points = []
+    nx = generator_env.symbolic.nx
+    physical_action = generator_env.symbolic.U_EQ
 
     while len(starting_points) < num_points:
-        generator_env.reset()
-        init_state = generator_env.state
-        test_env = env_func(init_state=init_state, randomized_init=False)
+        init_state, info = generator_env.reset()
+        unextended_obs = np.squeeze(init_state)[:nx]
+        safety_filter.reset_before_run()
+        _, success = safety_filter.certify_action(unextended_obs, physical_action, info)
+        if not success:
+            safety_filter.ocp_solver.reset()
+            _, success = safety_filter.certify_action(unextended_obs, physical_action, info)
 
-        uncert_experiment = BaseExperiment(test_env, ctrl)
+        if success and np.all(safety_filter.slack_prev < 1e-4):
+            starting_points += [init_state]
 
-        _, uncert_metrics = uncert_experiment.run_evaluation(n_episodes=1)
-        uncert_experiment.reset()
-
-        if uncert_metrics['average_constraint_violation'] <= 5 \
-                or uncert_metrics['average_length'] != config.task_config.ctrl_freq * config.task_config.episode_len_sec:
-            test_env.close()
-            continue
-
-        cert_experiment = BaseExperiment(test_env, ctrl, safety_filter=safety_filter)
-        cert_results, cert_metrics = cert_experiment.run_evaluation(n_steps=num_steps)
-        cert_experiment.reset()
-        test_env.close()
-
-        mpsc_results = cert_results['safety_filter_data'][0]
-
-        if cert_metrics['average_length'] == num_steps \
-                and np.all(mpsc_results['feasible']) \
-                and cert_metrics['average_constraint_violation'] == 0:
-            starting_points.append(cert_results['state'][0][0])
-
-    uncert_experiment.close()
-    cert_experiment.close()
+    generator_env.close()
+    safety_filter.close()
 
     print(starting_points)
-    np.save(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy', starting_points)
+    np.save(f'./models/starting_points/{system}/starting_points_{system}_{task}.npy', starting_points)
 
 
 def run_multiple(plot=True):
@@ -370,7 +334,7 @@ def run_multiple_models(plot=True, model=None):
     else:
         system = config.task
 
-    starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy')
+    starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}.npy')
 
     if model is None:
         all_models = os.listdir(f'./models/rl_models/{system}/{task}/{config.algo}/')
@@ -407,7 +371,7 @@ def run_multiple_models(plot=True, model=None):
 if __name__ == '__main__':
     # run()
     # run_uncertified_trajectory()
-    # determine_feasible_starting_points(num_points=25, num_steps=25)
+    # determine_feasible_starting_points(num_points=100)
     # run_multiple(plot=False)
     if '--model=' in sys.argv:
         run_multiple_models(plot=False, model='none')

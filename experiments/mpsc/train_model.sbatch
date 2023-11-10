@@ -9,25 +9,25 @@
 #SBATCH --gres=gpu:0
 #SBATCH --qos=normal
 
-SYS='cartpole'
+# SYS='cartpole'
 # SYS='quadrotor_2D'
-# SYS='quadrotor_3D'
+SYS='quadrotor_3D'
 
-TASK='stab'
-# TASK='track'
+# TASK='stab'
+TASK='track'
 
 ALGO='ppo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 
+if [ "$4" ]; then
+  SYS=$4
+fi
 if [ "$5" ]; then
-  SYS=$5
+  TASK=$5
 fi
 if [ "$6" ]; then
-  TASK=$6
-fi
-if [ "$7" ]; then
-  ALGO=$7
+  ALGO=$6
 fi
 
 # SAFETY_FILTER='linear_mpsc'
@@ -54,18 +54,12 @@ else
 fi
 
 if [ "$3" = 'True' ]; then
-    EARLY_STOP_TAG='_es'
-else
-    EARLY_STOP_TAG=''
-fi
-
-if [ "$4" = 'True' ]; then
     PENALIZE_SF_TAG='_pen'
 else
     PENALIZE_SF_TAG=''
 fi
 
-if [ "$8" = True ]; then
+if [ "$7" = True ]; then
     CONSTR_PEN='True'
     CONSTR_PEN_TAG='_cpen'
 else
@@ -73,7 +67,7 @@ else
     CONSTR_PEN_TAG=''
 fi
 
-TAG="$1${SAFE_RESET_TAG}${EARLY_STOP_TAG}${PENALIZE_SF_TAG}${CONSTR_PEN_TAG}"
+TAG="$1${SAFE_RESET_TAG}${PENALIZE_SF_TAG}${CONSTR_PEN_TAG}"
 echo $TAG $SYS $ALGO $TASK
 
 if [ "$SYS" = 'cartpole' ]; then
@@ -116,8 +110,7 @@ python3 train_rl.py \
         sf_config.soften_constraints=True \
         algo_config.filter_train_actions=${FILTER} \
         algo_config.use_safe_reset=$2 \
-        task_config.done_on_violation=$3 \
-        algo_config.penalize_sf_diff=$4 \
+        algo_config.penalize_sf_diff=$3 \
         algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
 
 ./mpsc_experiment.sh $TAG $SYS $TASK $ALGO

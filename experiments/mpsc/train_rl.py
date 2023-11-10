@@ -52,7 +52,7 @@ def train():
     ctrl.reset()
 
     # Setup MPSC.
-    if config.algo_config.filter_train_actions or config.algo_config.penalize_sf_diff or config.algo_config.use_safe_reset:
+    if config.algo in ['ppo', 'sac']:
         safety_filter = make(config.safety_filter,
                              env_func,
                              **config.sf_config)

@@ -226,7 +226,7 @@ class PPO(BaseController):
                 env.add_tracker('constraint_values', 0, mode='queue')
                 env.add_tracker('mse', 0, mode='queue')
 
-        obs, info = env.reset()
+        obs, info = self.env_reset(env)
         true_obs = obs
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
@@ -237,21 +237,19 @@ class PPO(BaseController):
 
             # Adding safety filter
             success = False
-            if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
-                physical_action = env.denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
+            physical_action = env.denormalize_action(action)
+            unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
+            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+            if success and self.filter_train_actions is True:
+                action = env.normalize_action(certified_action)
+            else:
+                self.safety_filter.ocp_solver.reset()
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
-                    action = env.normalize_action(certified_action)
-                else:
-                    self.safety_filter.ocp_solver.reset()
+                    action = self.env.envs[0].normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))
             obs, rew, done, info = env.step(action)
-            if self.penalize_sf_diff and success:
-                rew = np.log(rew)
-                rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
-                rew = np.exp(rew)
             total_return += rew
 
             if render:
@@ -263,7 +261,7 @@ class PPO(BaseController):
                 assert 'episode' in info
                 ep_returns.append(total_return)
                 ep_lengths.append(info['episode']['l'])
-                obs, info = env.reset()
+                obs, info = self.env_reset(env)
                 total_return = 0
             true_obs = obs
             obs = self.obs_normalizer(obs)
@@ -303,6 +301,9 @@ class PPO(BaseController):
                     action = self.env.envs[0].normalize_action(certified_action)
                 else:
                     self.safety_filter.ocp_solver.reset()
+                    certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                    if success and self.filter_train_actions is True:
+                        action = self.env.envs[0].normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))
             next_obs, rew, done, info = self.env.step(action)
@@ -435,5 +436,8 @@ class PPO(BaseController):
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
                 _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                if not success:
+                    self.safety_filter.ocp_solver.reset()
+                    _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
 
         return obs, info
