@@ -144,4 +144,4 @@ class PRECOMPUTED_COST(MPSC_COST):
         Returns:
             value (float): The value of the constraint at the given state.
         '''
-        return np.round_(np.atleast_1d(np.squeeze(con.sym_func(np.array(state, ndmin=1)))), decimals=con.decimals)
+        return np.round(np.atleast_1d(np.squeeze(con.sym_func(np.array(state, ndmin=1)))), decimals=con.decimals)

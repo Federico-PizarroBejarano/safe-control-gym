@@ -102,6 +102,10 @@ def load_all_models(system, task, algo):
         all_results['safe_ppo'] = pickle.load(f)
         all_results['safe_ppo_cert'] = all_results['safe_ppo']
 
+    with open(f'./results_mpsc/{system}/{task}/cpo/results_{system}_{task}_cpo_none.pkl', 'rb') as f:
+        all_results['cpo'] = pickle.load(f)
+        all_results['cpo_cert'] = all_results['cpo']
+
     return all_results
 
 
@@ -773,10 +777,13 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'))
     if 'cert' not in data_extractor.__name__:
         labels = labels + ['safe_ppo_cert']
+        labels = labels + ['cpo_cert']
     elif 'uncert' in data_extractor.__name__:
         labels = labels + ['safe_ppo']
+        labels = labels + ['cpo']
     else:
         labels = labels + ['safe_ppo'] + ['safe_ppo_cert']
+        labels = labels + ['cpo'] + ['cpo_cert']
 
     labels = [label for label in labels if '_es' not in label]
 
@@ -784,7 +791,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
 
     for model in labels:
         exp_data = all_results[model]
-        if model == 'safe_ppo':
+        if model == 'safe_ppo' or model == 'cpo':
             data.append(data_extractor(exp_data, certified=False))
         else:
             data.append(data_extractor(exp_data))
@@ -855,6 +862,7 @@ def plot_all_logs(system, task, algo):
         all_results[model] = load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/logs/')
 
     all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/{system}/{task}/safe_explorer_ppo/none/logs/')
+    all_results['cpo'] = load_from_logs(f'./models/rl_models/{system}/{task}/cpo/none/logs/')
 
     for key in all_results['none'].keys():
         plot_log(system, task, algo, key, all_results)
@@ -880,6 +888,8 @@ def plot_log(system, task, algo, key, all_results):
 
     for i, model in enumerate(labels):
         if key == 'loss/critic_loss' and model == 'safe_ppo':
+            continue
+        if key in ['loss/policy_loss', 'loss/critic_loss'] and model == 'cpo':
             continue
         y = all_results[model][key][3]  # savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
         ax.plot(all_results[model][key][1], y, label=model, color=colors[i])

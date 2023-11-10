@@ -45,7 +45,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     if init_state is not None:
         config.task_config['init_state'] = init_state
     config.task_config['randomized_init'] = False
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
         config.task_config['cost'] = Cost.RL_REWARD
         config.task_config['normalized_rl_action_space'] = True
     else:
@@ -70,7 +70,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                 **config.algo_config,
                 output_dir=curr_path + '/temp')
 
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
         # Load state_dict from trained.
         ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/model_latest.pt')
 
@@ -272,7 +272,7 @@ def run_uncertified_trajectory(n_episodes=10):
     config = fac.merge()
     config.algo_config['training'] = False
     config.task_config['randomized_init'] = False
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
         config.task_config['cost'] = Cost.RL_REWARD
         config.task_config['normalized_rl_action_space'] = True
     else:
@@ -296,7 +296,7 @@ def run_uncertified_trajectory(n_episodes=10):
                 **config.algo_config,
                 output_dir='./temp')
 
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo']:
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
         # Load state_dict from trained.
         ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_latest.pt')
 
