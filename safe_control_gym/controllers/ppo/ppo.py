@@ -240,12 +240,12 @@ class PPO(BaseController):
             physical_action = env.denormalize_action(action)
             unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
             certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-            if success and self.filter_train_actions is True:
+            if success:
                 action = env.normalize_action(certified_action)
             else:
                 self.safety_filter.ocp_solver.reset()
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success and self.filter_train_actions is True:
+                if success:
                     action = self.env.envs[0].normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))

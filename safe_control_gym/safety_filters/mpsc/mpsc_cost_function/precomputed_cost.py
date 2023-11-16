@@ -30,7 +30,6 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         self.output_dir = output_dir
         self.uncertified_controller = None
-        self.skip_checks = False
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
@@ -106,10 +105,7 @@ class PRECOMPUTED_COST(MPSC_COST):
             # Concatenate goal info (goal state(s)) for RL
             extended_obs = self.env.extend_obs(obs, next_step + 1)
 
-            info = {
-                'current_step': next_step,
-                'constraint_values': np.concatenate([self.get_constraint_value(con, obs) for con in self.env.constraints.state_constraints])
-            }
+            info = {'current_step': next_step}
 
             action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
 
@@ -121,7 +117,7 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
 
-            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001 and not self.skip_checks:
+            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
                 raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
             v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
@@ -133,15 +129,3 @@ class PRECOMPUTED_COST(MPSC_COST):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
         return v_L
-
-    def get_constraint_value(self, con, state):
-        '''Gets the value of a constraint given the state.
-
-        Args:
-            con (Constraint): The constraint.
-            state (ndarray): The state to be tested.
-
-        Returns:
-            value (float): The value of the constraint at the given state.
-        '''
-        return np.round(np.atleast_1d(np.squeeze(con.sym_func(np.array(state, ndmin=1)))), decimals=con.decimals)
