@@ -94,7 +94,7 @@ task_config:
   obs_goal_horizon: 1
 
   # RL Reward
-  rew_state_weight: [1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+  rew_state_weight: [2, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0]
   rew_act_weight: 0
   rew_exponential: True
   info_mse_metric_state_weight: [1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0]

@@ -68,7 +68,13 @@ else
     CONSTR_PEN_TAG=''
 fi
 
-TAG="$1${SAFE_RESET_TAG}${PENALIZE_SF_TAG}${CONSTR_PEN_TAG}"
+if [ "$8" = False ]; then
+    SF_PEN_TAG=''
+else
+    SF_PEN_TAG="_$8"
+fi
+
+TAG="$1${SAFE_RESET_TAG}${PENALIZE_SF_TAG}${CONSTR_PEN_TAG}${SF_PEN_TAG}"
 echo $TAG $SYS $ALGO $TASK
 
 if [ "$SYS" = 'cartpole' ]; then
@@ -112,6 +118,7 @@ python3 train_rl.py \
         algo_config.filter_train_actions=${FILTER} \
         algo_config.use_safe_reset=$2 \
         algo_config.penalize_sf_diff=$3 \
+        algo_config.sf_penalty=$8 \
         algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
 
 ./mpsc_experiment.sh $TAG $SYS $TASK $ALGO
