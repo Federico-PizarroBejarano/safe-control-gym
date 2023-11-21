@@ -72,7 +72,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
         # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/model_latest.pt')
+        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/seed_{config.task_config.seed}/model_latest.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -364,7 +364,8 @@ def run_multiple_models(plot=True, model=None):
                        'config': config,
                        'X_GOAL': X_GOAL}
 
-        with open(f'./results_mpsc/{system}/{task}/{config.algo}/results_{system}_{task}_{config.algo}_{model}.pkl', 'wb') as f:
+        os.makedirs(f'./results_mpsc/{system}/{task}/{config.algo}/results_{system}_{task}_{config.algo}_{model}/', exist_ok=True)
+        with open(f'./results_mpsc/{system}/{task}/{config.algo}/results_{system}_{task}_{config.algo}_{model}/seed_{config.task_config.seed}.pkl', 'wb') as f:
             pickle.dump(all_results, f)
 
 

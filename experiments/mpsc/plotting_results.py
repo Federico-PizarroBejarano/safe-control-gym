@@ -95,8 +95,11 @@ def load_all_models(system, task, algo):
     all_results = {}
 
     for model in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'):
-        with open(f'./results_mpsc/{system}/{task}/{algo}/results_{system}_{task}_{algo}_{model}.pkl', 'rb') as f:
-            all_results[model] = pickle.load(f)
+        all_results[model] = []
+        for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
+            with open(f'./results_mpsc/{system}/{task}/{algo}/results_{system}_{task}_{algo}_{model}/{seed}.pkl', 'rb') as f:
+                all_results[model].append(pickle.load(f))
+        consolidate_multiple_seeds(all_results, model)
 
     with open(f'./results_mpsc/{system}/{task}/safe_explorer_ppo/results_{system}_{task}_safe_explorer_ppo_none.pkl', 'rb') as f:
         all_results['safe_ppo'] = pickle.load(f)
@@ -107,6 +110,27 @@ def load_all_models(system, task, algo):
         all_results['cpo_cert'] = all_results['cpo']
 
     return all_results
+
+
+def consolidate_multiple_seeds(all_results, model):
+    all_data = all_results[model]
+    data = all_results[model][0]
+    all_results[model] = {}
+    all_results[model]['X_GOAL'] = data['X_GOAL']
+    all_results[model]['config'] = data['config']
+    all_results[model]['cert_metrics'] = data['cert_metrics']
+    all_results[model]['uncert_metrics'] = data['uncert_metrics']
+
+    for k in data['cert_results'].keys():
+        for i in range(1, len(all_data)):
+            data['cert_results'][k] += all_data[i]['cert_results'][k]
+
+    for k in data['uncert_results'].keys():
+        for i in range(1, len(all_data)):
+            data['uncert_results'][k] += all_data[i]['uncert_results'][k]
+
+    all_results[model]['cert_results'] = data['cert_results']
+    all_results[model]['uncert_results'] = data['uncert_results']
 
 
 def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
@@ -859,12 +883,14 @@ def plot_all_logs(system, task, algo):
     all_results = {}
 
     for model in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'):
-        all_results[model] = load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/logs/')
+        all_results[model] = []
+        for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
+            all_results[model].append(load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/{seed}/logs/'))
 
-    all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/{system}/{task}/safe_explorer_ppo/none/logs/')
-    all_results['cpo'] = load_from_logs(f'./models/rl_models/{system}/{task}/cpo/none/logs/')
+    # all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/{system}/{task}/safe_explorer_ppo/none/logs/')
+    # all_results['cpo'] = load_from_logs(f'./models/rl_models/{system}/{task}/cpo/none/logs/')
 
-    for key in all_results['none'].keys():
+    for key in all_results['none'][0].keys():
         plot_log(system, task, algo, key, all_results)
 
 
@@ -891,8 +917,10 @@ def plot_log(system, task, algo, key, all_results):
             continue
         if key in ['loss/policy_loss', 'loss/critic_loss'] and model == 'cpo':
             continue
-        y = all_results[model][key][3]  # savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
-        ax.plot(all_results[model][key][1], y, label=model, color=colors[i])
+        x = all_results[model][0][key][1]
+        all_data = np.array([values[key][3] for values in all_results[model]])
+        ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[i])
+        ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[i], facecolor=colors[i])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
     ax.legend()

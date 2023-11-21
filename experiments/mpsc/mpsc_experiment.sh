@@ -42,6 +42,12 @@ else
     SYS_NAME='quadrotor'
 fi
 
+if [ -z "$5" ]; then
+    SEED=1337
+else
+    SEED=$5
+fi
+
 # Model predictive safety certification of an unsafe controller.
 python3 ./mpsc_experiment.py \
     --task ${SYS_NAME} \
@@ -54,4 +60,7 @@ python3 ./mpsc_experiment.py \
     --kv_overrides \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
+        task_config.seed=${SEED} \
+        algo_config.seed=${SEED} \
+        sf_config.seed=${SEED} \
     --model=${1}

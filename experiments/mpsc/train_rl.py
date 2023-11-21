@@ -47,7 +47,6 @@ def train():
                 env_func,
                 checkpoint_path=os.path.join(config.output_dir, 'model_latest.pt'),
                 output_dir=config.output_dir,
-                seed=config.seed,
                 **config.algo_config)
     ctrl.reset()
 

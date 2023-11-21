@@ -74,6 +74,12 @@ else
     SF_PEN_TAG="_$8"
 fi
 
+if [ -z "$9" ]; then
+    SEED=1337
+else
+    SEED=$9
+fi
+
 TAG="$1${SAFE_RESET_TAG}${PENALIZE_SF_TAG}${CONSTR_PEN_TAG}${SF_PEN_TAG}"
 echo $TAG $SYS $ALGO $TASK
 
@@ -91,9 +97,11 @@ if [ "$ALGO" == 'safe_explorer_ppo' ]; then
         --overrides \
             ./config_overrides/${SYS}/${ALGO}_${SYS}_pretrain.yaml \
             ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
-        --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
+        --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/seed_${SEED}/ \
         --seed 2 \
         --kv_overrides \
+            task_config.seed=${SEED} \
+            algo_config.seed=${SEED} \
             task_config.init_state=None
 fi
 
@@ -106,7 +114,7 @@ python3 train_rl.py \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
-    --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}/${TAG}/ \
+    --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}/${TAG}/seed_${SEED}/ \
     --seed 2 \
     --kv_overrides \
         task_config.init_state=None \
@@ -119,7 +127,10 @@ python3 train_rl.py \
         algo_config.use_safe_reset=$2 \
         algo_config.penalize_sf_diff=$3 \
         algo_config.sf_penalty=$8 \
-        algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/ \
+        algo_config.pretrained=./models/rl_models/${SYS}/${TASK}/${ALGO}_pretrain/seed_${SEED}/ \
+        task_config.seed=${SEED} \
+        algo_config.seed=${SEED} \
+        sf_config.seed=${SEED} \
 
-./mpsc_experiment.sh $TAG $SYS $TASK $ALGO
+./mpsc_experiment.sh $TAG $SYS $TASK $ALGO $SEED
 # python plotting_results.py $SYS $TASK $ALGO
