@@ -61,6 +61,7 @@ class BaseAviary(BenchmarkEnv):
                  record=False,
                  gui=False,
                  verbose=False,
+                 camera_view=[5, -40, -55, 1.5, 2, 0.5],
                  **kwargs):
         '''Initialization of a generic aviary environment.
 
@@ -139,10 +140,10 @@ class BaseAviary(BenchmarkEnv):
         if gui:
             # With debug GUI.
             self.PYB_CLIENT = p.connect(p.GUI)  # p.connect(p.GUI, options='--opengl2')
-            p.resetDebugVisualizerCamera(cameraDistance=3,
-                                         cameraYaw=-30,
-                                         cameraPitch=-30,
-                                         cameraTargetPosition=[0, 0, 0],
+            p.resetDebugVisualizerCamera(cameraDistance=camera_view[0],
+                                         cameraYaw=camera_view[1],
+                                         cameraPitch=camera_view[2],
+                                         cameraTargetPosition=[camera_view[3], camera_view[4], camera_view[5]],
                                          physicsClientId=self.PYB_CLIENT)
             ret = p.getDebugVisualizerCamera(physicsClientId=self.PYB_CLIENT)
             if verbose:
@@ -391,7 +392,8 @@ class BaseAviary(BenchmarkEnv):
         '''
         forces = np.array(rpm**2) * self.KF
         torques = np.array(rpm**2) * self.KM
-        z_torque = (-torques[0] + torques[1] - torques[2] + torques[3])
+        # z_torque = (-torques[0] + torques[1] - torques[2] + torques[3])
+        z_torque = (torques[0] - torques[1] + torques[2] - torques[3])
         for i in range(4):
             p.applyExternalForce(self.DRONE_IDS[nth_drone],
                                  i,
@@ -509,7 +511,8 @@ class BaseAviary(BenchmarkEnv):
         thrust_world_frame = np.dot(rotation, thrust)
         force_world_frame = thrust_world_frame - np.array([0, 0, self.GRAVITY])
         z_torques = np.array(rpm**2) * self.KM
-        z_torque = (-z_torques[0] + z_torques[1] - z_torques[2] + z_torques[3])
+        # z_torque = (-z_torques[0] + z_torques[1] - z_torques[2] + z_torques[3])
+        z_torque = (z_torques[0] - z_torques[1] + z_torques[2] - z_torques[3])
         if self.DRONE_MODEL == DroneModel.CF2X:
             x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (self.L / np.sqrt(2))
             y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * (self.L / np.sqrt(2))

@@ -7,6 +7,7 @@ import os
 import random
 import subprocess
 import sys
+import time
 
 import gymnasium as gym
 import imageio
@@ -193,3 +194,19 @@ def unwrap_wrapper(env, wrapper_class):
 def is_wrapped(env, wrapper_class):
     '''Check if a given environment has been wrapped with a given wrapper.'''
     return unwrap_wrapper(env, wrapper_class) is not None
+
+
+def sync(i, start_time, timestep):
+    '''Syncs the stepped simulation with the wall-clock.
+    Function `sync` calls time.sleep() to pause a for-loop
+    running faster than the expected timestep.
+
+    Args:
+        i (int): Current simulation iteration.
+        start_time (timestamp): Timestamp of the simulation start.
+        timestep (float) Desired, wall-clock step of the simulation's rendering.
+    '''
+
+    elapsed = time.time() - start_time
+    if elapsed < (i * timestep):
+        time.sleep(timestep * i - elapsed)

@@ -862,6 +862,7 @@ class Quadrotor(BaseAviary):
             done (bool): Whether an episode is over.
         '''
         # Done if goal reached for stabilization task with quadratic cost.
+        self.goal_reached = False
         if self.TASK == Task.STABILIZATION:
             self.goal_reached = bool(np.linalg.norm(self.state - self.X_GOAL) < self.TASK_INFO['stabilization_goal_tolerance'])
             if self.goal_reached:
@@ -923,6 +924,12 @@ class Quadrotor(BaseAviary):
         '''
         info = {}
         info['symbolic_model'] = self.symbolic
+        info['nominal_physical_parameters'] = {
+            'quadrotor_mass': self.MASS,
+            'quadrotor_ixx_inertia': self.J[0, 0],
+            'quadrotor_iyy_inertia': self.J[1, 1],
+            'quadrotor_izz_inertia': self.J[2, 2]
+        }
         info['physical_parameters'] = {
             'quadrotor_mass': self.OVERRIDDEN_QUAD_MASS,
             'quadrotor_inertia': self.OVERRIDDEN_QUAD_INERTIA,
@@ -931,4 +938,28 @@ class Quadrotor(BaseAviary):
         info['u_reference'] = self.U_GOAL
         if self.constraints is not None:
             info['symbolic_constraints'] = self.constraints.get_all_symbolic_models()
+        else:
+            info['symbolic_constraints'] = {}
+
+        # Reset info.
+        info['ctrl_timestep'] = self.CTRL_TIMESTEP
+        info['ctrl_freq'] = self.CTRL_FREQ
+        info['episode_len_sec'] = self.EPISODE_LEN_SEC
+        info['quadrotor_kf'] = self.KF
+        info['quadrotor_km'] = self.KM
+
+        if self.RANDOMIZED_INIT:
+            info['initial_state_randomization'] = self.INIT_STATE_RAND_INFO
+        else:
+            info['initial_state_randomization'] = {}
+        if self.RANDOMIZED_INERTIAL_PROP:
+            info['inertial_prop_randomization'] = self.INERTIAL_PROP_RAND_INFO
+        else:
+            info['inertial_prop_randomization'] = {}
+        info['disturbances'] = self.DISTURBANCES
+
+        # INFO 2022 - Debugging.
+        info['urdf_dir'] = self.URDF_DIR
+        info['pyb_client'] = self.PYB_CLIENT
+
         return info

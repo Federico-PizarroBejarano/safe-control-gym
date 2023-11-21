@@ -1,0 +1,10 @@
+algo: lqr
+algo_config:
+  # Cost parameters
+  r_lqr:
+   - 0.1
+  q_lqr:
+   - 0.1
+
+  # Model arguments
+  discrete_dynamics: True

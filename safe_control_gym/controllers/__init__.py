@@ -53,3 +53,7 @@ register(idx='rap',
 register(idx='cpo',
          entry_point='safe_control_gym.controllers.cpo.cpo:CPO',
          config_entry_point='safe_control_gym.controllers.cpo:cpo.yaml')
+
+register(idx='firmware',
+         entry_point='safe_control_gym.controllers.firmware.firmware_wrapper:FirmwareWrapper',
+         config_entry_point='safe_control_gym.controllers.firmware:firmware.yaml')
