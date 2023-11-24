@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TASK='stab'
+TASK='track'
 
 MPSC='nl_mpsc'
 # MPSC='linear_mpsc'

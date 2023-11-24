@@ -1,7 +1,9 @@
 '''Precomputed Cost Function for Smooth MPSC.'''
 
+import casadi as cs
 import numpy as np
 
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.abstract_cost import MPSC_COST
 from safe_control_gym.controllers.pid.pid import PID
 from safe_control_gym.envs.benchmark_env import Environment
 from safe_control_gym.envs.env_wrappers.vectorized_env.vec_env import VecEnv
@@ -28,8 +30,39 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         super().__init__(env, mpsc_cost_horizon, decay_factor)
 
+        self.model.nx = 4
+        self.model.nu = 2
+
         self.output_dir = output_dir
         self.uncertified_controller = None
+
+        self.set_dynamics()
+        self.model.fd_func = self.dynamics_func
+
+    def set_dynamics(self):
+        '''Compute the linear dynamics. '''
+        self.Ad = np.array([[ 1,           0.03659,   7.598e-07, -0.006083],
+                    [-5.858e-06,   0.7886,    5.132e-06,  0.03174],
+                    [ 3.259e-06,   0.0009138, 1,          0.03899],
+                    [-1.735e-05,  -0.006111, -9.836e-06,  0.7786]])
+
+        self.Bd = np.array([[ 0.003886,  0.01169],
+                      [ 0.4229,   -0.06055],
+                      [-0.001915, -0.0006503],
+                      [ 0.01223,   0.4419]])
+
+        delta_x = cs.MX.sym('delta_x', self.model.nx, 1)
+        delta_u = cs.MX.sym('delta_u', self.model.nu, 1)
+
+        linear_sys = self.Ad @ delta_x + self.Bd @ delta_u
+        dynamics_func = cs.Function('fd',
+                                    [delta_x, delta_u],
+                                    [linear_sys],
+                                    ['x0', 'p'],
+                                    ['xf'])
+
+        self.dynamics_func = dynamics_func
+
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
@@ -95,6 +128,7 @@ class PRECOMPUTED_COST(MPSC_COST):
             uncert_env = self.uncertified_controller.env
 
         v_L = np.zeros((self.model.nu, self.mpsc_cost_horizon))
+        uncertified_action = uncertified_action.reshape((self.model.nu, 1))
 
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
@@ -104,6 +138,7 @@ class PRECOMPUTED_COST(MPSC_COST):
             next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
             # Concatenate goal info (goal state(s)) for RL
             extended_obs = self.env.extend_obs(obs, next_step + 1)
+            extended_obs = extended_obs.reshape((self.model.nx, 1))
 
             info = {'current_step': next_step}
 
@@ -115,7 +150,7 @@ class PRECOMPUTED_COST(MPSC_COST):
                 elif self.env.NAME == Environment.QUADROTOR:
                     action = (1 + uncert_env.norm_act_scale * action) * uncert_env.hover_thrust
 
-            action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
+            action = np.clip(action, np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
 
             if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
                 raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')

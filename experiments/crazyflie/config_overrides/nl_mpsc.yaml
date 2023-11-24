@@ -2,26 +2,18 @@ safety_filter: nl_mpsc
 sf_config:
   # LQR controller parameters
   r_lin:
-    - 90
+    - 2
   q_lin:
-    - 0.001
-    - 0.06
-    - 0.001
-    - 0.06
-    - 0.00025
-    - 80
-    - 0.00001
-    - 0.00001
-    - 0.75
-    - 1
-    - 1
-    - 1
+    - 0.008
+    - 1.85
+    - 0.008
+    - 1.85
 
   # MPC Parameters
   horizon: 10
   warmstart: True
   integration_algo: rk4
-  use_terminal_set: True
+  use_terminal_set: False
 
   # Prior info
   prior_info:

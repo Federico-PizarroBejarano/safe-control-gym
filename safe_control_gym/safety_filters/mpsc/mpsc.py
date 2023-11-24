@@ -79,14 +79,19 @@ class MPSC(BaseSafetyFilter, ABC):
         # Setup attributes.
         self.reset()
         self.dt = self.model.dt
+
+        self.model.nx = 4
+        self.model.nu = 2
+
         self.Q = get_cost_weight_matrix(q_lin, self.model.nx)
         self.R = get_cost_weight_matrix(r_lin, self.model.nu)
 
-        self.X_EQ = np.zeros(self.model.nx)
-        self.U_EQ = self.model.U_EQ
+        self.X_EQ = np.zeros((self.model.nx,1))
+        self.U_EQ = np.zeros((self.model.nu,1))
 
         self.set_dynamics()
-        self.lqr_gain = -compute_lqr_gain(self.model, self.X_EQ, self.U_EQ, self.Q, self.R, discrete_dynamics=True)
+        # self.lqr_gain = -compute_lqr_gain(self.model, self.X_EQ, self.U_EQ, self.Q, self.R, discrete_dynamics=True)
+        self.lqr_gain = np.zeros((4, 2)).T
 
         self.terminal_set = None
         self.prev_action = self.U_EQ
@@ -212,8 +217,9 @@ class MPSC(BaseSafetyFilter, ABC):
         # Solve the optimization problem.
         try:
             sol = opti.solve()
-            self.cost_prev = sol.value(opti_dict['cost'])
-            self.slack_prev = sol.value(opti_dict['slack'])
+            if self.use_acados:
+                self.cost_prev = sol.value(opti_dict['cost'])
+                self.slack_prev = sol.value(opti_dict['slack'])
             x_val, u_val, next_u_val = sol.value(z_var), sol.value(v_var), sol.value(next_u)
             self.z_prev = x_val
             self.v_prev = u_val.reshape((self.model.nu), self.horizon)
@@ -295,7 +301,7 @@ class MPSC(BaseSafetyFilter, ABC):
             certified_action (ndarray): The certified action
             success (bool): Whether the safety filtering was successful or not.
         '''
-        uncertified_action = np.clip(uncertified_action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
+        uncertified_action = np.clip(uncertified_action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
         self.results_dict['uncertified_action'].append(uncertified_action)
         success = True
 
@@ -315,7 +321,7 @@ class MPSC(BaseSafetyFilter, ABC):
                 if self.integration_algo == 'LTI':
                     action = np.squeeze(action) + np.squeeze(self.U_EQ)
                 action = np.squeeze(action)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
+                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
 
                 if np.linalg.norm(clipped_action - action) >= 0.01:
                     success = False
@@ -324,7 +330,7 @@ class MPSC(BaseSafetyFilter, ABC):
                 action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
                 if self.integration_algo == 'LTI':
                     action += np.squeeze(self.U_EQ)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
+                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
 
                 success = False
                 certified_action = clipped_action

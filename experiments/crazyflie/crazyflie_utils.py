@@ -80,6 +80,24 @@ def plot_traj(CTRL_FREQ, TEST=0, CERTIFIED=False, COST_FUNCTION='one_step', M=2)
     plt.show()
 
 
+def gen_input_traj(CTRL_FREQ, EPISODE_LEN_SEC, num_channels=1, plot=False):
+    num_freqs = 20
+
+    input_traj = []
+    for _ in range(num_channels):
+        freqs = np.power(np.random.rand(num_freqs+1)*2, 2)
+        freqs = np.linspace(freqs[:-1], freqs[1:], CTRL_FREQ * EPISODE_LEN_SEC, axis=1).flatten()
+        x = np.linspace(0, 12*np.pi, num_freqs * CTRL_FREQ * EPISODE_LEN_SEC)
+        traj = np.sin(np.multiply(x, freqs))
+        input_traj.append(traj*0.25)
+
+    if plot:
+        plt.plot(traj)
+        plt.show()
+
+    return np.array(input_traj)
+
+
 def gen_traj(CTRL_FREQ, EPISODE_LEN_SEC, plot=False):
     CTRL_DT = 1.0 / CTRL_FREQ
 
@@ -133,6 +151,7 @@ if __name__ == '__main__':
     M = 10
 
     # gen_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
-    plot_traj(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
+    gen_input_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
+    # plot_traj(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
     # get_max_chatter(CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
     # calc_error(CTRL_FREQ=25, EPISODE_LEN_SEC=20, TEST=TEST, CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
