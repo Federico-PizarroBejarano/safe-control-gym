@@ -816,44 +816,7 @@ class Quadrotor(BaseAviary):
         Returns:
             reward (float): The evaluated reward/cost.
         '''
-        # RL cost.
-        if self.COST == Cost.RL_REWARD:
-            state = self.state
-            act = np.asarray(self.current_noisy_physical_action)
-            act_error = act - self.U_GOAL
-            # Quadratic costs w.r.t state and action
-            # TODO: consider using multiple future goal states for cost in tracking
-            if self.TASK == Task.STABILIZATION:
-                state_error = state - self.X_GOAL
-                dist = np.sum(self.rew_state_weight * state_error * state_error)
-                dist += np.sum(self.rew_act_weight * act_error * act_error)
-            if self.TASK == Task.TRAJ_TRACKING:
-                wp_idx = min(self.ctrl_step_counter + 1, self.X_GOAL.shape[0] - 1)  # +1 because state has already advanced but counter not incremented.
-                state_error = state - self.X_GOAL[wp_idx]
-                dist = np.sum(self.rew_state_weight * state_error * state_error)
-                dist += np.sum(self.rew_act_weight * act_error * act_error)
-            rew = -dist
-            # Convert rew to be positive and bounded [0,1].
-            if self.rew_exponential:
-                rew = np.exp(rew)
-            return rew
-
-        # Control cost.
-        if self.COST == Cost.QUADRATIC:
-            if self.TASK == Task.STABILIZATION:
-                return float(-1 * self.symbolic.loss(x=self.state,
-                                                     Xr=self.X_GOAL,
-                                                     u=self.current_clipped_action,
-                                                     Ur=self.U_GOAL,
-                                                     Q=self.Q,
-                                                     R=self.R)['l'])
-            if self.TASK == Task.TRAJ_TRACKING:
-                return float(-1 * self.symbolic.loss(x=self.state,
-                                                     Xr=self.X_GOAL[self.ctrl_step_counter + 1, :],  # +1 because state has already advanced but counter not incremented.
-                                                     u=self.current_clipped_action,
-                                                     Ur=self.U_GOAL,
-                                                     Q=self.Q,
-                                                     R=self.R)['l'])
+        return 1
 
     def _get_done(self):
         '''Computes the conditions for termination of an episode.

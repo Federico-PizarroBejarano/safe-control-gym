@@ -187,6 +187,9 @@ class MPSC(BaseSafetyFilter, ABC):
             action (ndarray): The certified action.
             feasible (bool): Whether the safety filtering was feasible or not.
         '''
+        obs = obs.reshape((-1, 1))
+        uncertified_action = uncertified_action.reshape((-1, 1))
+
         opti_dict = self.opti_dict
         opti = opti_dict['opti']
         z_var = opti_dict['z_var']

@@ -26,6 +26,56 @@ task_config:
   randomized_init: False
   randomized_inertial_prop: False
 
+  init_state_randomization_info:
+    init_x:
+      distrib: 'uniform'
+      low: -0.75
+      high: 0.75
+    init_x_dot:
+      distrib: 'uniform'
+      low: -0.5
+      high: 0.5
+    init_y:
+      distrib: 'uniform'
+      low: -0.75
+      high: 0.75
+    init_y_dot:
+      distrib: 'uniform'
+      low: -0.5
+      high: 0.5
+    init_z:
+      distrib: 'uniform'
+      low: 0.5
+      high: 2
+    init_z_dot:
+      distrib: 'uniform'
+      low: -1
+      high: 1
+    init_phi:
+      distrib: 'uniform'
+      low: -0.2
+      high: 0.2
+    init_theta:
+      distrib: 'uniform'
+      low: -0.2
+      high: 0.2
+    init_psi:
+      distrib: 'uniform'
+      low: -0.2
+      high: 0.2
+    init_p:
+      distrib: 'uniform'
+      low: -1
+      high: 1
+    init_q:
+      distrib: 'uniform'
+      low: -1
+      high: 1
+    init_r:
+      distrib: 'uniform'
+      low: -1
+      high: 1
+
   task: traj_tracking
   task_info:
     trajectory_type: figure8

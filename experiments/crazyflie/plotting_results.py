@@ -12,8 +12,6 @@ Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
 Legend._ncol = property(lambda self: self._ncols)
 
 
-k
-
 plot = True
 save_figs = False
 

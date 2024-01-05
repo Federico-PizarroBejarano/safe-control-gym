@@ -1,6 +1,7 @@
 '''Running MPSC using the crazyflie firmware. '''
 
 import sys
+import shutil
 import time
 sys.path.insert(0, '/home/federico/GitHub/safe-control-gym')
 
@@ -54,8 +55,11 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
                        **config.task_config)
 
     FIRMWARE_FREQ = 500
+
     config.task_config.gui = gui
     config.task_config['ctrl_freq'] = FIRMWARE_FREQ
+    config.algo_config['training'] = False
+
     env_func_500 = partial(make,
                            config.task,
                            **config.task_config)
@@ -80,11 +84,20 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
     ctrl = make(config.algo,
                 env_func,
                 **config.algo_config)
-    ctrl.gain = lqr_gain
-    ctrl.model.U_EQ = np.array([[0, 0]]).T
 
-    ctrl.env.X_GOAL = full_trajectory
-    ctrl.env.TASK = Task.TRAJ_TRACKING
+    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
+        # Load state_dict from trained.
+        ctrl.load(f'{curr_path}/models/rl_models/{config.algo}/model_best.pt')
+
+        # Remove temporary files and directories
+        shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
+        ctrl.X_GOAL = full_trajectory
+    else:
+        ctrl.gain = lqr_gain
+        ctrl.model.U_EQ = np.array([[0, 0]]).T
+
+        ctrl.env.X_GOAL = full_trajectory
+        ctrl.env.TASK = Task.TRAJ_TRACKING
 
     if certify is True:
         # Setup MPSC.
@@ -114,8 +127,8 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
         curr_obs = np.atleast_2d(obs[0:4]).T
         curr_obs = curr_obs.reshape((4, 1))
         info['current_step'] = i
-        new_act = ctrl.select_action(curr_obs, info)
-        new_act = np.clip(new_act, np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
+        new_act = np.squeeze(ctrl.select_action(curr_obs, info))
+        new_act = np.clip(new_act, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
         actions_uncert.append(new_act)
         if certify is True:
             certified_action, success = safety_filter.certify_action(curr_obs, new_act, info)
@@ -147,15 +160,15 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
 
     states = np.array(states)
     actions_uncert = np.array(actions_uncert)
-    print('Number of Max Inputs: ', np.sum(np.abs(actions_uncert) == 0.25))
+    print(f'Number of Max Inputs: {np.sum(np.abs(actions_uncert) == 0.25)}/{2*len(actions_uncert)}')
     actions_cert = np.array(actions_cert)
     corrections = np.squeeze(actions_cert) - np.squeeze(actions_uncert)
 
     # Close the environment
     env.close()
     print('Elapsed Time: ', time.time() - ep_start)
-    print('NUM ERRORS POS: ', np.sum(np.abs(states[:, 0]) >= 0.75))
-    print('NUM ERRORS VEL: ', np.sum(np.abs(states[:, 1]) >= 0.5))
+    print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[:, 0]) >= 0.75))
+    print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[:, 1]) >= 0.5))
     print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(np.atleast_2d(actions_cert).T, CTRL_FREQ)))
     if certify:
         print(f'Feasible steps: {float(successes)}/{CTRL_FREQ*env.EPISODE_LEN_SEC}')
@@ -169,7 +182,14 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
         plt.legend()
         plt.show()
 
-        plt.plot(states[:, 0], label='traj')
+        plt.plot(states[:, 1], label='x vel')
+        plt.plot(states[:, 3], label='y vel')
+        plt.plot(states[:, 5], label='z vel')
+        plt.legend()
+        plt.show()
+
+        plt.plot(states[:, 0], label='x traj')
+        plt.plot(states[:, 2], label='y traj')
         plt.plot(full_trajectory[:, 0], label='ref')
         plt.legend()
         plt.show()

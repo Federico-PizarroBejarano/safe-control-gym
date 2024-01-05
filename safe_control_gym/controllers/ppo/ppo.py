@@ -15,6 +15,7 @@ Additional references:
 import os
 import time
 
+from gymnasium import spaces
 import numpy as np
 import torch
 
@@ -58,8 +59,10 @@ class PPO(BaseController):
             self.env = env_func()
             self.env = RecordEpisodeStatistics(self.env)
         # Agent.
-        self.agent = PPOAgent(self.env.observation_space,
-                              self.env.action_space,
+        self.obs_space = spaces.Box(low=np.array([-2,-2,-2,-2,-2,-2,-2,-2]), high=np.array([2,2,2,2,2,2,2,2]), shape=(8,))
+        self.act_space = spaces.Box(low=np.array([-0.25,-0.25]), high=np.array([0.25,0.25]), shape=(2,))
+        self.agent = PPOAgent(self.obs_space,
+                              self.act_space,
                               hidden_dim=self.hidden_dim,
                               use_clipped_value=self.use_clipped_value,
                               clip_param=self.clip_param,
@@ -113,6 +116,7 @@ class PPO(BaseController):
 
     def close(self):
         '''Shuts down and cleans up lingering resources.'''
+        self.firmware_wrapper.close()
         self.env.close()
         if self.training:
             self.eval_env.close()
@@ -162,33 +166,9 @@ class PPO(BaseController):
               ):
         '''Performs learning (pre-training, training, fine-tuning, etc).'''
         while self.total_steps < self.max_env_steps:
-            results = self.train_step()
-            # Checkpoint.
-            if self.total_steps >= self.max_env_steps or (self.save_interval and self.total_steps % self.save_interval == 0):
-                # Latest/final checkpoint.
-                self.save(self.checkpoint_path)
-                self.logger.info(f'Checkpoint | {self.checkpoint_path}')
-            if self.num_checkpoints and self.total_steps % (self.max_env_steps // self.num_checkpoints) == 0:
-                # Intermediate checkpoint.
-                path = os.path.join(self.output_dir, 'checkpoints', f'model_{self.total_steps}.pt')
-                self.save(path)
-            # Evaluation.
-            if self.eval_interval and self.total_steps % self.eval_interval == 0:
-                eval_results = self.run(env=self.eval_env, n_episodes=self.eval_batch_size)
-                results['eval'] = eval_results
-                self.logger.info('Eval | ep_lengths {:.2f} +/- {:.2f} | ep_return {:.3f} +/- {:.3f}'.format(eval_results['ep_lengths'].mean(),
-                                                                                                            eval_results['ep_lengths'].std(),
-                                                                                                            eval_results['ep_returns'].mean(),
-                                                                                                            eval_results['ep_returns'].std()))
-                # Save best model.
-                eval_score = eval_results['ep_returns'].mean()
-                eval_best_score = getattr(self, 'eval_best_score', -np.infty)
-                if self.eval_save_best and eval_best_score < eval_score:
-                    self.eval_best_score = eval_score
-                    self.save(os.path.join(self.output_dir, 'model_best.pt'))
-            # Logging.
-            if self.log_interval and self.total_steps % self.log_interval == 0:
-                self.log_step(results)
+            self.train_step()
+
+        self.save(os.path.join(self.output_dir, 'model_best.pt'))
 
     def select_action(self, obs, info=None):
         '''Determine the action to take at the current timestep.
@@ -202,8 +182,11 @@ class PPO(BaseController):
         '''
 
         with torch.no_grad():
-            obs = torch.FloatTensor(obs).to(self.device)
+            extended_obs = np.concatenate((np.squeeze(obs), self.X_GOAL[info['current_step'], :]))
+            obs = torch.FloatTensor(extended_obs).to(self.device)
             action = self.agent.ac.act(obs)
+
+        action = np.clip(np.squeeze([action]), [-1, -1], [1, 1])*0.25
 
         return action
 
@@ -280,65 +263,76 @@ class PPO(BaseController):
     def train_step(self):
         '''Performs a training/fine-tuning step.'''
         self.agent.train()
-        self.obs_normalizer.unset_read_only()
-        rollouts = PPOBuffer(self.env.observation_space, self.env.action_space, self.rollout_steps, self.rollout_batch_size)
-        obs = self.obs
-        true_obs = self.true_obs
-        info = self.info
+        rollouts = PPOBuffer(self.obs_space, self.act_space, self.rollout_steps, self.rollout_batch_size)
+        obs, info = self.firmware_wrapper.reset()
+        obs = np.squeeze(obs.reshape((12, 1))[:4, :])
+        firmware_action = np.zeros((4,1))
         start = time.time()
         for _ in range(self.rollout_steps):
+            extended_obs = np.concatenate((obs, self.X_GOAL[info['current_step']//20, :]))
             with torch.no_grad():
-                action, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
-                unsafe_action = action
+                unsafe_action, v, logp = self.agent.ac.step(torch.FloatTensor(extended_obs).to(self.device))
+
+            action = np.clip(np.squeeze([unsafe_action]), [-1, -1], [1, 1])*0.25
+            scaled_unsafe_action = action
 
             # Adding safety filter
             success = False
             if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
-                physical_action = self.env.envs[0].denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                certified_action, success = self.safety_filter.certify_action(obs, action, info)
                 if success and self.filter_train_actions is True:
-                    action = self.env.envs[0].normalize_action(certified_action)
+                    action = certified_action
                 else:
                     self.safety_filter.ocp_solver.reset()
-                    certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                    certified_action, success = self.safety_filter.certify_action(obs, action, info)
                     if success and self.filter_train_actions is True:
-                        action = self.env.envs[0].normalize_action(certified_action)
+                        action = certified_action
 
-            action = np.atleast_2d(np.squeeze([action]))
-            next_obs, rew, done, info = self.env.step(action)
-            if done[0] and self.use_safe_reset:
-                next_obs, info = self.env_reset(self.env)
+
+            pos = [(action[0] + obs[0]), (action[1] + obs[2]), 1]
+            vel = [0, 0, 0]
+            acc = [0, 0, 0]
+            yaw = 0
+            rpy_rate = [0, 0, 0]
+            args = [pos, vel, acc, yaw, rpy_rate]
+            curr_time = info['current_step']//20 * self.CTRL_DT
+            self.firmware_wrapper.sendFullStateCmd(*args, curr_time)
+
+            # Step the environment.
+            next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
+            next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
+            rew = self.get_reward(next_obs, info)
+            if done or info['current_step']//20-1 >= self.X_GOAL.shape[0] - 1 or self.firmware_wrapper._error == True:
+                next_obs, info = self.env_reset(self.firmware_wrapper)
+                next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
+                firmware_action = np.zeros((4,1))
+                mask = 0
+            else:
+                mask = 1
+
             if self.penalize_sf_diff and success:
                 rew = np.log(rew)
-                rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
+                rew -= self.sf_penalty * np.linalg.norm(scaled_unsafe_action - certified_action)
                 rew = np.exp(rew)
-            next_true_obs = next_obs
-            next_obs = self.obs_normalizer(next_obs)
-            rew = self.reward_normalizer(rew, done)
-            mask = 1 - done.astype(float)
+
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
-            for idx, inf in enumerate(info['n']):
-                if 'terminal_info' not in inf:
-                    continue
-                inff = inf['terminal_info']
+            if 'terminal_info' in info:
+                inff = info['terminal_info']
                 if 'TimeLimit.truncated' in inff and inff['TimeLimit.truncated']:
-                    terminal_obs = inf['terminal_observation']
+                    terminal_obs = info['terminal_observation']
                     terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
                     terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
-                    terminal_v[idx] = terminal_val
+                    terminal_v = terminal_val
 
-            rollouts.push({'obs': obs, 'act': unsafe_action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
+            rollouts.push({'obs': extended_obs, 'act': unsafe_action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
             obs = next_obs
-            true_obs = next_true_obs
-            info = info['n'][0]
-        self.obs = obs
-        self.true_obs = true_obs
-        self.info = info
+
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
-        last_val = self.agent.ac.critic(torch.FloatTensor(obs).to(self.device)).detach().cpu().numpy()
+        extended_obs = np.concatenate((obs, self.X_GOAL[info['current_step']//20, :]))
+        last_val = self.agent.ac.critic(torch.FloatTensor(extended_obs).to(self.device)).detach().cpu().numpy()
+        last_val = last_val.reshape((1,1))
         ret, adv = compute_returns_and_advantages(rollouts.rew,
                                                   rollouts.v,
                                                   rollouts.mask,
@@ -351,8 +345,17 @@ class PPO(BaseController):
         # Prevent divide-by-0 for repetitive tasks.
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         results = self.agent.update(rollouts, self.device)
-        results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
+        print(f'Steps: {self.total_steps}, Reward: {np.sum(rollouts.rew)}, Time: {time.time() - start}')
         return results
+
+    def get_reward(self, obs, info):
+        wp_idx = min(info['current_step']//20, self.X_GOAL.shape[0] - 1)  # +1 because state has already advanced but counter not incremented.
+        state_error = obs - self.X_GOAL[wp_idx]
+        dist = np.sum(np.array([2, 0, 2, 0]) * state_error * state_error)
+        rew = -dist
+        rew = np.exp(rew)
+
+        return rew
 
     def log_step(self,
                  results
@@ -423,7 +426,7 @@ class PPO(BaseController):
             info (dict): The initial info.
         '''
         success = False
-        act = self.model.U_EQ
+        act = np.array([0,0])
         obs, info = env.reset()
         if self.safety_filter is not None:
             self.safety_filter.reset_before_run()
@@ -432,12 +435,10 @@ class PPO(BaseController):
             while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
                 obs, info = env.reset()
                 info['current_step'] = 1
-                physical_action = self.env.envs[0].denormalize_action(act)
-                unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
-                _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                _, success = self.safety_filter.certify_action(np.squeeze(obs.reshape((12, 1))[:4, :]), act, info)
                 if not success:
                     self.safety_filter.ocp_solver.reset()
-                    _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                    _, success = self.safety_filter.certify_action(np.squeeze(obs.reshape((12, 1))[:4, :]), act, info)
 
         return obs, info

@@ -164,7 +164,7 @@ class FirmwareWrapper(BaseController):
         # Initialize controller
         if self.CONTROLLER == 'pid':
             firm.controllerPidInit()
-            print('PID controller init test:', firm.controllerPidTest())
+            # print('PID controller init test:', firm.controllerPidTest())
         elif self.CONTROLLER == 'mellinger':
             firm.controllerMellingerInit()
             assert (self.firmware_freq == 500), 'Mellinger controller requires a firmware frequency of 500Hz.'
