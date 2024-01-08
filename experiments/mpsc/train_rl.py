@@ -63,7 +63,7 @@ def train():
             if config.algo == 'pid':
                 ctrl.save('./temp-data/saved_controller_prev.npy')
 
-        safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}_linear.pkl')
+        safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
 
         ctrl.safety_filter = safety_filter
 

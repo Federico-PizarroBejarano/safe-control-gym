@@ -475,7 +475,7 @@ class SAC(BaseController):
             info (dict): The initial info.
         '''
         success = False
-        act = self.model.U_EQ
+        action = self.model.U_EQ
         obs, info = env.reset()
         if self.safety_filter is not None:
             self.safety_filter.reset_before_run()
@@ -484,12 +484,11 @@ class SAC(BaseController):
             while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
                 obs, info = env.reset()
                 info['current_step'] = 1
-                physical_action = self.env.envs[0].denormalize_action(act)
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
-                _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                _, success = self.safety_filter.certify_action(unextended_obs, action, info)
                 if not success:
                     self.safety_filter.ocp_solver.reset()
-                    _, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                    _, success = self.safety_filter.certify_action(unextended_obs, action, info)
 
         return obs, info
