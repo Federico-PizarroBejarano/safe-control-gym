@@ -16,8 +16,8 @@ import pickle
 import casadi as cs
 import cvxpy as cp
 import numpy as np
-# from acados_template import AcadosOcp, AcadosOcpSolver
-# from acados_template.acados_model import AcadosModel
+from acados_template import AcadosOcp, AcadosOcpSolver
+from acados_template.acados_model import AcadosModel
 from pytope import Polytope
 from scipy.linalg import block_diag, solve_discrete_are, sqrtm
 
@@ -92,6 +92,9 @@ class NL_MPSC(MPSC):
         self.L_x = np.vstack((L_x, np.zeros((p_u, self.n))))
         self.L_u = np.vstack((np.zeros((p_x, self.m)), L_u))
         self.l_xu = np.concatenate([l_x, l_u])
+
+        self.model.X_EQ = np.zeros((4,))
+        self.model.U_EQ = np.zeros((2,))
 
     def set_dynamics(self):
         '''Compute the discrete dynamics.'''
@@ -801,45 +804,32 @@ class NL_MPSC(MPSC):
 
         # Setup model
         model = AcadosModel()
-        model.x = self.model.x_sym
-        model.u = self.model.u_sym
-        model.f_expl_expr = self.model.x_dot
+        x = cs.MX.sym('x')
+        y = cs.MX.sym('y')
+        x_dot = cs.MX.sym('x_dot')
+        y_dot = cs.MX.sym('y_dot')
+        x_sym = cs.vertcat(x, x_dot, y, y_dot)
 
-        if self.env.NAME == Environment.CARTPOLE:
-            x1_dot = cs.MX.sym('x1_dot')
-            v_dot = cs.MX.sym('v_dot')
-            theta1_dot = cs.MX.sym('theta1_dot')
-            dtheta_dot = cs.MX.sym('dtheta_dot')
-            xdot = cs.vertcat(x1_dot, v_dot, theta1_dot, dtheta_dot)
-        elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
-            x1_dot = cs.MX.sym('x1_dot')
-            vx_dot = cs.MX.sym('vx_dot')
-            z1_dot = cs.MX.sym('z1_dot')
-            vz_dot = cs.MX.sym('vz_dot')
-            theta1_dot = cs.MX.sym('theta1_dot')
-            dtheta_dot = cs.MX.sym('dtheta_dot')
-            xdot = cs.vertcat(x1_dot, vx_dot, z1_dot, vz_dot, theta1_dot, dtheta_dot)
-        else:
-            x1_dot = cs.MX.sym('x1_dot')
-            vx_dot = cs.MX.sym('vx_dot')
-            y1_dot = cs.MX.sym('y1_dot')
-            vy_dot = cs.MX.sym('vy_dot')
-            z1_dot = cs.MX.sym('z1_dot')
-            vz_dot = cs.MX.sym('vz_dot')
-            phi1_dot = cs.MX.sym('phi1_dot')  # Roll
-            theta1_dot = cs.MX.sym('theta1_dot')  # Pitch
-            psi1_dot = cs.MX.sym('psi1_dot')  # Yaw
-            p1_body_dot = cs.MX.sym('p1_body_dot')  # Body frame roll rate
-            q1_body_dot = cs.MX.sym('q1_body_dot')  # body frame pith rate
-            r1_body_dot = cs.MX.sym('r1_body_dot')  # body frame yaw rate
-            xdot = cs.vertcat(x1_dot, vx_dot, y1_dot, vy_dot, z1_dot, vz_dot, phi1_dot, theta1_dot, psi1_dot, p1_body_dot, q1_body_dot, r1_body_dot)
+        f1 = cs.MX.sym('f1')
+        f2 = cs.MX.sym('f2')
+        u_sym = cs.vertcat(f1, f2)
+
+        model.x = x_sym
+        model.u = u_sym
+        model.f_expl_expr = self.Ac @ x_sym + self.Bc @ u_sym
+
+        x1_dot = cs.MX.sym('x1_dot')
+        vx_dot = cs.MX.sym('vx_dot')
+        y1_dot = cs.MX.sym('y1_dot')
+        vy_dot = cs.MX.sym('vy_dot')
+        xdot = cs.vertcat(x1_dot, vx_dot, y1_dot, vy_dot)
 
         model.xdot = xdot
         model.f_impl_expr = model.xdot - model.f_expl_expr
         model.name = 'mpsf'
         ocp.model = model
 
-        nx, nu = self.model.nx, self.model.nu
+        nx, nu = self.n, self.m
         ny = nx + nu
 
         ocp.dims.N = self.horizon
@@ -878,10 +868,10 @@ class NL_MPSC(MPSC):
 
         # Slack
         ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = np.array([0.5] * self.p)
-        ocp.cost.Zl = np.array([0.5] * self.p)
-        ocp.cost.zu = np.array([0.5] * self.p)
-        ocp.cost.zl = np.array([0.5] * self.p)
+        ocp.cost.Zu = np.array([1] * self.p)
+        ocp.cost.Zl = np.array([1] * self.p)
+        ocp.cost.zu = np.array([1] * self.p)
+        ocp.cost.zl = np.array([1] * self.p)
 
         # Options
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'

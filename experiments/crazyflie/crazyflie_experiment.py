@@ -87,7 +87,7 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
         # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{config.algo}/model_best.pt')
+        ctrl.load(f'{curr_path}/{config.output_dir}/model_latest.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -126,7 +126,6 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
     for i in range(CTRL_FREQ * env.EPISODE_LEN_SEC):
         curr_obs = np.atleast_2d(obs[0:4]).T
         curr_obs = curr_obs.reshape((4, 1))
-        info['current_step'] = i
         new_act = np.squeeze(ctrl.select_action(curr_obs, info))
         new_act = np.clip(new_act, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
         actions_uncert.append(new_act)

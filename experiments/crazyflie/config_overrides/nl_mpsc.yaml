@@ -10,6 +10,7 @@ sf_config:
     - 1.85
 
   # MPC Parameters
+  use_acados: True
   horizon: 10
   warmstart: True
   integration_algo: rk4

@@ -166,9 +166,33 @@ class PPO(BaseController):
               ):
         '''Performs learning (pre-training, training, fine-tuning, etc).'''
         while self.total_steps < self.max_env_steps:
-            self.train_step()
-
-        self.save(os.path.join(self.output_dir, 'model_best.pt'))
+            results = self.train_step()
+            # Checkpoint.
+            if self.total_steps >= self.max_env_steps or (self.save_interval and self.total_steps % self.save_interval == 0):
+                # Latest/final checkpoint.
+                self.save(self.checkpoint_path)
+                self.logger.info(f'Checkpoint | {self.checkpoint_path}')
+            if self.num_checkpoints and self.total_steps % (self.max_env_steps // self.num_checkpoints) == 0:
+                # Intermediate checkpoint.
+                path = os.path.join(self.output_dir, 'checkpoints', f'model_{self.total_steps}.pt')
+                self.save(path)
+            # Evaluation.
+            if self.eval_interval and self.total_steps % self.eval_interval == 0:
+                eval_results = self.run(n_episodes=self.eval_batch_size)
+                results['eval'] = eval_results
+                self.logger.info('Eval | ep_lengths {:.2f} +/- {:.2f} | ep_return {:.3f} +/- {:.3f}'.format(eval_results['ep_lengths'].mean(),
+                                                                                                            eval_results['ep_lengths'].std(),
+                                                                                                            eval_results['ep_returns'].mean(),
+                                                                                                            eval_results['ep_returns'].std()))
+                # Save best model.
+                eval_score = eval_results['ep_returns'].mean()
+                eval_best_score = getattr(self, 'eval_best_score', -np.infty)
+                if self.eval_save_best and eval_best_score < eval_score:
+                    self.eval_best_score = eval_score
+                    self.save(os.path.join(self.output_dir, 'model_best.pt'))
+            # Logging.
+            if self.log_interval and self.total_steps % self.log_interval == 0:
+                self.log_step(results)
 
     def select_action(self, obs, info=None):
         '''Determine the action to take at the current timestep.
@@ -182,7 +206,7 @@ class PPO(BaseController):
         '''
 
         with torch.no_grad():
-            extended_obs = np.concatenate((np.squeeze(obs), self.X_GOAL[info['current_step'], :]))
+            extended_obs = np.concatenate((np.squeeze(obs), self.X_GOAL[info['current_step']//20, :]))
             obs = torch.FloatTensor(extended_obs).to(self.device)
             action = self.agent.ac.act(obs)
 
@@ -191,73 +215,66 @@ class PPO(BaseController):
         return action
 
     def run(self,
-            env=None,
-            render=False,
             n_episodes=10,
-            verbose=False,
             ):
         '''Runs evaluation with current policy.'''
         self.agent.eval()
-        self.obs_normalizer.set_read_only()
-        if env is None:
-            env = self.env
-        else:
-            if not is_wrapped(env, RecordEpisodeStatistics):
-                env = RecordEpisodeStatistics(env, n_episodes)
-                # Add episodic stats to be tracked.
-                env.add_tracker('constraint_violation', 0, mode='queue')
-                env.add_tracker('constraint_values', 0, mode='queue')
-                env.add_tracker('mse', 0, mode='queue')
-
-        obs, info = self.env_reset(env)
-        true_obs = obs
-        obs = self.obs_normalizer(obs)
-        ep_returns, ep_lengths = [], []
-        frames = []
-        total_return = 0
+        obs, info = self.firmware_wrapper.reset()
+        obs = np.squeeze(obs.reshape((12, 1))[:4, :])
+        firmware_action = np.zeros((4,1))
+        total_rew, total_violations, total_mse = 0, 0, 0
+        ep_lengths, ep_returns, ep_violations, ep_mse = [], [], [], []
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=info)
 
             # Adding safety filter
             success = False
-            physical_action = env.denormalize_action(action)
-            unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
-            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-            if success:
-                action = env.normalize_action(certified_action)
-            else:
-                self.safety_filter.ocp_solver.reset()
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
-                    action = self.env.envs[0].normalize_action(certified_action)
+            if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
+                certified_action, success = self.safety_filter.certify_action(obs, action, info)
+                if success and self.filter_train_actions is True:
+                    action = certified_action
+                else:
+                    self.safety_filter.ocp_solver.reset()
+                    certified_action, success = self.safety_filter.certify_action(obs, action, info)
+                    if success and self.filter_train_actions is True:
+                        action = certified_action
 
-            action = np.atleast_2d(np.squeeze([action]))
-            obs, rew, done, info = env.step(action)
-            total_return += rew
+            pos = [(action[0] + obs[0]), (action[1] + obs[2]), 1]
+            vel = [0, 0, 0]
+            acc = [0, 0, 0]
+            yaw = 0
+            rpy_rate = [0, 0, 0]
+            args = [pos, vel, acc, yaw, rpy_rate]
+            curr_time = info['current_step']//20 * self.CTRL_DT
+            self.firmware_wrapper.sendFullStateCmd(*args, curr_time)
 
-            if render:
-                env.render()
-                frames.append(env.render('rgb_array'))
-            if verbose:
-                print(f'obs {obs} | act {action}')
-            if done:
-                assert 'episode' in info
-                ep_returns.append(total_return)
-                ep_lengths.append(info['episode']['l'])
-                obs, info = self.env_reset(env)
-                total_return = 0
-            true_obs = obs
-            obs = self.obs_normalizer(obs)
-        # Collect evaluation results.
+            # Step the environment.
+            next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
+            next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
+            total_violations += np.sum(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5])
+            rew, mse = self.get_reward(next_obs, info)
+
+            total_rew += rew
+            total_mse += mse
+
+            if done or info['current_step']//20-1 >= self.X_GOAL.shape[0] - 1 or self.firmware_wrapper._error == True:
+                ep_lengths.append(info["current_step"]//20)
+                ep_returns.append(total_rew)
+                ep_violations.append(total_violations)
+                ep_mse.append(total_mse/ep_lengths[-1])
+                obs, info = self.env_reset(self.firmware_wrapper)
+                obs = np.squeeze(obs.reshape((12, 1))[:4, :])
+                firmware_action = np.zeros((4,1))
+                total_rew, total_violations, total_mse = 0, 0, 0
+                continue
+
+            obs = next_obs
+
         ep_lengths = np.asarray(ep_lengths)
         ep_returns = np.asarray(ep_returns)
-        eval_results = {'ep_returns': ep_returns, 'ep_lengths': ep_lengths}
-        if len(frames) > 0:
-            eval_results['frames'] = frames
-        # Other episodic stats from evaluation env.
-        if len(env.queued_stats) > 0:
-            queued_stats = {k: np.asarray(v) for k, v in env.queued_stats.items()}
-            eval_results.update(queued_stats)
+        ep_violations = np.asarray(ep_violations)
+        ep_mse = np.asarray(ep_mse)
+        eval_results = {'ep_returns': ep_returns, 'ep_lengths': ep_lengths, 'ep_violations': ep_violations, 'ep_mse': ep_mse}
         return eval_results
 
     def train_step(self):
@@ -268,6 +285,8 @@ class PPO(BaseController):
         obs = np.squeeze(obs.reshape((12, 1))[:4, :])
         firmware_action = np.zeros((4,1))
         start = time.time()
+        total_rew, total_violations, total_mse = 0, 0, 0
+        ep_lengths, ep_returns, ep_violations, ep_mse = [], [], [], []
         for _ in range(self.rollout_steps):
             extended_obs = np.concatenate((obs, self.X_GOAL[info['current_step']//20, :]))
             with torch.no_grad():
@@ -288,7 +307,6 @@ class PPO(BaseController):
                     if success and self.filter_train_actions is True:
                         action = certified_action
 
-
             pos = [(action[0] + obs[0]), (action[1] + obs[2]), 1]
             vel = [0, 0, 0]
             acc = [0, 0, 0]
@@ -301,19 +319,30 @@ class PPO(BaseController):
             # Step the environment.
             next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
             next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
-            rew = self.get_reward(next_obs, info)
+            total_violations += np.sum(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5])
+            rew, mse = self.get_reward(next_obs, info)
+
+            if self.penalize_sf_diff and success:
+                rew = np.log(rew)
+                rew -= self.sf_penalty * np.linalg.norm(scaled_unsafe_action - certified_action)
+                rew = np.exp(rew)
+
+            total_rew += rew
+            total_mse += mse
+
             if done or info['current_step']//20-1 >= self.X_GOAL.shape[0] - 1 or self.firmware_wrapper._error == True:
+                ep_lengths.append(info["current_step"]//20)
+                ep_returns.append(total_rew)
+                ep_violations.append(total_violations)
+                ep_mse.append(total_mse/ep_lengths[-1])
+                total_rew, total_violations, total_mse = 0, 0, 0
+
                 next_obs, info = self.env_reset(self.firmware_wrapper)
                 next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
                 firmware_action = np.zeros((4,1))
                 mask = 0
             else:
                 mask = 1
-
-            if self.penalize_sf_diff and success:
-                rew = np.log(rew)
-                rew -= self.sf_penalty * np.linalg.norm(scaled_unsafe_action - certified_action)
-                rew = np.exp(rew)
 
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
@@ -345,7 +374,13 @@ class PPO(BaseController):
         # Prevent divide-by-0 for repetitive tasks.
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         results = self.agent.update(rollouts, self.device)
-        print(f'Steps: {self.total_steps}, Reward: {np.sum(rollouts.rew)}, Time: {time.time() - start}')
+        results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
+
+        ep_lengths = np.asarray(ep_lengths)
+        ep_returns = np.asarray(ep_returns)
+        ep_violations = np.asarray(ep_violations)
+        ep_mse = np.asarray(ep_mse)
+        results.update({'ep_returns': ep_returns, 'ep_lengths': ep_lengths, 'ep_violations': ep_violations, 'ep_mse': ep_mse})
         return results
 
     def get_reward(self, obs, info):
@@ -355,7 +390,9 @@ class PPO(BaseController):
         rew = -dist
         rew = np.exp(rew)
 
-        return rew
+        mse = np.sum(np.array([1, 1, 1, 1]) * state_error * state_error)
+
+        return rew, mse
 
     def log_step(self,
                  results
@@ -382,9 +419,9 @@ class PPO(BaseController):
             step,
             prefix='loss')
         # Performance stats.
-        ep_lengths = np.asarray(self.env.length_queue)
-        ep_returns = np.asarray(self.env.return_queue)
-        ep_constraint_violation = np.asarray(self.env.queued_stats['constraint_violation'])
+        ep_lengths = results['ep_lengths']
+        ep_returns = results['ep_returns']
+        ep_constraint_violation = results['ep_violations']
         self.logger.add_scalars(
             {
                 'ep_length': ep_lengths.mean(),
@@ -395,13 +432,11 @@ class PPO(BaseController):
             step,
             prefix='stat')
         # Total constraint violation during learning.
-        total_violations = self.env.accumulated_stats['constraint_violation']
-        self.logger.add_scalars({'constraint_violation': total_violations}, step, prefix='stat')
         if 'eval' in results:
             eval_ep_lengths = results['eval']['ep_lengths']
             eval_ep_returns = results['eval']['ep_returns']
-            eval_constraint_violation = results['eval']['constraint_violation']
-            eval_mse = results['eval']['mse']
+            eval_constraint_violation = results['eval']['ep_violations']
+            eval_mse = results['eval']['ep_mse']
             self.logger.add_scalars(
                 {
                     'ep_length': eval_ep_lengths.mean(),

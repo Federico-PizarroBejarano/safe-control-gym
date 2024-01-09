@@ -2,12 +2,14 @@
 
 import os
 import shutil
+import yaml
 import sys
 sys.path.insert(0, '/home/federico/GitHub/safe-control-gym')
 
 from functools import partial
 
 import numpy as np
+import munch
 
 from experiments.crazyflie.crazyflie_utils import gen_traj
 from safe_control_gym.utils.configuration import ConfigFactory
@@ -32,6 +34,8 @@ def train():
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = True
+    config.task_config['init_state'] = None
+    config.task_config['randomized_init'] = True
 
     shutil.rmtree(config.output_dir, ignore_errors=True)
 
@@ -88,10 +92,10 @@ def train():
     ctrl.close()
     print('Training done.')
 
-    # with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:
-    #     yaml.dump(munch.unmunchify(config), file, default_flow_style=False)
+    with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:
+        yaml.dump(munch.unmunchify(config), file, default_flow_style=False)
 
-    # make_plots(config)
+    make_plots(config)
 
 
 def make_plots(config):

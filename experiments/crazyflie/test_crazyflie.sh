@@ -14,8 +14,12 @@ MPSC_COST='one_step_cost'
 
 MPSC_COST_HORIZON=10
 
-# python3 ./train_rl.py \
-python3 ./crazyflie_experiment.py \
+TAG='mpsf_sr_pen'
+
+# FILE='crazyflie_experiment.py'
+FILE='train_rl.py'
+
+python3 ./${FILE} \
     --task quadrotor \
     --algo ppo \
     --safety_filter ${MPSC} \
@@ -23,8 +27,7 @@ python3 ./crazyflie_experiment.py \
         ./config_overrides/crazyflie_${TASK}.yaml \
         ./config_overrides/ppo_crazyflie.yaml \
         ./config_overrides/nl_mpsc.yaml \
-    --output_dir ./models/rl_models/ppo/ \
+    --output_dir ./models/rl_models/ppo/${TAG} \
     --kv_overrides \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
-        # task_config.init_state=None
