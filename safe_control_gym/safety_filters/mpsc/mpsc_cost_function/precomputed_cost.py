@@ -128,14 +128,14 @@ class PRECOMPUTED_COST(MPSC_COST):
             uncert_env = self.uncertified_controller.env
 
         v_L = np.zeros((self.model.nu, self.mpsc_cost_horizon))
-        uncertified_action = uncertified_action.reshape((self.model.nu, 1))
+        uncertified_action = np.squeeze(uncertified_action) #.reshape((self.model.nu, 1))
 
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
         for h in range(self.mpsc_cost_horizon):
-            next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
+            next_step = min(iteration + h, self.env.X_GOAL.shape[0]*20 - 1)
             # Concatenate goal info (goal state(s)) for RL
             extended_obs = self.env.extend_obs(obs, next_step + 1)
             extended_obs = extended_obs.reshape((self.model.nx, 1))
@@ -143,6 +143,7 @@ class PRECOMPUTED_COST(MPSC_COST):
             info = {'current_step': next_step}
 
             action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
+            action = np.squeeze(action)
 
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 if self.env.NAME == Environment.CARTPOLE:
@@ -150,7 +151,7 @@ class PRECOMPUTED_COST(MPSC_COST):
                 elif self.env.NAME == Environment.QUADROTOR:
                     action = (1 + uncert_env.norm_act_scale * action) * uncert_env.hover_thrust
 
-            action = np.clip(action, np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
+            action = np.clip(action, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
 
             if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
                 raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')

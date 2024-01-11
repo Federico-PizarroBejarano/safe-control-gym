@@ -70,7 +70,7 @@ python3 ./crazyflie_experiment.py \
         ./config_overrides/nl_mpsc.yaml \
     --output_dir ./models/rl_models/${ALGO}/${TAG} \
     --kv_overrides \
-        sf_config.cost_function=one_step_cost \
+        sf_config.cost_function=precomputed_cost \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         algo_config.filter_train_actions=$FILTER \
         algo_config.penalize_sf_diff=$FILTER \
