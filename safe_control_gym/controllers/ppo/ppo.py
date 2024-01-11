@@ -327,6 +327,12 @@ class PPO(BaseController):
                 rew -= self.sf_penalty * np.linalg.norm(scaled_unsafe_action - certified_action)
                 rew = np.exp(rew)
 
+            # Constraint Penalty
+            if self.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5]):
+                rew = np.log(rew)
+                rew -= 1.0
+                rew = np.exp(rew)
+
             total_rew += rew
             total_mse += mse
 
