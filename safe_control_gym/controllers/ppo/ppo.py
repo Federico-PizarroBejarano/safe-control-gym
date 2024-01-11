@@ -227,17 +227,15 @@ class PPO(BaseController):
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=info)
 
-            # Adding safety filter
-            success = False
-            if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
+            # Safety filter
+            certified_action, success = self.safety_filter.certify_action(obs, action, info)
+            if success and self.filter_train_actions is True:
+                action = certified_action
+            else:
+                self.safety_filter.ocp_solver.reset()
                 certified_action, success = self.safety_filter.certify_action(obs, action, info)
                 if success and self.filter_train_actions is True:
                     action = certified_action
-                else:
-                    self.safety_filter.ocp_solver.reset()
-                    certified_action, success = self.safety_filter.certify_action(obs, action, info)
-                    if success and self.filter_train_actions is True:
-                        action = certified_action
 
             pos = [(action[0] + obs[0]), (action[1] + obs[2]), 1]
             vel = [0, 0, 0]
@@ -328,7 +326,7 @@ class PPO(BaseController):
                 rew = np.exp(rew)
 
             # Constraint Penalty
-            if self.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5]):
+            if self.firmware_wrapper.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5]):
                 rew = np.log(rew)
                 rew -= 1.0
                 rew = np.exp(rew)

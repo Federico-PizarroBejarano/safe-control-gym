@@ -1,5 +1,6 @@
 '''Running MPSC using the crazyflie firmware. '''
 
+import pickle
 import sys
 import shutil
 import time
@@ -39,13 +40,17 @@ B = np.array([[ 0.003886,  0.01169],
               [ 0.01223,   0.4419]])
 
 
-def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
+def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_episodes=10):
     '''The main function creating, running, and closing an environment over N episodes. '''
 
     # Define arguments.
     fac = ConfigFactory()
     config = fac.merge()
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
+
+    config.algo_config['training'] = False
+    config.task_config['init_state'] = None
+    config.task_config['randomized_init'] = True
 
     CTRL_FREQ = config.task_config['ctrl_freq']
     CTRL_DT = 1 / CTRL_FREQ
@@ -58,7 +63,6 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
 
     config.task_config.gui = gui
     config.task_config['ctrl_freq'] = FIRMWARE_FREQ
-    config.algo_config['training'] = False
 
     env_func_500 = partial(make,
                            config.task,
@@ -67,10 +71,14 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
     states = []
     actions_uncert = []
     actions_cert = []
+    corrections = []
+    rewards = [0]*num_episodes
+    rmse = [0]*num_episodes
+    feasible = [0]*num_episodes
+    constraint_violations = [0]*num_episodes
 
     # Create environment.
     firmware_wrapper = make('firmware', env_func_500, FIRMWARE_FREQ, CTRL_FREQ)
-    obs, info = firmware_wrapper.reset()
     env = firmware_wrapper.env
 
     # Create trajectory.
@@ -118,61 +126,86 @@ def run(gui=False, plot=True, training=False, certify=True, curr_path='.'):
             safety_filter.cost_function.output_dir = curr_path
             safety_filter.env.X_GOAL = full_trajectory
 
-    ep_start = time.time()
-    states.append(env.state)
     action = env.U_GOAL
-    successes = 0
 
-    for i in range(CTRL_FREQ * env.EPISODE_LEN_SEC):
-        curr_obs = np.atleast_2d(obs[0:4]).T
-        curr_obs = curr_obs.reshape((4, 1))
-        new_act = np.squeeze(ctrl.select_action(curr_obs, info))
-        new_act = np.clip(new_act, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
-        actions_uncert.append(new_act)
-        if certify is True:
-            certified_action, success = safety_filter.certify_action(curr_obs, new_act, info)
-            if success:
-                successes += 1
-                new_act = certified_action
-        actions_cert.append(new_act)
-        pos = [(new_act[0] + curr_obs[0])[0], (new_act[1] + curr_obs[2])[0], 1]
-        vel = [0, 0, 0]
-        acc = [0, 0, 0]
-        yaw = 0
-        rpy_rate = [0, 0, 0]
-        args = [pos, vel, acc, yaw, rpy_rate]
+    for episode in range(num_episodes):
+        ep_start = time.time()
+        states.append([])
+        actions_uncert.append([])
+        actions_cert.append([])
+        obs, info = firmware_wrapper.reset()
+        states[-1].append(obs)
+        for i in range(CTRL_FREQ * env.EPISODE_LEN_SEC):
+            curr_obs = np.atleast_2d(obs[0:4]).T
+            curr_obs = curr_obs.reshape((4, 1))
+            new_act = np.squeeze(ctrl.select_action(curr_obs, info))
+            new_act = np.clip(new_act, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
+            actions_uncert[episode].append(new_act)
+            if certify is True:
+                certified_action, success = safety_filter.certify_action(curr_obs, new_act, info)
+                if success:
+                    feasible[episode] += 1
+                    new_act = certified_action
+            actions_cert[episode].append(new_act)
+            pos = [(new_act[0] + curr_obs[0])[0], (new_act[1] + curr_obs[2])[0], 1]
+            vel = [0, 0, 0]
+            acc = [0, 0, 0]
+            yaw = 0
+            rpy_rate = [0, 0, 0]
+            args = [pos, vel, acc, yaw, rpy_rate]
 
-        curr_time = i * CTRL_DT
-        firmware_wrapper.sendFullStateCmd(*args, curr_time)
+            curr_time = i * CTRL_DT
+            firmware_wrapper.sendFullStateCmd(*args, curr_time)
 
-        # Step the environment.
-        obs, _, _, info, action = firmware_wrapper.step(curr_time, action)
+            # Step the environment.
+            obs, _, _, info, action = firmware_wrapper.step(curr_time, action)
+            reward, mse = get_reward(np.squeeze(obs.reshape((12, 1))[:4, :]), info, full_trajectory)
+            rewards[episode] += reward
+            rmse[episode] += mse
+            constraint_violations[episode] += int(np.any(info['constraint_values'] >= 0))
 
-        states.append(obs)
-        if obs[4] < 0.05:
-            print('CRASHED!!!')
-            break
+            states[episode].append(obs)
+            if obs[4] < 0.05:
+                print('CRASHED!!!')
+                break
 
-        # Synchronize the GUI.
-        if config.task_config.gui:
-            sync(i, ep_start, CTRL_DT)
+            # Synchronize the GUI.
+            if config.task_config.gui:
+                sync(i, ep_start, CTRL_DT)
 
-    states = np.array(states)
-    actions_uncert = np.array(actions_uncert)
-    print(f'Number of Max Inputs: {np.sum(np.abs(actions_uncert) == 0.25)}/{2*len(actions_uncert)}')
-    actions_cert = np.array(actions_cert)
-    corrections = np.squeeze(actions_cert) - np.squeeze(actions_uncert)
+        states[-1] = np.array(states[-1])
+        actions_uncert[-1] = np.array(actions_uncert[-1])
+        actions_cert[-1] = np.array(actions_cert[-1])
+        corrections.append(np.squeeze(actions_cert[-1]) - np.squeeze(actions_uncert[-1]))
+
+        print(f'Number of Max Inputs: {np.sum(np.abs(actions_uncert[-1]) == 0.25)}/{2*len(actions_uncert[-1])}')
+        print('Elapsed Time: ', time.time() - ep_start)
+        print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[-1][:, 0]) >= 0.75))
+        print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[-1][:, 1]) >= 0.5))
+        print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(np.atleast_2d(actions_cert[-1]).T, CTRL_FREQ)))
+        if certify:
+            print(f'Feasible steps: {float(feasible[-1])}/{CTRL_FREQ*env.EPISODE_LEN_SEC}')
+            print('Max Correction: ', np.max(np.abs(corrections[-1])))
+            print('Magnitude of Corrections: ', np.linalg.norm(corrections[-1]))
+        print('----------------------------------')
+
+    results = {
+        'state': states,
+        'certified_action': actions_cert,
+        'uncertified_action': actions_uncert,
+        'corrections': corrections,
+        'rewards': rewards,
+        'rmse': rmse,
+        'feasible': feasible,
+        'constraint_violations': constraint_violations,
+        }
+
+    with open(f'./results_cf/{config.algo}/{config.output_dir.split("/")[-1]}.pkl', 'wb') as file:
+        pickle.dump(results, file)
 
     # Close the environment
     env.close()
-    print('Elapsed Time: ', time.time() - ep_start)
-    print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[:, 0]) >= 0.75))
-    print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[:, 1]) >= 0.5))
-    print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(np.atleast_2d(actions_cert).T, CTRL_FREQ)))
-    if certify:
-        print(f'Feasible steps: {float(successes)}/{CTRL_FREQ*env.EPISODE_LEN_SEC}')
-        print('Max Correction: ', np.max(np.abs(corrections)))
-        print('Magnitude of Corrections: ', np.linalg.norm(corrections))
+
 
     if plot:
         plt.plot(states[:, 0], label='x')
@@ -278,6 +311,16 @@ def identify_system(curr_path='.'):
     plt.legend()
     plt.show()
 
+def get_reward(obs, info, traj):
+    wp_idx = min(info['current_step']//20, traj.shape[0] - 1)  # +1 because state has already advanced but counter not incremented.
+    state_error = obs - traj[wp_idx]
+    dist = np.sum(np.array([2, 0, 2, 0]) * state_error * state_error)
+    rew = -dist
+    rew = np.exp(rew)
+
+    mse = np.sum(np.array([1, 1, 1, 1]) * state_error * state_error)
+
+    return rew, mse
 
 if __name__ == '__main__':
     run()

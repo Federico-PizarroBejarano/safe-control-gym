@@ -1,6 +1,8 @@
 '''This script analyzes and plots the results from MPSC experiments. '''
 
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
+import os
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tikzplotlib
@@ -11,42 +13,30 @@ Line2D._us_dashSeq = property(lambda self: self._dash_pattern[1])
 Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
 Legend._ncol = property(lambda self: self._ncols)
 
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
+
 
 plot = True
-save_figs = False
+save_figs = True
 
-ordered_costs = ['one_step', 'regularized', 'precomputed M=2', 'precomputed M=5', 'precomputed M=10']
+ordered_models = ['mpsf_1', 'mpsf_10', 'mpsf_100', 'none', 'none_cpen']
 
 
-def load_all_algos():
-    '''Loads all the results.
+def load_all_models(algo):
+    '''Loads the results of every model for a specific experiment with every algo.
+
+    Args:
+        algo (str): The controller.
 
     Returns:
         all_results (dict): A dictionary containing all the results.
     '''
 
     all_results = {}
-    num_tests = 5
 
-    for cost in ordered_costs:
-        all_results[cost] = {'states': [], 'inputs': [], 'corrections': []}
-        if 'precomputed' in cost:
-            cost_name = 'precomputed'
-            M = cost.split('=')[1]
-            extra_folder = f'm{M}/'
-        else:
-            cost_name = cost
-            extra_folder = ''
-
-        for test in range(num_tests):
-            all_results[cost]['states'].append(np.load(f'./all_trajs/test{test}/cert/{cost_name}_cost/{extra_folder}states.npy'))
-            all_results[cost]['inputs'].append(np.load(f'./all_trajs/test{test}/cert/{cost_name}_cost/{extra_folder}actions.npy'))
-            all_results[cost]['corrections'].append(np.load(f'./all_trajs/test{test}/cert/{cost_name}_cost/{extra_folder}corrections.npy'))
-
-    all_results['uncert'] = {'states': [], 'inputs': []}
-    for test in range(num_tests):
-        all_results['uncert']['states'].append(np.load(f'./all_trajs/test{test}/uncert/states.npy'))
-        all_results['uncert']['inputs'].append(np.load(f'./all_trajs/test{test}/uncert/actions.npy'))
+    for model in os.listdir(f'./models/rl_models/{algo}/'):
+        with open(f'./results_cf/{algo}/{model}.pkl', 'rb') as f:
+            all_results[model] = pickle.load(f)
 
     return all_results
 
@@ -65,6 +55,23 @@ def extract_magnitude_of_corrections(results_data):
     return magn_of_corrections
 
 
+def extract_percent_magnitude_of_corrections(results_data):
+    '''Extracts the percent magnitude of corrections from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        magn_of_corrections (list): The list of percent magnitude of corrections for all experiments.
+    '''
+
+    max_input = [np.maximum(np.linalg.norm(results_data['uncertified_action'][i], axis=1), np.linalg.norm(results_data['certified_action'][i], axis=1)) for i in range(len(results_data['uncertified_action']))]
+    perc_change = [np.divide(np.linalg.norm(results_data['corrections'][i], axis=1), max_input[i]) for i in range(len(results_data['corrections']))]
+    magn_of_corrections = [np.linalg.norm(elem) for elem in perc_change]
+
+    return magn_of_corrections
+
+
 def extract_max_correction(results_data):
     '''Extracts the max correction from an experiment's data.
 
@@ -79,29 +86,21 @@ def extract_max_correction(results_data):
     return max_corrections
 
 
-def extract_rate_of_change(results_data, mode='input'):
-    '''Extracts the rate of change of a signal from an experiment's data.
+def extract_percent_max_correction(results_data):
+    '''Extracts the percent max correction from an experiment's data.
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
-        mode (string): Either 'input' or 'correction', denoting which signal to use.
 
     Returns:
-        roc (list): The list of rate of changes.
+        max_corrections (list): The list of percent max corrections for all experiments.
     '''
-    if mode == 'input':
-        all_signals = results_data['inputs']
-    elif mode == 'correction':
-        all_signals = results_data['corrections']
 
-    total_derivatives = []
-    for signal in all_signals:
-        signal = signal.reshape(-1, 1)
-        ctrl_freq = 25
-        derivative = get_discrete_derivative(signal, ctrl_freq)
-        total_derivatives.append(np.linalg.norm(derivative, 'fro'))
+    max_input = [np.maximum(np.linalg.norm(results_data['uncertified_action'][i], axis=1), np.linalg.norm(results_data['certified_action'][i], axis=1)) for i in range(len(results_data['uncertified_action']))]
+    perc_change = [np.divide(np.linalg.norm(results_data['corrections'][i], axis=1), max_input[i]) for i in range(len(results_data['corrections']))]
+    max_corrections = [np.max(elem) for elem in perc_change]
 
-    return total_derivatives
+    return max_corrections
 
 
 def extract_number_of_corrections(results_data):
@@ -114,8 +113,97 @@ def extract_number_of_corrections(results_data):
         num_corrections (list): The list of the number of corrections for all experiments.
     '''
 
-    num_corrections = [np.sum(np.squeeze(np.abs(results_data['corrections'][i])) * 10 > np.squeeze(np.abs(results_data['inputs'][i]))) for i in range(len(results_data['inputs']))]
+    num_corrections = [np.sum(np.squeeze(np.abs(results_data['corrections'][i])) * 10 > np.squeeze(np.abs(results_data['certified_action'][i]))) for i in range(len(results_data['certified_action']))]
     return num_corrections
+
+
+def extract_feasible_iterations(results_data):
+    '''Extracts the number of feasible iterations from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        feasible_iterations (list): The list of the number of feasible iterations for all experiments.
+    '''
+    feasible_iterations = results_data['feasible']
+    return feasible_iterations
+
+
+def extract_rmse(results_data):
+    '''Extracts the RMSEs from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        rmse (list): The list of RMSEs for all experiments.
+    '''
+
+    rmse = results_data['rmse']
+    return rmse
+
+
+def extract_length(results_data):
+    '''Extracts the lengths from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        length (list): The list of lengths for all experiments.
+    '''
+
+    length = np.asarray(results_data['rmse'])
+    return length
+
+
+def extract_constraint_violations(results_data):
+    '''Extracts the simulation time from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+        certified (bool): Whether to extract the certified data or uncertified data.
+
+    Returns:
+        num_violations (list): The list of number of constraint violations for all experiments.
+    '''
+
+    num_violations = np.asarray(results_data['constraint_violations'])
+    return num_violations
+
+def extract_rate_of_change(results_data):
+    '''Extracts the rate of change of a signal from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        roc (list): The list of rate of changes.
+    '''
+    all_signals = results_data['certified_action']
+
+    total_derivatives = []
+    for signal in all_signals:
+        signal = signal.reshape(-1, 1)
+        ctrl_freq = 25
+        derivative = get_discrete_derivative(signal, ctrl_freq)
+        total_derivatives.append(np.linalg.norm(derivative, 'fro'))
+
+    return total_derivatives
+
+def extract_reward(results_data):
+    '''Extracts the mean reward from an experiment's data.
+
+    Args:
+        results_data (dict): A dictionary containing all the data from the desired experiment.
+
+    Returns:
+        mean_reward (list): The list of mean rewards.
+    '''
+
+    returns = np.asarray(results_data['rewards'])
+    return returns
 
 
 def create_paper_plot(data_extractor):
@@ -125,24 +213,19 @@ def create_paper_plot(data_extractor):
         data_extractor (lambda): A function that extracts the necessary data from the results.
     '''
 
-    all_results = load_all_algos()
+    all_results = load_all_models('ppo')
 
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = [r'$J_{MPSF, 1}$', r'$+J_{reg, 10}$', r'$J_{MPSF, 2}$', r'$J_{MPSF, 5}$', r'$J_{MPSF, 10}$']
-    colors = ['cornflowerblue', 'pink', 'limegreen', 'forestgreen', 'darkgreen']
+    labels = ['Ours - 1', 'Ours - 10', 'Ours - 100', 'Std.', 'C.Pen.']
+    colors = ['limegreen', 'forestgreen', 'darkgreen', 'cornflowerblue', 'pink']
     data = []
 
-    for cost in ordered_costs:
-        if cost == 'one_step' and data_extractor == extract_rate_of_change_of_inputs:
-            labels = ['Uncert'] + labels
-            colors = ['plum'] + colors
-            results = all_results['uncert']
-            data.append(data_extractor(results))
-        results = all_results[cost]
+    for model in ordered_models:
+        results = all_results[model]
         data.append(data_extractor(results))
-        print(f'Cost: {cost}, val:{np.mean(data_extractor(results))}')
+        print(f'Model: {model}, val:{np.mean(data_extractor(results))}')
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
     ax.set_ylabel(ylabel, weight='bold', fontsize=35, labelpad=10)
@@ -164,87 +247,24 @@ def create_paper_plot(data_extractor):
 
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
-        fig.savefig(f'./all_trajs/{image_suffix}.png', dpi=300)
-        tikzplotlib.save(f'./all_trajs/{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
+        fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
+        # tikzplotlib.save(f'./all_trajs/{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
     if plot is True:
         plt.show()
-
-
-def create_chattering_plot(TEST=0):
-    all_results = load_all_algos()
-
-    fig = plt.figure(figsize=(16.0, 10.0))
-    ax = fig.add_subplot(111)
-
-    labels = ['Uncert', r'$J_{MPSF, 1}$', r'$J_{MPSF, 10}$']
-    colors = ['plum', 'cornflowerblue', 'darkgreen']
-
-    start = 7
-    freq = 25
-
-    uncert_states = all_results['uncert']['states'][TEST][start * freq:, 0]
-    one_step_states = all_results['one_step']['states'][TEST][start * freq:, 0]
-    precomputed_states = all_results['precomputed M=10']['states'][TEST][start * freq:, 0]
-
-    one_step_corr = all_results['one_step']['corrections'][TEST][start * freq:]
-    one_step_inputs = all_results['one_step']['inputs'][TEST][start * freq:]
-    precomputed_corr = all_results['precomputed M=10']['corrections'][TEST][start * freq:]
-    precomputed_inputs = all_results['precomputed M=10']['inputs'][TEST][start * freq:]
-
-    ax.plot(np.array(range(len(uncert_states))) / freq + start, uncert_states, label=labels[0], color=colors[0], linewidth=2)
-    ax.plot(np.array(range(len(one_step_states))) / freq + start, one_step_states, label=labels[1], color=colors[1], linewidth=2)
-    ax.plot(np.array(range(len(precomputed_states))) / freq + start, precomputed_states, label=labels[2], color=colors[2], linewidth=2)
-
-    corrections_one_step = np.squeeze(np.abs(one_step_corr)) * 10 > np.squeeze(np.abs(one_step_inputs))
-    corrections_precomputed = np.squeeze(np.abs(precomputed_corr)) * 10 > np.squeeze(np.abs(precomputed_inputs))
-
-    corr_one_step_ranges = get_ranges(corrections_one_step)
-    corr_precomputed_ranges = get_ranges(corrections_precomputed)
-
-    for r in corr_one_step_ranges:
-        ax.plot((np.array(range(len(uncert_states))) / freq)[r[0]:r[1]] + start, one_step_states[r[0]:r[1]], color=colors[1], linewidth=8, alpha=0.5)
-
-    for r in corr_precomputed_ranges:
-        ax.plot((np.array(range(len(precomputed_states))) / freq)[r[0]:r[1]] + start, precomputed_states[r[0]:r[1]], color=colors[2], linewidth=8, alpha=0.5)
-
-    fig.tight_layout()
-    ax.yaxis.grid(True)
-
-    ax.set_ylabel('x Position [m]', weight='bold', fontsize=35, labelpad=10)
-    ax.set_xlabel('Time [s]', weight='bold', fontsize=35, labelpad=10)
-
-    ax.legend(loc='upper left', fontsize=25)
-
-    if save_figs:
-        fig.savefig('./all_trajs/traj.png', dpi=300)
-        tikzplotlib.save('./all_trajs/traj.tex', axis_height='2.2in', axis_width='3.3in')
-    if plot is True:
-        plt.show()
-
-
-def get_ranges(l):
-    ranges = []
-
-    started_range = False
-    for i, val in enumerate(l):
-        if val == True and started_range is False:
-            min_idx = i
-            started_range = True
-        if val == False and started_range is True:
-            ranges.append((min_idx, i - 1))
-            started_range = False
-
-    if val == True and started_range is True:
-        ranges.append((min_idx, i))
-
-    return ranges
 
 
 if __name__ == '__main__':
-    create_chattering_plot(TEST=3)
-    def extract_rate_of_change_of_inputs(results_data): return extract_rate_of_change(results_data, mode='input')
+    algo_name = 'ppo'
+    all_results = load_all_models(algo_name)
 
-    # create_paper_plot(extract_magnitude_of_corrections)
-    # create_paper_plot(extract_max_correction)
-    # create_paper_plot(extract_rate_of_change_of_inputs)
-    # create_paper_plot(extract_number_of_corrections)
+    create_paper_plot(extract_magnitude_of_corrections)
+    create_paper_plot(extract_percent_magnitude_of_corrections)
+    create_paper_plot(extract_max_correction)
+    create_paper_plot(extract_percent_max_correction)
+    create_paper_plot(extract_rate_of_change)
+    create_paper_plot(extract_number_of_corrections)
+    create_paper_plot(extract_feasible_iterations)
+    create_paper_plot(extract_reward)
+    create_paper_plot(extract_rmse)
+    create_paper_plot(extract_constraint_violations)
+    create_paper_plot(extract_length)
