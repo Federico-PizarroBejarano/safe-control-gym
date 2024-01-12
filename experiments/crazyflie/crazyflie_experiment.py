@@ -183,11 +183,31 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
         print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[-1][:, 0]) >= 0.75))
         print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[-1][:, 1]) >= 0.5))
         print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(np.atleast_2d(actions_cert[-1]).T, CTRL_FREQ)))
+        print(f'Reward: {rewards[episode]}')
         if certify:
-            print(f'Feasible steps: {float(feasible[-1])}/{CTRL_FREQ*env.EPISODE_LEN_SEC}')
+            print(f'Feasible steps: {float(feasible[episode])}/{CTRL_FREQ*env.EPISODE_LEN_SEC}')
             print('Max Correction: ', np.max(np.abs(corrections[-1])))
             print('Magnitude of Corrections: ', np.linalg.norm(corrections[-1]))
         print('----------------------------------')
+
+        if plot:
+            plt.plot(states[-1][:, 0], label='x')
+            plt.plot(states[-1][:, 2], label='y')
+            plt.plot(states[-1][:, 4], label='z')
+            plt.legend()
+            plt.show()
+
+            plt.plot(states[-1][:, 1], label='x vel')
+            plt.plot(states[-1][:, 3], label='y vel')
+            plt.plot(states[-1][:, 5], label='z vel')
+            plt.legend()
+            plt.show()
+
+            plt.plot(states[-1][:, 0], label='x traj')
+            plt.plot(states[-1][:, 2], label='y traj')
+            plt.plot(full_trajectory[:, 0], label='ref')
+            plt.legend()
+            plt.show()
 
     results = {
         'state': states,
@@ -205,26 +225,6 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
 
     # Close the environment
     env.close()
-
-
-    if plot:
-        plt.plot(states[:, 0], label='x')
-        plt.plot(states[:, 2], label='y')
-        plt.plot(states[:, 4], label='z')
-        plt.legend()
-        plt.show()
-
-        plt.plot(states[:, 1], label='x vel')
-        plt.plot(states[:, 3], label='y vel')
-        plt.plot(states[:, 5], label='z vel')
-        plt.legend()
-        plt.show()
-
-        plt.plot(states[:, 0], label='x traj')
-        plt.plot(states[:, 2], label='y traj')
-        plt.plot(full_trajectory[:, 0], label='ref')
-        plt.legend()
-        plt.show()
 
     print('Experiment Complete.')
 
