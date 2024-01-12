@@ -1,8 +1,9 @@
 '''Template training/plotting/testing script.'''
 
+from functools import partial
 import os
 import shutil
-from functools import partial
+import time
 
 import munch
 import yaml
@@ -68,7 +69,9 @@ def train():
         ctrl.safety_filter = safety_filter
 
     # Training.
+    start_time = time.time()
     ctrl.learn()
+    config['logging'] = {'total_learning_time': time.time() - start_time}
     ctrl.close()
     print('Training done.')
 
