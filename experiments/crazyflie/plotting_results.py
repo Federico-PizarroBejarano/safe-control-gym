@@ -19,7 +19,7 @@ from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivat
 plot = True
 save_figs = True
 
-ordered_models = ['mpsf_1', 'mpsf_10', 'mpsf_100', 'none', 'none_cpen']
+ordered_models = ['mpsf_0.1', 'mpsf_1', 'mpsf_10', 'none', 'none_cpen']
 
 
 def load_all_models(algo):
@@ -34,7 +34,7 @@ def load_all_models(algo):
 
     all_results = {}
 
-    for model in os.listdir(f'./models/rl_models/{algo}/'):
+    for model in ordered_models:
         with open(f'./results_cf/{algo}/{model}.pkl', 'rb') as f:
             all_results[model] = pickle.load(f)
 
@@ -154,7 +154,7 @@ def extract_length(results_data):
         length (list): The list of lengths for all experiments.
     '''
 
-    length = np.asarray(results_data['rmse'])
+    length = np.asarray([len(actions) for actions in results_data['uncertified_action']])
     return length
 
 
@@ -218,7 +218,7 @@ def create_paper_plot(data_extractor):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = ['Ours - 1', 'Ours - 10', 'Ours - 100', 'Std.', 'C.Pen.']
+    labels = ['Ours - 0.1', 'Ours - 1', 'Ours - 10', 'Std.', 'C.Pen.']
     colors = ['limegreen', 'forestgreen', 'darkgreen', 'cornflowerblue', 'pink']
     data = []
 

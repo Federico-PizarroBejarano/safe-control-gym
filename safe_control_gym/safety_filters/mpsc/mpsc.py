@@ -80,7 +80,7 @@ class MPSC(BaseSafetyFilter, ABC):
         self.reset()
         self.dt = self.model.dt
 
-        self.model.nx = 4
+        self.model.nx = 6
         self.model.nu = 2
 
         self.Q = get_cost_weight_matrix(q_lin, self.model.nx)
@@ -91,7 +91,7 @@ class MPSC(BaseSafetyFilter, ABC):
 
         self.set_dynamics()
         # self.lqr_gain = -compute_lqr_gain(self.model, self.X_EQ, self.U_EQ, self.Q, self.R, discrete_dynamics=True)
-        self.lqr_gain = np.zeros((4, 2)).T
+        self.lqr_gain = np.zeros((self.model.nx, self.model.nu)).T
 
         self.terminal_set = None
         self.prev_action = self.U_EQ

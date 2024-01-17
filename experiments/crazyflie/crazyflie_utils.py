@@ -101,11 +101,8 @@ def gen_input_traj(CTRL_FREQ, EPISODE_LEN_SEC, num_channels=1, plot=False):
 def gen_traj(CTRL_FREQ, EPISODE_LEN_SEC, plot=False):
     CTRL_DT = 1.0 / CTRL_FREQ
 
-    linspace = np.linspace(0, 4 * np.pi, CTRL_FREQ * EPISODE_LEN_SEC)
+    linspace = np.linspace(0, 8 * np.pi, CTRL_FREQ * EPISODE_LEN_SEC)
     trajectory = 1.5 * np.sin(linspace)
-    x = np.array(range(CTRL_FREQ * EPISODE_LEN_SEC))
-    ramp_up = 1 / (1 + np.exp(-0.03 * (x - 100)))
-    trajectory = ramp_up * trajectory
 
     traj_vel = (trajectory[2:] - trajectory[:-2]) / (CTRL_DT * 2)
     traj_vel = np.insert(traj_vel, 0, (trajectory[1] - trajectory[0]) / CTRL_DT)
@@ -150,8 +147,8 @@ if __name__ == '__main__':
     COST_FUNCTION = 'precomputed'
     M = 10
 
-    # gen_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
-    gen_input_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
+    gen_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
+    # gen_input_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
     # plot_traj(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
     # get_max_chatter(CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
     # calc_error(CTRL_FREQ=25, EPISODE_LEN_SEC=20, TEST=TEST, CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)

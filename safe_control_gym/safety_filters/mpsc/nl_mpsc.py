@@ -21,7 +21,7 @@ from acados_template.acados_model import AcadosModel
 from pytope import Polytope
 from scipy.linalg import block_diag, solve_discrete_are, sqrtm
 
-from safe_control_gym.envs.benchmark_env import Environment, Task
+from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.envs.constraints import BoundedConstraint, ConstrainedVariableType
 from safe_control_gym.safety_filters.cbf.cbf_utils import cartesian_product
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
@@ -66,9 +66,9 @@ class NL_MPSC(MPSC):
 
         self.model_bias = None
 
-        self.n = 4
+        self.n = 6
         self.m = 2
-        self.q = 4
+        self.q = 6
 
         super().__init__(env_func, horizon, q_lin, r_lin, integration_algo, warmstart, additional_constraints, use_terminal_set, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
@@ -78,7 +78,7 @@ class NL_MPSC(MPSC):
 
         state_lower_bounds = self.env.constraints.state_constraints[0].lower_bounds
         state_upper_bounds = self.env.constraints.state_constraints[0].upper_bounds
-        self.state_constraint = BoundedConstraint(self.env, state_lower_bounds[:4], state_upper_bounds[:4], ConstrainedVariableType.STATE, active_dims=[0, 1, 2, 3])
+        self.state_constraint = BoundedConstraint(self.env, state_lower_bounds[[0,1,2,3,6,7]], state_upper_bounds[[0,1,2,3,6,7]], ConstrainedVariableType.STATE, active_dims=[0,1,2,3,6,7])
         self.input_constraint = BoundedConstraint(self.env, [-0.25, -0.25], [0.25, 0.25], ConstrainedVariableType.INPUT, active_dims=[0, 1])
 
         [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
@@ -93,30 +93,38 @@ class NL_MPSC(MPSC):
         self.L_u = np.vstack((np.zeros((p_x, self.m)), L_u))
         self.l_xu = np.concatenate([l_x, l_u])
 
-        self.model.X_EQ = np.zeros((4,))
-        self.model.U_EQ = np.zeros((2,))
+        self.model.X_EQ = np.zeros((self.n,))
+        self.model.U_EQ = np.zeros((self.m,))
 
     def set_dynamics(self):
         '''Compute the discrete dynamics.'''
-        self.Ad = np.array([[ 1,           0.03659,   7.598e-07, -0.006083],
-                    [-5.858e-06,   0.7886,    5.132e-06,  0.03174],
-                    [ 3.259e-06,   0.0009138, 1,          0.03899],
-                    [-1.735e-05,  -0.006111, -9.836e-06,  0.7786]])
+        self.Ad = np.array([[ 1,      0.04,    0,     0,        0,       0.008],
+                            [ 0,      1,       0,     0,        0,       0.365],
+                            [ 0,      0,       1,     0.04,    -0.008,   0    ],
+                            [ 0,      0,       0,     1,       -0.365,   0    ],
+                            [ 0,      0,       0,     0.001,    0.815,  -0.003],
+                            [ 0,     -0.001,   0,     0,       -0.003,   0.815]])
 
-        self.Bd = np.array([[ 0.003886,  0.01169],
-                      [ 0.4229,   -0.06055],
-                      [-0.001915, -0.0006503],
-                      [ 0.01223,   0.4419]])
+        self.Bd = np.array([[ 0,      0     ],
+                            [ 0,      0.037 ],
+                            [ 0,      0     ],
+                            [-0.037,  0     ],
+                            [ 0.205,  0     ],
+                            [ 0,      0.205 ]])
 
-        self.Ac = np.array([[-2.11e-05, 1.027, 1.524e-05, -0.1919],
-                      [-0.000155, -5.934, 0.0001495, 1.012],
-                      [9.153e-05, 0.02977, 2.589e-05, 1.101],
-                      [-0.0004908, -0.1949, -0.0002774, -6.253]])
+        self.Ac = np.array([[0,  1,      0,  0,       0,         0.0125],
+                            [0,  0.0052, 0,  0,       0.0179,   10.0887],
+                            [0,  0,      0,  1,      -0.0125,    0     ],
+                            [0,  0,      0,  0.0052,-10.0887,   -0.0179],
+                            [0,  0,      0,  0.0276, -5.1084,   -0.0920],
+                            [0, -0.0276, 0,  0,      -0.0920,   -5.1084]])
 
-        self.Bc = np.array([[-0.1273, .3702],
-                       [11.87, -1.942],
-                       [-0.06172, -0.2686],
-                       [0.39, 12.48]])
+        self.Bc = np.array([[ 0,       -0.0129],
+                            [-0.0025,  -0.1444],
+                            [ 0.0129,   0     ],
+                            [ 0.1444,   0.0025],
+                            [ 5.6668,   0.0101],
+                            [ 0.0101,   5.6668]])
 
         delta_x = cs.MX.sym('delta_x', self.n, 1)
         delta_u = cs.MX.sym('delta_u', self.m, 1)
@@ -147,8 +155,8 @@ class NL_MPSC(MPSC):
 
         self.tolerance = 1e-4
 
-        self.x_r = np.array([0, 0, 0, 0])
-        self.u_r = np.array([0, 0])
+        self.x_r = self.model.X_EQ
+        self.u_r = self.model.U_EQ
 
         x_sym = cs.MX.sym('delta_x', self.n, 1)
         u_sym = cs.MX.sym('delta_u', self.m, 1)
@@ -808,7 +816,9 @@ class NL_MPSC(MPSC):
         y = cs.MX.sym('y')
         x_dot = cs.MX.sym('x_dot')
         y_dot = cs.MX.sym('y_dot')
-        x_sym = cs.vertcat(x, x_dot, y, y_dot)
+        roll = cs.MX.sym('x_dot')
+        pitch = cs.MX.sym('y_dot')
+        x_sym = cs.vertcat(x, x_dot, y, y_dot, roll, pitch)
 
         f1 = cs.MX.sym('f1')
         f2 = cs.MX.sym('f2')
@@ -822,7 +832,9 @@ class NL_MPSC(MPSC):
         vx_dot = cs.MX.sym('vx_dot')
         y1_dot = cs.MX.sym('y1_dot')
         vy_dot = cs.MX.sym('vy_dot')
-        xdot = cs.vertcat(x1_dot, vx_dot, y1_dot, vy_dot)
+        roll_dot = cs.MX.sym('roll_dot')
+        pitch_dot = cs.MX.sym('pitch_dot')
+        xdot = cs.vertcat(x1_dot, vx_dot, y1_dot, vy_dot, roll_dot, pitch_dot)
 
         model.xdot = xdot
         model.f_impl_expr = model.xdot - model.f_expl_expr

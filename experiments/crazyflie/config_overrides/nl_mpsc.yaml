@@ -8,6 +8,8 @@ sf_config:
     - 1.85
     - 0.008
     - 1.85
+    - 10
+    - 10
 
   # MPC Parameters
   use_acados: True

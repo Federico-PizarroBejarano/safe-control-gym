@@ -30,7 +30,7 @@ class PRECOMPUTED_COST(MPSC_COST):
 
         super().__init__(env, mpsc_cost_horizon, decay_factor)
 
-        self.model.nx = 4
+        self.model.nx = 6
         self.model.nu = 2
 
         self.output_dir = output_dir
@@ -41,15 +41,19 @@ class PRECOMPUTED_COST(MPSC_COST):
 
     def set_dynamics(self):
         '''Compute the linear dynamics. '''
-        self.Ad = np.array([[ 1,           0.03659,   7.598e-07, -0.006083],
-                    [-5.858e-06,   0.7886,    5.132e-06,  0.03174],
-                    [ 3.259e-06,   0.0009138, 1,          0.03899],
-                    [-1.735e-05,  -0.006111, -9.836e-06,  0.7786]])
+        self.Ad = np.array([[ 1,      0.04,    0,     0,        0,       0.008],
+                            [ 0,      1,       0,     0,        0,       0.365],
+                            [ 0,      0,       1,     0.04,    -0.008,   0    ],
+                            [ 0,      0,       0,     1,       -0.365,   0    ],
+                            [ 0,      0,       0,     0.001,    0.815,  -0.003],
+                            [ 0,     -0.001,   0,     0,       -0.003,   0.815]])
 
-        self.Bd = np.array([[ 0.003886,  0.01169],
-                      [ 0.4229,   -0.06055],
-                      [-0.001915, -0.0006503],
-                      [ 0.01223,   0.4419]])
+        self.Bd = np.array([[ 0,      0     ],
+                            [ 0,      0.037 ],
+                            [ 0,      0     ],
+                            [-0.037,  0     ],
+                            [ 0.205,  0     ],
+                            [ 0,      0.205 ]])
 
         delta_x = cs.MX.sym('delta_x', self.model.nx, 1)
         delta_u = cs.MX.sym('delta_u', self.model.nu, 1)

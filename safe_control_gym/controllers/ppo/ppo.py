@@ -59,7 +59,7 @@ class PPO(BaseController):
             self.env = env_func()
             self.env = RecordEpisodeStatistics(self.env)
         # Agent.
-        self.obs_space = spaces.Box(low=np.array([-2,-2,-2,-2,-2,-2,-2,-2]), high=np.array([2,2,2,2,2,2,2,2]), shape=(8,))
+        self.obs_space = spaces.Box(low=np.array([-2,-2,-2,-2,-0.5,-0.5,-2,-2,-2,-2]), high=np.array([2,2,2,2,0.5,0.5,2,2,2,2]), shape=(10,))
         self.act_space = spaces.Box(low=np.array([-0.25,-0.25]), high=np.array([0.25,0.25]), shape=(2,))
         self.agent = PPOAgent(self.obs_space,
                               self.act_space,
@@ -220,7 +220,7 @@ class PPO(BaseController):
         '''Runs evaluation with current policy.'''
         self.agent.eval()
         obs, info = self.firmware_wrapper.reset()
-        obs = np.squeeze(obs.reshape((12, 1))[:4, :])
+        obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
         firmware_action = np.zeros((4,1))
         total_rew, total_violations, total_mse = 0, 0, 0
         ep_lengths, ep_returns, ep_violations, ep_mse = [], [], [], []
@@ -229,27 +229,21 @@ class PPO(BaseController):
 
             # Safety filter
             certified_action, success = self.safety_filter.certify_action(obs, action, info)
-            if success and self.filter_train_actions is True:
+            if success:
                 action = certified_action
             else:
                 self.safety_filter.ocp_solver.reset()
                 certified_action, success = self.safety_filter.certify_action(obs, action, info)
-                if success and self.filter_train_actions is True:
+                if success:
                     action = certified_action
 
-            pos = [(action[0] + obs[0]), (action[1] + obs[2]), 1]
-            vel = [0, 0, 0]
-            acc = [0, 0, 0]
-            yaw = 0
-            rpy_rate = [0, 0, 0]
-            args = [pos, vel, acc, yaw, rpy_rate]
             curr_time = info['current_step']//20 * self.CTRL_DT
-            self.firmware_wrapper.sendFullStateCmd(*args, curr_time)
+            self.firmware_wrapper.sendCmdVel(action[0], action[1], 0, 0, curr_time)
 
             # Step the environment.
             next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
-            next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
-            total_violations += np.sum(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5])
+            next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
+            total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.25, 0.25])
             rew, mse = self.get_reward(next_obs, info)
 
             total_rew += rew
@@ -261,7 +255,7 @@ class PPO(BaseController):
                 ep_violations.append(total_violations)
                 ep_mse.append(total_mse/ep_lengths[-1])
                 obs, info = self.env_reset(self.firmware_wrapper)
-                obs = np.squeeze(obs.reshape((12, 1))[:4, :])
+                obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
                 firmware_action = np.zeros((4,1))
                 total_rew, total_violations, total_mse = 0, 0, 0
                 continue
@@ -280,7 +274,7 @@ class PPO(BaseController):
         self.agent.train()
         rollouts = PPOBuffer(self.obs_space, self.act_space, self.rollout_steps, self.rollout_batch_size)
         obs, info = self.firmware_wrapper.reset()
-        obs = np.squeeze(obs.reshape((12, 1))[:4, :])
+        obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
         firmware_action = np.zeros((4,1))
         start = time.time()
         total_rew, total_violations, total_mse = 0, 0, 0
@@ -305,19 +299,13 @@ class PPO(BaseController):
                     if success and self.filter_train_actions is True:
                         action = certified_action
 
-            pos = [(action[0] + obs[0]), (action[1] + obs[2]), 1]
-            vel = [0, 0, 0]
-            acc = [0, 0, 0]
-            yaw = 0
-            rpy_rate = [0, 0, 0]
-            args = [pos, vel, acc, yaw, rpy_rate]
             curr_time = info['current_step']//20 * self.CTRL_DT
-            self.firmware_wrapper.sendFullStateCmd(*args, curr_time)
+            self.firmware_wrapper.sendCmdVel(action[0], action[1], 0, 0, curr_time)
 
             # Step the environment.
             next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
-            next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
-            total_violations += np.sum(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5])
+            next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
+            total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.25, 0.25])
             rew, mse = self.get_reward(next_obs, info)
 
             if self.penalize_sf_diff and success:
@@ -326,7 +314,7 @@ class PPO(BaseController):
                 rew = np.exp(rew)
 
             # Constraint Penalty
-            if self.firmware_wrapper.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5]):
+            if self.firmware_wrapper.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5, 0.25, 0.25]):
                 rew = np.log(rew)
                 rew -= 1.0
                 rew = np.exp(rew)
@@ -342,7 +330,7 @@ class PPO(BaseController):
                 total_rew, total_violations, total_mse = 0, 0, 0
 
                 next_obs, info = self.env_reset(self.firmware_wrapper)
-                next_obs = np.squeeze(next_obs.reshape((12, 1))[:4, :])
+                next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
                 firmware_action = np.zeros((4,1))
                 mask = 0
             else:
@@ -389,7 +377,7 @@ class PPO(BaseController):
 
     def get_reward(self, obs, info):
         wp_idx = min(info['current_step']//20, self.X_GOAL.shape[0] - 1)  # +1 because state has already advanced but counter not incremented.
-        state_error = obs - self.X_GOAL[wp_idx]
+        state_error = obs[:4] - self.X_GOAL[wp_idx]
         dist = np.sum(np.array([2, 0, 2, 0]) * state_error * state_error)
         rew = -dist
         rew = np.exp(rew)
@@ -475,9 +463,9 @@ class PPO(BaseController):
                 obs, info = env.reset()
                 info['current_step'] = 1
                 self.safety_filter.reset_before_run()
-                _, success = self.safety_filter.certify_action(np.squeeze(obs.reshape((12, 1))[:4, :]), act, info)
+                _, success = self.safety_filter.certify_action(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), act, info)
                 if not success:
                     self.safety_filter.ocp_solver.reset()
-                    _, success = self.safety_filter.certify_action(np.squeeze(obs.reshape((12, 1))[:4, :]), act, info)
+                    _, success = self.safety_filter.certify_action(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), act, info)
 
         return obs, info

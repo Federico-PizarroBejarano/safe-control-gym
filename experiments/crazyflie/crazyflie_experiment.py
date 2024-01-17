@@ -10,7 +10,7 @@ from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.io import savemat
+from scipy.io import savemat, loadmat
 
 from experiments.crazyflie.crazyflie_utils import gen_traj, gen_input_traj
 from safe_control_gym.envs.benchmark_env import Task
@@ -28,16 +28,19 @@ else:
 finally:
     print('Module \'cffirmware\' available:', FIRMWARE_INSTALLED)
 
+A = np.array([[ 1,      0.04,    0,     0,        0,       0.008],
+              [ 0,      1,       0,     0,        0,       0.365],
+              [ 0,      0,       1,     0.04,    -0.008,   0    ],
+              [ 0,      0,       0,     1,       -0.365,   0    ],
+              [ 0,      0,       0,     0.001,    0.815,  -0.003],
+              [ 0,     -0.001,   0,     0,       -0.003,   0.815]])
 
-A = np.array([[ 1,           0.03659,   7.598e-07, -0.006083],
-              [-5.858e-06,   0.7886,    5.132e-06,  0.03174],
-              [ 3.259e-06,   0.0009138, 1,          0.03899],
-              [-1.735e-05,  -0.006111, -9.836e-06,  0.7786]])
-
-B = np.array([[ 0.003886,  0.01169],
-              [ 0.4229,   -0.06055],
-              [-0.001915, -0.0006503],
-              [ 0.01223,   0.4419]])
+B = np.array([[ 0,      0     ],
+              [ 0,      0.037 ],
+              [ 0,      0     ],
+              [-0.037,  0     ],
+              [ 0.205,  0     ],
+              [ 0,      0.205 ]])
 
 
 def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_episodes=10):
@@ -136,8 +139,8 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
         obs, info = firmware_wrapper.reset()
         states[-1].append(obs)
         for i in range(CTRL_FREQ * env.EPISODE_LEN_SEC):
-            curr_obs = np.atleast_2d(obs[0:4]).T
-            curr_obs = curr_obs.reshape((4, 1))
+            curr_obs = np.atleast_2d(obs[[0,1,2,3,6,7]]).T
+            curr_obs = curr_obs.reshape((6, 1))
             new_act = np.squeeze(ctrl.select_action(curr_obs, info))
             new_act = np.clip(new_act, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
             actions_uncert[episode].append(new_act)
@@ -147,22 +150,16 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
                     feasible[episode] += 1
                     new_act = certified_action
             actions_cert[episode].append(new_act)
-            pos = [(new_act[0] + curr_obs[0])[0], (new_act[1] + curr_obs[2])[0], 1]
-            vel = [0, 0, 0]
-            acc = [0, 0, 0]
-            yaw = 0
-            rpy_rate = [0, 0, 0]
-            args = [pos, vel, acc, yaw, rpy_rate]
 
             curr_time = i * CTRL_DT
-            firmware_wrapper.sendFullStateCmd(*args, curr_time)
+            firmware_wrapper.sendCmdVel(new_act[0], new_act[1], 0, 0, curr_time)  # roll, pitch, yaw, z vel
 
             # Step the environment.
             obs, _, _, info, action = firmware_wrapper.step(curr_time, action)
-            reward, mse = get_reward(np.squeeze(obs.reshape((12, 1))[:4, :]), info, full_trajectory)
+            reward, mse = get_reward(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), info, full_trajectory)
             rewards[episode] += reward
             rmse[episode] += mse
-            constraint_violations[episode] += int(np.any(info['constraint_values'] >= 0))
+            constraint_violations[episode] += int(np.any(np.abs(obs[[0,1,2,3,6,7]]) > [0.75, 1, 0.75, 1, 0.25, 0.25]))
 
             states[episode].append(obs)
             if obs[4] < 0.05:
@@ -180,8 +177,9 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
 
         print(f'Number of Max Inputs: {np.sum(np.abs(actions_uncert[-1]) == 0.25)}/{2*len(actions_uncert[-1])}')
         print('Elapsed Time: ', time.time() - ep_start)
-        print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[-1][:, 0]) >= 0.75))
-        print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[-1][:, 1]) >= 0.5))
+        print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[-1][:, [0,2]]) >= 0.75))
+        print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[-1][:, [1,3]]) >= 1))
+        print('NUM VIOLATIONS ANG: ', np.sum(np.abs(states[-1][:, [6,7]]) >= 0.25))
         print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(np.atleast_2d(actions_cert[-1]).T, CTRL_FREQ)))
         print(f'Reward: {rewards[episode]}')
         if certify:
@@ -253,30 +251,48 @@ def identify_system(curr_path='.'):
     env = firmware_wrapper.env
 
     # Create trajectory.
-    input_traj = gen_input_traj(CTRL_FREQ, env.EPISODE_LEN_SEC, num_channels=2)
+    # input_traj = gen_input_traj(env.EPISODE_LEN_SEC, num_channels=2)
 
     states.append(env.state)
     action = env.U_GOAL
 
     errors = []
 
-    for i in range(10000):
-        curr_obs = np.atleast_2d(obs[0:4]).T
-        new_act = np.atleast_2d(input_traj[:, i]).T
-        actions.append(new_act)
+    for i in range(475):
+        curr_obs = np.atleast_2d(obs[[0,1,2,3,6,7]]).T
+        # new_act = np.atleast_2d(input_traj[:, i]).T
+        if i < 25:
+            u1, u2 = 0, 0
+        if i < 125:
+            u1, u2 = np.sin((i)/3.4), -np.sin((i)/7.0)
+        elif i < 225:
+            u1, u2 = -np.sin((i)/4.0), np.sin((i)/3.9)
+        elif i < 250:
+            u1, u2 = -1, -1
+        elif i < 275:
+            u1, u2 = 0, 0
+        elif i < 375:
+            u1, u2 = np.sin((i)/9.0), np.sin((i)/1.2)
+        elif i < 475:
+            u1, u2 = -np.sin((i)/2.0), np.sin((i)/12.0)
+        elif i < 500:
+            u1, u2 = 1, 1
+        elif i < 525:
+            u1, u2 = 0, 0
 
-        pos = [(new_act[0] + curr_obs[0])[0], (new_act[1] + curr_obs[2])[0], 1]
-        args = [pos, [0, 0, 0], [0, 0, 0], 0, [0, 0, 0]]
+        u1 = u1*0.25 + np.random.rand()*0.06
+        u2 = u2*0.25 + np.random.rand()*0.06
+        actions.append([u1, u2])
 
         curr_time = i * CTRL_DT
-        firmware_wrapper.sendFullStateCmd(*args, curr_time)
+        firmware_wrapper.sendCmdVel(u1, u2, 0, 0, curr_time)  # roll, pitch, yaw, z vel
 
         # Step the environment.
         obs, _, _, _, action = firmware_wrapper.step(curr_time, action)
         states.append(obs.copy())
 
-        pred_next_state = A @ curr_obs + B @ new_act
-        errors.append(np.squeeze(obs[0:4] - np.squeeze(pred_next_state)))
+        pred_next_state = A @ curr_obs + B @ np.array([[u1,u2]]).T
+        errors.append(np.squeeze(obs[[0,1,2,3,6,7]] - np.squeeze(pred_next_state)))
 
         if obs[4] < 0.05:
             print('CRASHED!!!')
@@ -311,9 +327,13 @@ def identify_system(curr_path='.'):
     plt.legend()
     plt.show()
 
+    plt.plot(actions, label='x')
+    plt.legend()
+    plt.show()
+
 def get_reward(obs, info, traj):
     wp_idx = min(info['current_step']//20, traj.shape[0] - 1)  # +1 because state has already advanced but counter not incremented.
-    state_error = obs - traj[wp_idx]
+    state_error = obs[:4] - traj[wp_idx]
     dist = np.sum(np.array([2, 0, 2, 0]) * state_error * state_error)
     rew = -dist
     rew = np.exp(rew)
@@ -322,6 +342,38 @@ def get_reward(obs, info, traj):
 
     return rew, mse
 
+def linear_regression():
+    data = loadmat('./models/traj_data/matlab_data.mat')
+    states = data['states'][:, [0,1,2,3,6,7]]
+    n = states.shape[1]
+    actions = data['actions']
+
+    X = np.hstack((states[:-1, :], actions))
+    y = states[1:, :]
+
+    lamb = 0.5
+    theta = np.round(np.linalg.pinv(X.T @ X + lamb * np.eye(8)) @ X.T @ y,4)
+    y_est = X @ theta
+    LR_err = np.linalg.norm(y_est - y)
+    print(f'LR ERROR: {LR_err}')
+
+    # A = np.array([[1, 1/25.0], [0, 1]])
+    # B = np.array([[0, -0.408]]).T
+
+    A = np.atleast_2d(theta.T[:n,:n])
+    B = np.atleast_2d(theta.T[:,n:])
+    y_est2 = A @ states[:-1, :].T + B @ actions.T
+    LIN_err = np.linalg.norm(y_est2.T - y)
+    print(f'LIN ERROR: {LIN_err}')
+
+    print(A, B)
+
+    # print(theta)
+
+    return A, B
+
+
 if __name__ == '__main__':
     run()
     # identify_system()
+    # linear_regression()
