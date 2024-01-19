@@ -14,9 +14,10 @@ Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
 Legend._ncol = property(lambda self: self._ncols)
 
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
+from safe_control_gym.utils.plotting import load_from_logs
 
 
-plot = True
+plot = False
 save_figs = True
 
 ordered_models = ['mpsf_0.1', 'mpsf_1', 'mpsf_10', 'none', 'none_cpen']
@@ -225,7 +226,6 @@ def create_paper_plot(data_extractor):
     for model in ordered_models:
         results = all_results[model]
         data.append(data_extractor(results))
-        print(f'Model: {model}, val:{np.mean(data_extractor(results))}')
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
     ax.set_ylabel(ylabel, weight='bold', fontsize=35, labelpad=10)
@@ -253,6 +253,67 @@ def create_paper_plot(data_extractor):
         plt.show()
 
 
+
+def plot_all_logs(algo):
+    '''Plots comparative plots of all the logs.
+
+    Args:
+        system (str): The system to be controlled.
+        task (str): The task to be completed (either 'stab' or 'track').
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+    '''
+    all_results = {}
+
+    for model in os.listdir(f'./models/rl_models/{algo}/'):
+        all_results[model] = [load_from_logs(f'./models/rl_models/{algo}/{model}/logs/')]
+
+    # all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/safe_explorer_ppo/none/logs/')
+    # all_results['cpo'] = load_from_logs(f'./models/rl_models/cpo/none/logs/')
+
+    for key in all_results['none'][0].keys():
+        plot_log(algo, key, all_results)
+
+
+def plot_log(algo, key, all_results):
+    '''Plots a comparative plot of the log 'key'.
+
+    Args:
+        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+        key (str): The name of the log to be plotted.
+        all_results (dict): A dictionary of all the logged results for all models.
+    '''
+    fig = plt.figure(figsize=(16.0, 10.0))
+    ax = fig.add_subplot(111)
+
+    labels = sorted(all_results.keys())
+    labels = [label for label in labels if '_es' not in label]
+
+    colors = plt.colormaps['tab20'].colors
+
+    for i, model in enumerate(labels):
+        if key == 'loss/critic_loss' and model == 'safe_ppo':
+            continue
+        if key in ['loss/policy_loss', 'loss/critic_loss'] and model == 'cpo':
+            continue
+        x = all_results[model][0][key][1]
+        all_data = np.array([values[key][3] for values in all_results[model]])
+        ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[i])
+        ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[i], facecolor=colors[i])
+
+    ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
+    ax.legend()
+
+    fig.tight_layout()
+    ax.yaxis.grid(True)
+
+    if plot is True:
+        plt.show()
+    if save_figs:
+        image_suffix = key.replace('/', '__')
+        fig.savefig(f'./results_cf/{algo}/graphs/{image_suffix}.png', dpi=300)
+    plt.close()
+
+
 if __name__ == '__main__':
     algo_name = 'ppo'
     all_results = load_all_models(algo_name)
@@ -268,3 +329,5 @@ if __name__ == '__main__':
     create_paper_plot(extract_rmse)
     create_paper_plot(extract_constraint_violations)
     create_paper_plot(extract_length)
+
+    plot_all_logs(algo_name)

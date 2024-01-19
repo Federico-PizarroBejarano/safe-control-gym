@@ -243,7 +243,7 @@ class PPO(BaseController):
             # Step the environment.
             next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
             next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-            total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.25, 0.25])
+            total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5])
             rew, mse = self.get_reward(next_obs, info)
 
             total_rew += rew
@@ -305,7 +305,7 @@ class PPO(BaseController):
             # Step the environment.
             next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
             next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-            total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.25, 0.25])
+            total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5])
             rew, mse = self.get_reward(next_obs, info)
 
             if self.penalize_sf_diff and success:
@@ -314,7 +314,7 @@ class PPO(BaseController):
                 rew = np.exp(rew)
 
             # Constraint Penalty
-            if self.firmware_wrapper.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 0.5, 0.75, 0.5, 0.25, 0.25]):
+            if self.firmware_wrapper.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5]):
                 rew = np.log(rew)
                 rew -= 1.0
                 rew = np.exp(rew)

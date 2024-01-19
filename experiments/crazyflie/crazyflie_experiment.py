@@ -159,7 +159,7 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
             reward, mse = get_reward(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), info, full_trajectory)
             rewards[episode] += reward
             rmse[episode] += mse
-            constraint_violations[episode] += int(np.any(np.abs(obs[[0,1,2,3,6,7]]) > [0.75, 1, 0.75, 1, 0.25, 0.25]))
+            constraint_violations[episode] += int(np.any(np.abs(obs[[0,1,2,3,6,7]]) > [0.75, 1, 0.75, 1, 0.5, 0.5]))
 
             states[episode].append(obs)
             if obs[4] < 0.05:
@@ -179,7 +179,7 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
         print('Elapsed Time: ', time.time() - ep_start)
         print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[-1][:, [0,2]]) >= 0.75))
         print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[-1][:, [1,3]]) >= 1))
-        print('NUM VIOLATIONS ANG: ', np.sum(np.abs(states[-1][:, [6,7]]) >= 0.25))
+        print('NUM VIOLATIONS ANG: ', np.sum(np.abs(states[-1][:, [6,7]]) >= 0.5))
         print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(np.atleast_2d(actions_cert[-1]).T, CTRL_FREQ)))
         print(f'Reward: {rewards[episode]}')
         if certify:
