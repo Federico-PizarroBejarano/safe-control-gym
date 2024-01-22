@@ -252,7 +252,7 @@ class CPO(BaseController):
         v_loss, cost_v_loss, objective, cost_surrogate, kl, entropy = self.train_step(trajs=trajectories)
         score = np.mean(scores)
         cvs = np.mean(cvs)
-        results = {'score': score, 'cv': cv, 'value_loss': v_loss, 'cost_value_loss': cost_v_loss, 'objective': objective, 'cost_surrogate': cost_surrogate, 'approx_kl': kl, 'entropy_loss': entropy}
+        results = {'score': score, 'cv': cvs, 'value_loss': v_loss, 'cost_value_loss': cost_v_loss, 'objective': objective, 'cost_surrogate': cost_surrogate, 'approx_kl': kl, 'entropy_loss': entropy}
         results.update({'step': (epoch + 1) * self.max_steps, 'elapsed_time': time.time() - start})
         return results
 
@@ -499,11 +499,7 @@ class CPO(BaseController):
         state_constraints = np.maximum(info['constraint_values'][:nx], info['constraint_values'][nx:nx * 2])
         constraint_width = info['constraint_values'][:nx] + info['constraint_values'][nx:nx * 2]
         state_cost = np.divide(state_constraints, -constraint_width / 2) + 0.0001
-
-        if np.any(state_cost >= 0):
-            return np.max(state_cost)
-        else:
-            return 0
+        return np.sum([max(s,0) for s in state_cost])
 
     def normalizeAction(self, a):
         return normalize(a, self.action_bound_max, self.action_bound_min)

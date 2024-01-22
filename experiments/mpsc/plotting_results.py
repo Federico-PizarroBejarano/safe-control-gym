@@ -984,8 +984,8 @@ if __name__ == '__main__':
     def extract_length_uncert(results_data, certified=False):
         return extract_length(results_data, certified)
 
-    system_name = 'cartpole'
-    task_name = 'stab'
+    system_name = 'quadrotor_3D'
+    task_name = 'track'
     algo_name = 'ppo'
     if len(sys.argv) == 4:
         system_name = sys.argv[1]
