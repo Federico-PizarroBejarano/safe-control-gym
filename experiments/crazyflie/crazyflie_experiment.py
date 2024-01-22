@@ -86,7 +86,7 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
 
     # Create trajectory.
     full_trajectory = gen_traj(CTRL_FREQ, env.EPISODE_LEN_SEC)
-    full_trajectory = np.hstack((full_trajectory, full_trajectory))
+    full_trajectory = np.hstack((full_trajectory, -full_trajectory))
 
     lqr_gain = 0.05 * np.array([[4,  0.1,  0,  0],
                                 [0,  0,    4,  0.1]])

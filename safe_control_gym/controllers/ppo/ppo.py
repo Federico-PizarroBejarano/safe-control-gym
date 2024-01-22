@@ -241,7 +241,7 @@ class PPO(BaseController):
             self.firmware_wrapper.sendCmdVel(action[0], action[1], 0, 0, curr_time)
 
             # Step the environment.
-            next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
+            next_obs, _, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
             next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
             total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5])
             rew, mse = self.get_reward(next_obs, info)
@@ -249,16 +249,17 @@ class PPO(BaseController):
             total_rew += rew
             total_mse += mse
 
-            if done or info['current_step']//20-1 >= self.X_GOAL.shape[0] - 1 or self.firmware_wrapper._error == True:
+            if done or info['current_step']//20 >= self.X_GOAL.shape[0] or self.firmware_wrapper._error == True:
                 ep_lengths.append(info["current_step"]//20)
                 ep_returns.append(total_rew)
                 ep_violations.append(total_violations)
                 ep_mse.append(total_mse/ep_lengths[-1])
-                obs, info = self.env_reset(self.firmware_wrapper)
-                obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
+
+                next_obs, info = self.env_reset(self.firmware_wrapper)
+                next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
                 firmware_action = np.zeros((4,1))
+
                 total_rew, total_violations, total_mse = 0, 0, 0
-                continue
 
             obs = next_obs
 
@@ -303,7 +304,7 @@ class PPO(BaseController):
             self.firmware_wrapper.sendCmdVel(action[0], action[1], 0, 0, curr_time)
 
             # Step the environment.
-            next_obs, rew, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
+            next_obs, _, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
             next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
             total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5])
             rew, mse = self.get_reward(next_obs, info)
@@ -322,7 +323,15 @@ class PPO(BaseController):
             total_rew += rew
             total_mse += mse
 
-            if done or info['current_step']//20-1 >= self.X_GOAL.shape[0] - 1 or self.firmware_wrapper._error == True:
+            terminal_v = np.zeros_like(v)
+            if done or info['current_step']//20 >= self.X_GOAL.shape[0] or self.firmware_wrapper._error == True:
+                if info['current_step']//20 >= self.X_GOAL.shape[0]:
+                    # Time truncation is not the same as true termination.
+                    next_extended_obs = np.concatenate((next_obs, self.X_GOAL[-1, :]))
+                    terminal_obs_tensor = torch.FloatTensor(next_extended_obs).unsqueeze(0).to(self.device)
+                    terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
+                    terminal_v = terminal_val
+
                 ep_lengths.append(info["current_step"]//20)
                 ep_returns.append(total_rew)
                 ep_violations.append(total_violations)
@@ -336,15 +345,6 @@ class PPO(BaseController):
             else:
                 mask = 1
 
-            # Time truncation is not the same as true termination.
-            terminal_v = np.zeros_like(v)
-            if 'terminal_info' in info:
-                inff = info['terminal_info']
-                if 'TimeLimit.truncated' in inff and inff['TimeLimit.truncated']:
-                    terminal_obs = info['terminal_observation']
-                    terminal_obs_tensor = torch.FloatTensor(terminal_obs).unsqueeze(0).to(self.device)
-                    terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
-                    terminal_v = terminal_val
 
             rollouts.push({'obs': extended_obs, 'act': unsafe_action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
             obs = next_obs

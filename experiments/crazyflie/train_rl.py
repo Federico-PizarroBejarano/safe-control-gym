@@ -62,7 +62,7 @@ def train():
 
     # Create trajectory.
     full_trajectory = gen_traj(CTRL_FREQ, env.EPISODE_LEN_SEC)
-    full_trajectory = np.hstack((full_trajectory, full_trajectory))
+    full_trajectory = np.hstack((full_trajectory, -full_trajectory))
 
     # Setup controller.
     ctrl = make(config.algo,
@@ -71,11 +71,11 @@ def train():
                 output_dir=config.output_dir,
                 seed=1,
                 **config.algo_config)
-    ctrl.reset()
 
     ctrl.firmware_wrapper = firmware_wrapper
     ctrl.X_GOAL = full_trajectory
     ctrl.CTRL_DT = 1.0 / CTRL_FREQ
+    ctrl.reset()
 
     # Setup MPSC.
     if config.algo in ['ppo', 'sac']:
