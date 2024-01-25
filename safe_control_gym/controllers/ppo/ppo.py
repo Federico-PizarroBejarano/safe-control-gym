@@ -221,7 +221,7 @@ class PPO(BaseController):
         self.agent.eval()
         obs, info = self.firmware_wrapper.reset()
         obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-        firmware_action = np.zeros((4,1))
+        firmware_action = self.eval_env.U_GOAL
         total_rew, total_violations, total_mse = 0, 0, 0
         ep_lengths, ep_returns, ep_violations, ep_mse = [], [], [], []
         while len(ep_returns) < n_episodes:
@@ -249,7 +249,7 @@ class PPO(BaseController):
             total_rew += rew
             total_mse += mse
 
-            if done or info['current_step']//20 >= self.X_GOAL.shape[0] or self.firmware_wrapper._error == True:
+            if done:
                 ep_lengths.append(info["current_step"]//20)
                 ep_returns.append(total_rew)
                 ep_violations.append(total_violations)
@@ -257,7 +257,7 @@ class PPO(BaseController):
 
                 next_obs, info = self.env_reset(self.firmware_wrapper)
                 next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-                firmware_action = np.zeros((4,1))
+                firmware_action = self.eval_env.U_GOAL
 
                 total_rew, total_violations, total_mse = 0, 0, 0
 
@@ -276,7 +276,7 @@ class PPO(BaseController):
         rollouts = PPOBuffer(self.obs_space, self.act_space, self.rollout_steps, self.rollout_batch_size)
         obs, info = self.firmware_wrapper.reset()
         obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-        firmware_action = np.zeros((4,1))
+        firmware_action = self.eval_env.U_GOAL
         start = time.time()
         total_rew, total_violations, total_mse = 0, 0, 0
         ep_lengths, ep_returns, ep_violations, ep_mse = [], [], [], []
@@ -324,7 +324,7 @@ class PPO(BaseController):
             total_mse += mse
 
             terminal_v = np.zeros_like(v)
-            if done or info['current_step']//20 >= self.X_GOAL.shape[0] or self.firmware_wrapper._error == True:
+            if done:
                 if info['current_step']//20 >= self.X_GOAL.shape[0]:
                     # Time truncation is not the same as true termination.
                     next_extended_obs = np.concatenate((next_obs, self.X_GOAL[-1, :]))
@@ -340,7 +340,7 @@ class PPO(BaseController):
 
                 next_obs, info = self.env_reset(self.firmware_wrapper)
                 next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-                firmware_action = np.zeros((4,1))
+                firmware_action = self.eval_env.U_GOAL
                 mask = 0
             else:
                 mask = 1

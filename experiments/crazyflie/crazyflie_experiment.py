@@ -129,8 +129,6 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
             safety_filter.cost_function.output_dir = curr_path
             safety_filter.env.X_GOAL = full_trajectory
 
-    action = env.U_GOAL
-
     for episode in range(num_episodes):
         ep_start = time.time()
         states.append([])
@@ -138,6 +136,7 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
         actions_cert.append([])
         obs, info = firmware_wrapper.reset()
         states[-1].append(obs)
+        firmware_action = env.U_GOAL
         for i in range(CTRL_FREQ * env.EPISODE_LEN_SEC):
             curr_obs = np.atleast_2d(obs[[0,1,2,3,6,7]]).T
             curr_obs = curr_obs.reshape((6, 1))
@@ -155,7 +154,7 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
             firmware_wrapper.sendCmdVel(new_act[0], new_act[1], 0, 0, curr_time)  # roll, pitch, yaw, z vel
 
             # Step the environment.
-            obs, _, _, info, action = firmware_wrapper.step(curr_time, action)
+            obs, _, _, info, firmware_action = firmware_wrapper.step(curr_time, firmware_action)
             reward, mse = get_reward(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), info, full_trajectory)
             rewards[episode] += reward
             rmse[episode] += mse
@@ -254,7 +253,7 @@ def identify_system(curr_path='.'):
     # input_traj = gen_input_traj(env.EPISODE_LEN_SEC, num_channels=2)
 
     states.append(env.state)
-    action = env.U_GOAL
+    firmware_action = env.U_GOAL
 
     errors = []
 
@@ -288,7 +287,7 @@ def identify_system(curr_path='.'):
         firmware_wrapper.sendCmdVel(u1, u2, 0, 0, curr_time)  # roll, pitch, yaw, z vel
 
         # Step the environment.
-        obs, _, _, _, action = firmware_wrapper.step(curr_time, action)
+        obs, _, _, _, firmware_action = firmware_wrapper.step(curr_time, firmware_action)
         states.append(obs.copy())
 
         pred_next_state = A @ curr_obs + B @ np.array([[u1,u2]]).T
