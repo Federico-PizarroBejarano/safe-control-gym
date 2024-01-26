@@ -108,7 +108,7 @@ class SAC(BaseController):
             self.eval_env.add_tracker('mse', 0, mode='queue')
 
             self.total_steps = 0
-            obs, info = self.env_reset(self.env)
+            obs, info = self.env_reset(self.env, self.use_safe_reset)
             self.info = info['n'][0]
             self.true_obs = obs
             self.obs = self.obs_normalizer(obs)
@@ -234,7 +234,7 @@ class SAC(BaseController):
                 env.add_tracker('constraint_values', 0, mode='queue')
                 env.add_tracker('mse', 0, mode='queue')
 
-        obs, info = self.env_reset(env)
+        obs, info = self.env_reset(env, True)
         true_obs = obs
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
@@ -273,7 +273,7 @@ class SAC(BaseController):
                 assert 'episode' in info
                 ep_returns.append(total_return)
                 ep_lengths.append(info['episode']['l'])
-                obs, info = self.env_reset(env)
+                obs, info = self.env_reset(env, True)
                 total_return = 0
             true_obs = obs
             obs = self.obs_normalizer(obs)
@@ -325,7 +325,7 @@ class SAC(BaseController):
         action = np.atleast_2d(np.squeeze([applied_action]))
         next_obs, rew, done, info = self.env.step(action)
         if done[0] and self.use_safe_reset is True:
-            next_obs, info = self.env_reset(self.env)
+            next_obs, info = self.env_reset(self.env, self.use_safe_reset)
         if self.penalize_sf_diff and success:
             unsafe_rew = np.log(rew)
             unsafe_rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
@@ -464,11 +464,12 @@ class SAC(BaseController):
         # print summary table
         self.logger.dump_scalars()
 
-    def env_reset(self, env):
+    def env_reset(self, env, use_safe_reset):
         '''Resets the environment until a feasible initial state is found.
 
         Args:
             env (BenchmarkEnv): The environment that is being reset.
+            use_safe_reset (bool): Whether to safely reset the system using the SF.
 
         Returns:
             obs (ndarray): The initial observation.
@@ -480,7 +481,7 @@ class SAC(BaseController):
         if self.safety_filter is not None:
             self.safety_filter.reset_before_run()
 
-        if self.use_safe_reset is True and self.safety_filter is not None:
+        if use_safe_reset is True and self.safety_filter is not None:
             while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
                 obs, info = env.reset()
                 info['current_step'] = 1
