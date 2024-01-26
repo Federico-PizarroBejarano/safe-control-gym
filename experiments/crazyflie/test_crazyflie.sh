@@ -19,7 +19,7 @@ MPSC_COST='one_step_cost'
 # MPSC_COST='precomputed_cost'
 # MPSC_COST='learned_cost'
 
-MPSC_COST_HORIZON=10
+MPSC_COST_HORIZON=2
 
 if [ "$1" = 'mpsf' ]; then
     FILTER='True'
@@ -58,7 +58,6 @@ python3 ./train_rl.py \
         algo_config.use_safe_reset=$FILTER \
         algo_config.sf_penalty=$4 \
         task_config.use_constraint_penalty=$3
-
 
 python3 ./crazyflie_experiment.py \
     --task quadrotor \

@@ -2,46 +2,33 @@ algo: ppo
 algo_config:
   # model args
   hidden_dim: 128
-  activation: 'leaky_relu'
-  norm_obs: False
-  norm_reward: False
-  clip_obs: 10.0
-  clip_reward: 10.0
 
   # loss args
-  gamma: 0.98
-  use_gae: False
-  gae_lambda: 0.8
-  use_clipped_value: False
-  clip_param: 0.1
-  target_kl: 1.587713889686473e-07
-  entropy_coef: 0.00010753631441212628
+  use_gae: True
+  entropy_coef: 0.01
 
   # optim args
-  opt_epochs: 5
-  mini_batch_size: 128
-  actor_lr: 0.0007948148615930024
-  critic_lr: 0.007497368468753617
-  max_grad_norm: 0.5
+  opt_epochs: 20
+  mini_batch_size: 256
+  actor_lr: 0.001
+  critic_lr: 0.001
 
   # runner args
-  max_env_steps: 200000
-  num_workers: 1
+  max_env_steps: 100000
   rollout_batch_size: 1
-  rollout_steps: 500
-  deque_size: 10
+  rollout_steps: 1000
   eval_batch_size: 10
 
   # misc
-  log_interval: 10000
+  log_interval: 5000
   save_interval: 0
   num_checkpoints: 0
-  eval_interval: 10000
+  eval_interval: 5000
   eval_save_best: True
   tensorboard: False
 
   # safety filter
   filter_train_actions: True
   penalize_sf_diff: True
-  sf_penalty: 10
+  sf_penalty: 75
   use_safe_reset: True
