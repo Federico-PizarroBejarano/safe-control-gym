@@ -206,6 +206,11 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
             plt.legend()
             plt.show()
 
+            plt.plot(actions_uncert[-1][:, 0], label='roll')
+            plt.plot(actions_uncert[-1][:, 1], label='pitch')
+            plt.legend()
+            plt.show()
+
     results = {
         'state': states,
         'certified_action': actions_cert,

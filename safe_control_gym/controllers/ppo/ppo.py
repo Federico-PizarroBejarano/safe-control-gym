@@ -104,10 +104,6 @@ class PPO(BaseController):
             self.eval_env.add_tracker('mse', 0, mode='queue')
 
             self.total_steps = 0
-            obs, info = self.env_reset(self.env)
-            self.info = info['n'][0]
-            self.true_obs = obs
-            self.obs = self.obs_normalizer(obs)
         else:
             # Add episodic stats to be tracked.
             self.env.add_tracker('constraint_violation', 0, mode='queue')
@@ -136,7 +132,6 @@ class PPO(BaseController):
         if self.training:
             exp_state = {
                 'total_steps': self.total_steps,
-                'obs': self.obs,
                 'random_state': get_random_state(),
                 'env_random_state': self.env.get_env_random_state()
             }
@@ -155,7 +150,6 @@ class PPO(BaseController):
         # Restore experiment state.
         if self.training:
             self.total_steps = state['total_steps']
-            self.obs = state['obs']
             set_random_state(state['random_state'])
             self.env.set_env_random_state(state['env_random_state'])
             self.logger.load(self.total_steps)
@@ -219,7 +213,7 @@ class PPO(BaseController):
             ):
         '''Runs evaluation with current policy.'''
         self.agent.eval()
-        obs, info = self.firmware_wrapper.reset()
+        obs, info = self.env_reset(self.firmware_wrapper, True)
         obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
         firmware_action = self.eval_env.U_GOAL
         total_rew, total_violations, total_mse = 0, 0, 0
@@ -255,7 +249,7 @@ class PPO(BaseController):
                 ep_violations.append(total_violations)
                 ep_mse.append(total_mse/ep_lengths[-1])
 
-                next_obs, info = self.env_reset(self.firmware_wrapper)
+                next_obs, info = self.env_reset(self.firmware_wrapper, True)
                 next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
                 firmware_action = self.eval_env.U_GOAL
 
@@ -274,7 +268,7 @@ class PPO(BaseController):
         '''Performs a training/fine-tuning step.'''
         self.agent.train()
         rollouts = PPOBuffer(self.obs_space, self.act_space, self.rollout_steps, self.rollout_batch_size)
-        obs, info = self.firmware_wrapper.reset()
+        obs, info = self.env_reset(self.firmware_wrapper, self.use_safe_reset)
         obs = np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :])
         firmware_action = self.eval_env.U_GOAL
         start = time.time()
@@ -338,7 +332,7 @@ class PPO(BaseController):
                 ep_mse.append(total_mse/ep_lengths[-1])
                 total_rew, total_violations, total_mse = 0, 0, 0
 
-                next_obs, info = self.env_reset(self.firmware_wrapper)
+                next_obs, info = self.env_reset(self.firmware_wrapper, self.use_safe_reset)
                 next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
                 firmware_action = self.eval_env.U_GOAL
                 mask = 0
@@ -442,11 +436,12 @@ class PPO(BaseController):
         # Print summary table
         self.logger.dump_scalars()
 
-    def env_reset(self, env):
+    def env_reset(self, env, use_safe_reset):
         '''Resets the environment until a feasible initial state is found.
 
         Args:
             env (BenchmarkEnv): The environment that is being reset.
+            use_safe_reset (bool): Whether to safely reset the system using the SF.
 
         Returns:
             obs (ndarray): The initial observation.
@@ -455,10 +450,11 @@ class PPO(BaseController):
         success = False
         act = np.array([0,0])
         obs, info = env.reset()
+
         if self.safety_filter is not None:
             self.safety_filter.reset_before_run()
 
-        if self.use_safe_reset is True and self.safety_filter is not None:
+        if use_safe_reset is True and self.safety_filter is not None:
             while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
                 obs, info = env.reset()
                 info['current_step'] = 1

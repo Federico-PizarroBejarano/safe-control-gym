@@ -88,12 +88,12 @@ def train():
         safety_filter.env.X_GOAL = full_trajectory
         ctrl.safety_filter = safety_filter
 
+    with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:
+        yaml.dump(munch.unmunchify(config), file, default_flow_style=False)
+
     ctrl.learn()
     ctrl.close()
     print('Training done.')
-
-    with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:
-        yaml.dump(munch.unmunchify(config), file, default_flow_style=False)
 
     make_plots(config)
 
