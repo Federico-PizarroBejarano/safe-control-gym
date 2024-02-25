@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import savemat, loadmat
 
-from experiments.crazyflie.crazyflie_utils import gen_traj, gen_input_traj
+from experiments.crazyflie.crazyflie_utils import gen_traj
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, get_discrete_derivative
 from safe_control_gym.utils.configuration import ConfigFactory
@@ -28,19 +28,18 @@ else:
 finally:
     print('Module \'cffirmware\' available:', FIRMWARE_INSTALLED)
 
-A = np.array([[ 1,      0.04,    0,     0,        0,       0.008],
-              [ 0,      1,       0,     0,        0,       0.365],
-              [ 0,      0,       1,     0.04,    -0.008,   0    ],
-              [ 0,      0,       0,     1,       -0.365,   0    ],
-              [ 0,      0,       0,     0.001,    0.815,  -0.003],
-              [ 0,     -0.001,   0,     0,       -0.003,   0.815]])
-
-B = np.array([[ 0,      0     ],
-              [ 0,      0.037 ],
-              [ 0,      0     ],
-              [-0.037,  0     ],
-              [ 0.205,  0     ],
-              [ 0,      0.205 ]])
+A = np.array([[0.9885, 0.0419, -0.0005, 0.0, -0.0032, 0.0354],
+            [-0.0862, 1.0142, -0.0037, 0.0004, -0.0236, 0.2658],
+            [-0.0015, 0.0002, 0.9979, 0.0399, -0.0485, -0.0031],
+            [-0.0112, 0.0012, -0.0157, 0.9994, -0.3639, -0.0232],
+            [-0.0109, 0.0018, -0.0111, 0.0017, 0.8245, -0.0036],
+            [0.0399, -0.0072, -0.0013, 0.0008, -0.0156, 0.8651]])
+B = np.array([[0.0011, -0.0015],
+            [0.0082, -0.0111],
+            [0.0083, -0.002],
+            [0.0624, -0.0147],
+            [0.1944, -0.0307],
+            [0.0344, 0.1793]])
 
 
 def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_episodes=10):
@@ -273,6 +272,7 @@ def env_reset(env, mpsf):
 
 
 def identify_system(curr_path='.'):
+    A,B = linear_regression()
     '''The main function creating, running, and closing an environment over N episodes. '''
     # Define arguments.
     fac = ConfigFactory()
@@ -294,9 +294,6 @@ def identify_system(curr_path='.'):
     firmware_wrapper = make('firmware', env_func_500, FIRMWARE_FREQ, CTRL_FREQ)
     obs, _ = firmware_wrapper.reset()
     env = firmware_wrapper.env
-
-    # Create trajectory.
-    # input_traj = gen_input_traj(env.EPISODE_LEN_SEC, num_channels=2)
 
     states.append(env.state)
     firmware_action = env.U_GOAL
@@ -376,6 +373,57 @@ def identify_system(curr_path='.'):
     plt.legend()
     plt.show()
 
+
+def identify_real_system():
+    A,B = linear_regression_real()
+
+    states = np.load(f'./all_trajs/test0/none_uncert/states.npy')[:, [0,1,2,3,6,7]]
+    actions = np.load(f'./all_trajs/test0/none_uncert/actions.npy')
+
+    errors = []
+    next_states = [states[0, :]]
+
+    for i in range(max(states.shape)-1):
+        pred_next_state = A @ states[i,:] + B @ actions[i, :]
+        next_states.append(pred_next_state)
+        errors.append(np.squeeze(states[i+1,:]) - np.squeeze(pred_next_state))
+
+    errors = np.array(errors)
+    next_states = np.array(next_states)
+
+    plt.plot(states[:, 0], label='x')
+    plt.plot(states[:, 2], label='y')
+    plt.plot(next_states[:, 0], label='pred_x')
+    plt.plot(next_states[:, 2], label='pred_y')
+    plt.legend()
+    plt.show()
+
+    np.save('./models/traj_data/errors.npy', errors)
+
+
+def linear_regression_real():
+    states = np.load(f'./all_trajs/test0/mpsf_10_uncert/states.npy')[:, [0,1,2,3,6,7]]
+    actions = np.load(f'./all_trajs/test0/mpsf_10_uncert/actions.npy')
+    n = states.shape[1]
+
+    X = np.hstack((states[:-1, :], actions[:-1, :]))
+    y = states[1:, :]
+
+    lamb = 0
+    theta = np.round(np.linalg.pinv(X.T @ X + lamb * np.eye(8)) @ X.T @ y,4)
+    y_est = X @ theta
+    LR_err = np.linalg.norm(y_est - y)
+    print(f'LR ERROR: {LR_err}')
+
+    A = np.atleast_2d(theta.T[:n,:n])
+    B = np.atleast_2d(theta.T[:,n:])
+    y_est2 = A @ states[:-1, :].T + B @ actions[:-1, :].T
+    LIN_err = np.linalg.norm(y_est2.T - y)
+    print(f'LIN ERROR: {LIN_err}')
+
+    return A, B
+
+
 def linear_regression():
     data = loadmat('./models/traj_data/matlab_data.mat')
     states = data['states'][:, [0,1,2,3,6,7]]
@@ -397,14 +445,37 @@ def linear_regression():
     LIN_err = np.linalg.norm(y_est2.T - y)
     print(f'LIN ERROR: {LIN_err}')
 
-    print(A, B)
-
-    # print(theta)
-
     return A, B
+
+
+def print_errors():
+    # Create set of error residuals.
+    w = np.load('./models/traj_data/errors.npy')
+    print('MEAN ERROR PER DIM:', np.mean(w, axis=0))
+
+    w = w - np.mean(w, axis=0)
+    normed_w = np.linalg.norm(w, axis=1)
+
+    print('MAX ERROR:', np.max(normed_w))
+    print('STD ERROR:', np.mean(normed_w) + 3 * np.std(normed_w))
+    print('MEAN ERROR:', np.mean(normed_w))
+    print('MAX ERROR PER DIM:', np.max(w, axis=0))
+    print('STD ERROR PER DIM:', np.mean(w, axis=0) + 3 * np.std(w, axis=0))
+    print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
+
+
+def print_numpy(A):
+    print('np.array([', end='')
+    for row in range(A.shape[0]):
+        print('[', end='')
+        row_str = ', '.join([str(float(elem)) for elem in A[row, :]])
+        print(row_str+'],')
+    print('])')
 
 
 if __name__ == '__main__':
     run()
     # identify_system()
+    # identify_real_system()
     # linear_regression()
+    # print_errors()

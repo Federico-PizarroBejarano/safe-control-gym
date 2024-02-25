@@ -7,31 +7,40 @@ import numpy as np
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
 
 
-def calc_error(CTRL_FREQ, EPISODE_LEN_SEC, TEST=0, CERTIFIED=False, COST_FUNCTION='one_step', M=2):
+def calc_error(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
     if not CERTIFIED:
-        folder = 'uncert'
+        folder = f'{MODEL}_uncert'
     else:
-        folder = 'cert/' + COST_FUNCTION + '_cost'
-        if COST_FUNCTION == 'precomputed':
-            folder += '/m' + str(M)
+        folder = f'{MODEL}_cert'
+
     states = np.load(f'./all_trajs/test{TEST}/{folder}/states.npy')
     actions = np.load(f'./all_trajs/test{TEST}/{folder}/actions.npy')
     corrections = np.load(f'./all_trajs/test{TEST}/{folder}/corrections.npy')
 
-    A = np.array([[0.9987, 0.02872],
-                  [0.006117, 0.8535]])
-    B = np.array([[0.02309, 0.2854]]).T
+    A = np.array([[0.9885, 0.0419, -0.0005, 0.0, -0.0032, 0.0354],
+            [-0.0862, 1.0142, -0.0037, 0.0004, -0.0236, 0.2658],
+            [-0.0015, 0.0002, 0.9979, 0.0399, -0.0485, -0.0031],
+            [-0.0112, 0.0012, -0.0157, 0.9994, -0.3639, -0.0232],
+            [-0.0109, 0.0018, -0.0111, 0.0017, 0.8245, -0.0036],
+            [0.0399, -0.0072, -0.0013, 0.0008, -0.0156, 0.8651]])
+    B = np.array([[0.0011, -0.0015],
+            [0.0082, -0.0111],
+            [0.0083, -0.002],
+            [0.0624, -0.0147],
+            [0.1944, -0.0307],
+            [0.0344, 0.1793]])
 
     errors = []
     for i in range(len(states) - 1):
-        curr_obs = np.array([states[i, 0], states[i, 1]]).T
-        next_obs = np.array([states[i + 1, 0], states[i + 1, 1]]).T
-        next_est = np.squeeze(A @ curr_obs) + np.squeeze(B * actions[i])
+        curr_obs = np.array([states[i, [0,1,2,3,6,7]]]).T
+        next_obs = np.array([states[i + 1, [0,1,2,3,6,7]]]).T
+        next_est = np.squeeze(A @ curr_obs) + np.squeeze(B @ actions[i, :])
         errors.append(np.squeeze(next_obs) - np.squeeze(next_est))
 
     print('Model Errors: ', np.linalg.norm(errors))
-    print('NUM ERRORS POS: ', np.sum(np.abs(states[:, 0]) >= 0.75))
-    print('NUM ERRORS VEL: ', np.sum(np.abs(states[:, 1]) >= 0.5))
+    print('NUM ERRORS POS: ', np.sum(np.abs(states[:, [0,2]]) >= 0.95))
+    print('NUM ERRORS VEL: ', np.sum(np.abs(states[:, [1,3]]) >= 2))
+    print('NUM ERRORS ANGLE: ', np.sum(np.abs(states[:, [6,7]]) >= 0.785))
     print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(actions.reshape(-1, 1), CTRL_FREQ)))
 
     if CERTIFIED:
@@ -39,17 +48,15 @@ def calc_error(CTRL_FREQ, EPISODE_LEN_SEC, TEST=0, CERTIFIED=False, COST_FUNCTIO
         print('Magnitude of Corrections: ', np.linalg.norm(corrections))
 
 
-def plot_traj(CTRL_FREQ, TEST=0, CERTIFIED=False, COST_FUNCTION='one_step', M=2):
+def plot_traj(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
     if not CERTIFIED:
-        folder = 'uncert'
+        folder = f'{MODEL}_uncert'
     else:
-        folder = 'cert/' + COST_FUNCTION + '_cost'
-        if COST_FUNCTION == 'precomputed':
-            folder += '/m' + str(M)
+        folder = f'{MODEL}_cert'
 
     states = np.load(f'./all_trajs/test{TEST}/{folder}/states.npy')
+    actions = np.load(f'./all_trajs/test{TEST}/{folder}/actions.npy')
     goal_traj = np.load(f'./all_trajs/test{TEST}/{folder}/traj_goal.npy')
-    goal_traj *= -1
 
     estimated_vel = []
     bad_estimated_vel = []
@@ -67,17 +74,35 @@ def plot_traj(CTRL_FREQ, TEST=0, CERTIFIED=False, COST_FUNCTION='one_step', M=2)
     plt.legend()
     plt.show()
 
-    plt.plot(states[:, 0], label='traj')
-    plt.plot(goal_traj[:, 0], label='ref')
+    plt.plot(states[:, 0], label='x traj')
+    plt.plot(goal_traj[:, 0], label='x ref')
+    plt.plot(states[:, 2], label='y traj')
+    plt.plot(goal_traj[:, 2], label='y ref')
     plt.legend()
     plt.show()
 
-    plt.plot(states[:, 1], label='vel x')
-    plt.plot(goal_traj[:, 1], label='ref vel')
-    plt.plot(estimated_vel, label='est vel')
-    plt.plot(bad_estimated_vel, label='bad est vel')
+    plt.plot(states[:, 0], states[:, 2], label='x-y')
+    plt.plot(goal_traj[:, 0], goal_traj[:, 2], label='ref')
     plt.legend()
     plt.show()
+
+    plt.plot(actions[:, 0], label='roll')
+    plt.plot(actions[:, 1], label='pitch')
+    plt.legend()
+    plt.show()
+
+    plt.plot(states[:, 1], label='x vel')
+    plt.plot(states[:, 3], label='y vel')
+    plt.plot(states[:, 5], label='z vel')
+    plt.legend()
+    plt.show()
+
+    # plt.plot(states[:, 1], label='vel x')
+    # plt.plot(goal_traj[:, 1], label='ref vel')
+    # plt.plot(estimated_vel, label='est vel')
+    # plt.plot(bad_estimated_vel, label='bad est vel')
+    # plt.legend()
+    # plt.show()
 
 
 def gen_input_traj(CTRL_FREQ, EPISODE_LEN_SEC, num_channels=1, plot=False):
@@ -101,20 +126,47 @@ def gen_input_traj(CTRL_FREQ, EPISODE_LEN_SEC, num_channels=1, plot=False):
 def gen_traj(CTRL_FREQ, EPISODE_LEN_SEC, plot=False):
     CTRL_DT = 1.0 / CTRL_FREQ
 
-    linspace = np.linspace(0, 8 * np.pi, CTRL_FREQ * EPISODE_LEN_SEC)
-    trajectory = 1.5 * np.sin(linspace)
+    x = np.sin(np.linspace(0, 8*np.pi, CTRL_FREQ*EPISODE_LEN_SEC))
+    y = np.sin(np.linspace(2*np.pi, 6*np.pi, CTRL_FREQ*EPISODE_LEN_SEC))
 
-    traj_vel = (trajectory[2:] - trajectory[:-2]) / (CTRL_DT * 2)
-    traj_vel = np.insert(traj_vel, 0, (trajectory[1] - trajectory[0]) / CTRL_DT)
-    traj_vel = np.append(traj_vel, (trajectory[-1] - trajectory[-2]) / CTRL_DT)
-    full_trajectory = np.hstack((np.atleast_2d(trajectory).T, np.atleast_2d(traj_vel).T))
+    ramp_up = np.concatenate((np.linspace(0, 1, CTRL_FREQ*2), np.ones((EPISODE_LEN_SEC-2)*CTRL_FREQ)))
+    x = x * ramp_up
+    y = y * ramp_up
+
+    x_vel = (x[2:] - x[:-2]) / (CTRL_DT * 2)
+    x_vel = np.insert(x_vel, 0, (x[1] - x[0]) / CTRL_DT)
+    x_vel = np.append(x_vel, (x[-1] - x[-2]) / CTRL_DT)
+
+    y_vel = (y[2:] - y[:-2]) / (CTRL_DT * 2)
+    y_vel = np.insert(y_vel, 0, (y[1] - y[0]) / CTRL_DT)
+    y_vel = np.append(y_vel, (y[-1] - y[-2]) / CTRL_DT)
+
+    full_trajectory = np.vstack((x, x_vel, y, y_vel)).T
+
+    print(f'Max x: {np.max(x)}, Max x_vel: {np.max(x_vel)}, Max y: {np.max(y)}, Max y_vel: {np.max(y_vel)}')
 
     if plot is True:
-        plt.plot(full_trajectory[:, 0], label='ref')
+        plt.plot(full_trajectory[:, 0], label='x')
         plt.legend()
         plt.show()
 
-        plt.plot(full_trajectory[:, 1], label='ref vel')
+        plt.plot(full_trajectory[:, 1], label='x_vel')
+        plt.legend()
+        plt.show()
+
+        plt.plot(full_trajectory[:, 2],label='y')
+        plt.legend()
+        plt.show()
+
+        plt.plot(full_trajectory[:, 3], label='y_vel')
+        plt.legend()
+        plt.show()
+
+        plt.plot(full_trajectory[:, 0], full_trajectory[:, 2], label='ref')
+        plt.legend()
+        plt.show()
+
+        plt.plot(full_trajectory[:, 1], full_trajectory[:, 3], label='ref vel')
         plt.legend()
         plt.show()
 
@@ -144,11 +196,10 @@ def get_max_chatter(CERTIFIED, COST_FUNCTION, M):
 if __name__ == '__main__':
     TEST = 0
     CERTIFIED = True
-    COST_FUNCTION = 'precomputed'
-    M = 10
+    MODEL = 'none'
 
-    gen_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
+    # gen_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=15, plot=True)
     # gen_input_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
-    # plot_traj(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
+    # plot_traj(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, MODEL=MODEL)
     # get_max_chatter(CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
-    # calc_error(CTRL_FREQ=25, EPISODE_LEN_SEC=20, TEST=TEST, CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
+    calc_error(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, MODEL=MODEL)
