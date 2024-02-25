@@ -62,7 +62,6 @@ def train():
 
     # Create trajectory.
     full_trajectory = gen_traj(CTRL_FREQ, env.EPISODE_LEN_SEC)
-    full_trajectory = np.hstack((full_trajectory, -full_trajectory))
 
     # Setup controller.
     ctrl = make(config.algo,

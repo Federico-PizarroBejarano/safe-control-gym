@@ -6,7 +6,7 @@ task_config:
   pyb_freq: 1000
   physics: pyb
   quad_type: 3
-  episode_len_sec: 20
+  episode_len_sec: 15
   cost: quadratic
   normalized_rl_action_space: False
 
@@ -29,20 +29,20 @@ task_config:
   init_state_randomization_info:
     init_x:
       distrib: 'uniform'
-      low: -0.75
-      high: 0.75
+      low: -0.95
+      high: 0.95
     init_x_dot:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_y:
       distrib: 'uniform'
-      low: -0.75
-      high: 0.75
+      low: -0.95
+      high: 0.95
     init_y_dot:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_z:
       distrib: 'uniform'
       low: 1
@@ -53,24 +53,24 @@ task_config:
       high: 0
     init_phi:
       distrib: 'uniform'
-      low: -0.5
-      high: 0.5
+      low: -0.785
+      high: 0.785
     init_theta:
       distrib: 'uniform'
-      low: -0.5
-      high: 0.5
+      low: -0.785
+      high: 0.785
     init_psi:
       distrib: 'uniform'
       low: 0
       high: 0
     init_p:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_q:
       distrib: 'uniform'
-      low: -1
-      high: 1
+      low: -2
+      high: 2
     init_r:
       distrib: 'uniform'
       low: 0
@@ -93,34 +93,23 @@ task_config:
     Izz: 2.17e-5
 
   constraints:
-    - constraint_form: default_constraint
+    - constraint_form: bounded_constraint
       constrained_variable: state
+      active_dims: [0,1,2,3,6,7]
       upper_bounds:
-        - 0.75
-        - 1
-        - 0.75
-        - 1
+        - 0.95
         - 2
-        - 1
-        - 0.5
-        - 0.5
-        - 0.5
-        - 1
-        - 1
-        - 1
+        - 0.95
+        - 2
+        - 0.785
+        - 0.785
       lower_bounds:
-        - -0.75
-        - -1
-        - -0.75
-        - -1
-        - 0
-        - -1
-        - -0.5
-        - -0.5
-        - -0.5
-        - -1
-        - -1
-        - -1
+        - -0.95
+        - -2
+        - -0.95
+        - -2
+        - -0.785
+        - -0.785
     - constraint_form: default_constraint
       constrained_variable: input
   done_on_out_of_bound: True

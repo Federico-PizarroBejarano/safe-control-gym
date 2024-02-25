@@ -84,12 +84,10 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
     firmware_wrapper = make('firmware', env_func_500, FIRMWARE_FREQ, CTRL_FREQ)
     env = firmware_wrapper.env
 
+    state_constraints = env.constraints.state_constraints[0].upper_bounds
+
     # Create trajectory.
     full_trajectory = gen_traj(CTRL_FREQ, env.EPISODE_LEN_SEC)
-    full_trajectory = np.hstack((full_trajectory, -full_trajectory))
-
-    lqr_gain = 0.05 * np.array([[4,  0.1,  0,  0],
-                                [0,  0,    4,  0.1]])
 
     # Setup controller.
     ctrl = make(config.algo,
@@ -103,45 +101,37 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
         ctrl.X_GOAL = full_trajectory
+
+    # Setup MPSC.
+    safety_filter = make(config.safety_filter,
+                            env_func,
+                            **config.sf_config)
+    safety_filter.reset()
+    if training is True:
+        safety_filter.learn(env=env)
+        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_crazyflie_{task}.pkl')
+        1/0
     else:
-        ctrl.gain = lqr_gain
-        ctrl.model.U_EQ = np.array([[0, 0]]).T
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_crazyflie_{task}.pkl')
+        safety_filter.env.X_GOAL = full_trajectory
 
-        ctrl.env.X_GOAL = full_trajectory
-        ctrl.env.TASK = Task.TRAJ_TRACKING
-
-    if certify is True:
-        # Setup MPSC.
-        safety_filter = make(config.safety_filter,
-                             env_func,
-                             **config.sf_config)
-        safety_filter.reset()
-        if training is True:
-            safety_filter.learn(env=env)
-            safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_crazyflie_{task}.pkl')
-            1/0
-        else:
-            safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_crazyflie_{task}.pkl')
-            safety_filter.env.X_GOAL = full_trajectory
-
-        if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
-            safety_filter.cost_function.uncertified_controller = ctrl
-            safety_filter.cost_function.output_dir = curr_path
-            safety_filter.env.X_GOAL = full_trajectory
+    if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
+        safety_filter.cost_function.uncertified_controller = ctrl
+        safety_filter.cost_function.output_dir = curr_path
 
     for episode in range(num_episodes):
         ep_start = time.time()
         states.append([])
         actions_uncert.append([])
         actions_cert.append([])
-        obs, info = firmware_wrapper.reset()
+        obs, info = env_reset(firmware_wrapper, safety_filter)
         states[-1].append(obs)
         firmware_action = env.U_GOAL
         for i in range(CTRL_FREQ * env.EPISODE_LEN_SEC):
             curr_obs = np.atleast_2d(obs[[0,1,2,3,6,7]]).T
             curr_obs = curr_obs.reshape((6, 1))
             new_act = np.squeeze(ctrl.select_action(curr_obs, info))
-            new_act = np.clip(new_act, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
+            new_act = np.clip(new_act, np.array([-0.785, -0.785]), np.array([0.785, 0.785]))
             actions_uncert[episode].append(new_act)
             if certify is True:
                 certified_action, success = safety_filter.certify_action(curr_obs, new_act, info)
@@ -158,7 +148,7 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
             reward, mse = get_reward(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), info, full_trajectory)
             rewards[episode] += reward
             rmse[episode] += mse
-            constraint_violations[episode] += int(np.any(np.abs(obs[[0,1,2,3,6,7]]) > [0.75, 1, 0.75, 1, 0.5, 0.5]))
+            constraint_violations[episode] += int(np.any(np.abs(obs[[0,1,2,3,6,7]]) > state_constraints))
 
             states[episode].append(obs)
             if obs[4] < 0.05:
@@ -169,16 +159,18 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
             if config.task_config.gui:
                 sync(i, ep_start, CTRL_DT)
 
+        ep_end = time.time()
+
         states[-1] = np.array(states[-1])
         actions_uncert[-1] = np.array(actions_uncert[-1])
         actions_cert[-1] = np.array(actions_cert[-1])
         corrections.append(np.squeeze(actions_cert[-1]) - np.squeeze(actions_uncert[-1]))
 
-        print(f'Number of Max Inputs: {np.sum(np.abs(actions_uncert[-1]) == 0.25)}/{2*len(actions_uncert[-1])}')
-        print('Elapsed Time: ', time.time() - ep_start)
-        print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[-1][:, [0,2]]) >= 0.75))
-        print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[-1][:, [1,3]]) >= 1))
-        print('NUM VIOLATIONS ANG: ', np.sum(np.abs(states[-1][:, [6,7]]) >= 0.5))
+        print(f'Number of Max Inputs: {np.sum(np.abs(actions_uncert[-1]) == 0.785)}/{2*len(actions_uncert[-1])}')
+        print('Elapsed Time: ', ep_end - ep_start, (ep_end - ep_start)/(CTRL_FREQ * env.EPISODE_LEN_SEC))
+        print('NUM VIOLATIONS POS: ', np.sum(np.abs(states[-1][:, [0,2]]) >= state_constraints[0]))
+        print('NUM VIOLATIONS VEL: ', np.sum(np.abs(states[-1][:, [1,3]]) >= state_constraints[1]))
+        print('NUM VIOLATIONS ANG: ', np.sum(np.abs(states[-1][:, [6,7]]) >= state_constraints[4]))
         print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(np.atleast_2d(actions_cert[-1]).T, CTRL_FREQ)))
         print(f'Reward: {rewards[episode]}')
         if certify:
@@ -188,6 +180,11 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
         print('----------------------------------')
 
         if plot:
+            plt.plot(states[-1][:, 0], states[-1][:, 2], label='x-y')
+            plt.plot(full_trajectory[:, 0], full_trajectory[:, 2], label='ref')
+            plt.legend()
+            plt.show()
+
             plt.plot(states[-1][:, 0], label='x')
             plt.plot(states[-1][:, 2], label='y')
             plt.plot(states[-1][:, 4], label='z')
@@ -229,6 +226,50 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
     env.close()
 
     print('Experiment Complete.')
+
+
+def get_reward(obs, info, traj):
+    wp_idx = min(info['current_step']//20, traj.shape[0] - 1)  # +1 because state has already advanced but counter not incremented.
+    state_error = obs[:4] - traj[wp_idx]
+    dist = np.sum(np.array([2, 0, 2, 0]) * state_error * state_error)
+    rew = -dist
+    rew = np.exp(rew)
+
+    mse = np.sum(np.array([1, 1, 1, 1]) * state_error * state_error)
+
+    return rew, mse
+
+
+def env_reset(env, mpsf):
+        '''Resets the environment until a feasible initial state is found.
+
+        Args:
+            env (BenchmarkEnv): The environment that is being reset.
+            mpsf (MPSC): The MPSC.
+
+        Returns:
+            obs (ndarray): The initial observation.
+            info (dict): The initial info.
+        '''
+        success = False
+        act = np.array([0,0])
+        obs, info = env.reset()
+
+        resets = 0
+
+        while success is not True or np.any(mpsf.slack_prev > 1e-4):
+            resets += 1
+            obs, info = env.reset()
+            info['current_step'] = 1
+            mpsf.reset_before_run()
+            _, success = mpsf.certify_action(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), act, info)
+            if not success:
+                mpsf.ocp_solver.reset()
+                _, success = mpsf.certify_action(np.squeeze(obs.reshape((12, 1))[[0,1,2,3,6,7], :]), act, info)
+
+        print('TOTAL RESETS: ', resets)
+
+        return obs, info
 
 
 def identify_system(curr_path='.'):
@@ -335,17 +376,6 @@ def identify_system(curr_path='.'):
     plt.legend()
     plt.show()
 
-def get_reward(obs, info, traj):
-    wp_idx = min(info['current_step']//20, traj.shape[0] - 1)  # +1 because state has already advanced but counter not incremented.
-    state_error = obs[:4] - traj[wp_idx]
-    dist = np.sum(np.array([2, 0, 2, 0]) * state_error * state_error)
-    rew = -dist
-    rew = np.exp(rew)
-
-    mse = np.sum(np.array([1, 1, 1, 1]) * state_error * state_error)
-
-    return rew, mse
-
 def linear_regression():
     data = loadmat('./models/traj_data/matlab_data.mat')
     states = data['states'][:, [0,1,2,3,6,7]]
@@ -360,9 +390,6 @@ def linear_regression():
     y_est = X @ theta
     LR_err = np.linalg.norm(y_est - y)
     print(f'LR ERROR: {LR_err}')
-
-    # A = np.array([[1, 1/25.0], [0, 1]])
-    # B = np.array([[0, -0.408]]).T
 
     A = np.atleast_2d(theta.T[:n,:n])
     B = np.atleast_2d(theta.T[:,n:])

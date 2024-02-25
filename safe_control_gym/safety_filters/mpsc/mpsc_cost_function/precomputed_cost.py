@@ -155,10 +155,10 @@ class PRECOMPUTED_COST(MPSC_COST):
                 elif self.env.NAME == Environment.QUADROTOR:
                     action = (1 + uncert_env.norm_act_scale * action) * uncert_env.hover_thrust
 
-            action = np.clip(action, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
+            action = np.clip(action, np.array([-0.785, -0.785]), np.array([0.785, 0.785]))
 
-            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
-                raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
+            # if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
+                # raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
             v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
 

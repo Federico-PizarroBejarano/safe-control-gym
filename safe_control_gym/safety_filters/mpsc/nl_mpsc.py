@@ -78,8 +78,8 @@ class NL_MPSC(MPSC):
 
         state_lower_bounds = self.env.constraints.state_constraints[0].lower_bounds
         state_upper_bounds = self.env.constraints.state_constraints[0].upper_bounds
-        self.state_constraint = BoundedConstraint(self.env, state_lower_bounds[[0,1,2,3,6,7]], state_upper_bounds[[0,1,2,3,6,7]], ConstrainedVariableType.STATE, active_dims=[0,1,2,3,6,7])
-        self.input_constraint = BoundedConstraint(self.env, [-0.25, -0.25], [0.25, 0.25], ConstrainedVariableType.INPUT, active_dims=[0, 1])
+        self.state_constraint = BoundedConstraint(self.env, state_lower_bounds, state_upper_bounds, ConstrainedVariableType.STATE, active_dims=[0,1,2,3,6,7])
+        self.input_constraint = BoundedConstraint(self.env, [-0.785, -0.785], [0.785, 0.785], ConstrainedVariableType.INPUT, active_dims=[0, 1])
 
         [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
         [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
@@ -880,10 +880,10 @@ class NL_MPSC(MPSC):
 
         # Slack
         ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = np.array([1] * self.p)
-        ocp.cost.Zl = np.array([1] * self.p)
-        ocp.cost.zu = np.array([1] * self.p)
-        ocp.cost.zl = np.array([1] * self.p)
+        ocp.cost.Zu = np.array([500] * self.p)
+        ocp.cost.Zl = np.array([500] * self.p)
+        ocp.cost.zu = np.array([500] * self.p)
+        ocp.cost.zl = np.array([500] * self.p)
 
         # Options
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
@@ -896,7 +896,8 @@ class NL_MPSC(MPSC):
         ocp.solver_options.tf = self.dt * self.horizon
 
         solver_json = 'acados_ocp_mpsf.json'
-        ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
+        file_name = f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/{solver_json}'
+        ocp_solver = AcadosOcpSolver(ocp, json_file=file_name, generate=True, build=True)
 
         for stage in range(self.mpsc_cost_horizon):
             ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)

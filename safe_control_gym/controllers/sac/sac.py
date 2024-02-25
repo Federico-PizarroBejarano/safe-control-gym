@@ -241,7 +241,7 @@ class SAC(BaseController):
             obs = torch.FloatTensor(extended_obs).to(self.device)
             action = self.agent.ac.act(obs, deterministic=True)
 
-        action = np.clip(action, [-0.25, -0.25], [0.25, 0.25])
+        action = np.squeeze(action)
 
         return action
 
@@ -271,7 +271,7 @@ class SAC(BaseController):
             # Step the environment.
             next_obs, _, done, info, firmware_action = self.firmware_wrapper.step(curr_time, firmware_action)
             next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-            total_violations += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5])
+            total_violations += np.sum(np.abs(next_obs) > self.firmware_wrapper.env.constraints.state_constraints[0].upper_bounds)
             rew, mse = self.get_reward(next_obs, info)
 
             total_rew += rew
@@ -315,7 +315,7 @@ class SAC(BaseController):
         unsafe_action = np.squeeze(unsafe_action)
 
         # Adding safety filter
-        applied_action = unsafe_action
+        applied_action = unsafe_action.copy()
         success = False
 
         if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
@@ -334,20 +334,20 @@ class SAC(BaseController):
         # Step the environment.
         next_obs, _, done, info, self.firmware_action = self.firmware_wrapper.step(curr_time, self.firmware_action)
         next_obs = np.squeeze(next_obs.reshape((12, 1))[[0,1,2,3,6,7], :])
-        self.train_results['total_violations'] += np.sum(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5])
+        self.train_results['total_violations'] += np.sum(np.abs(next_obs) > self.firmware_wrapper.env.constraints.state_constraints[0].upper_bounds)
         next_i = min(info['current_step']//20, self.X_GOAL.shape[0]-1)
         extended_next_obs = np.concatenate((next_obs, self.X_GOAL[next_i, :])).reshape((1, -1))
         rew, mse = self.get_reward(next_obs, info)
 
         if self.penalize_sf_diff and success:
             unsafe_rew = np.log(rew)
-            unsafe_rew -= self.sf_penalty * np.linalg.norm(np.clip(unsafe_action, [-0.25, -0.25], [0.25, 0.25]) - certified_action)
+            unsafe_rew -= self.sf_penalty * np.linalg.norm(unsafe_action - np.squeeze(certified_action))
             unsafe_rew = np.exp(unsafe_rew)
         else:
             unsafe_rew = rew
 
         # Constraint Penalty
-        if self.firmware_wrapper.env.use_constraint_penalty and np.any(np.abs(next_obs) > [0.75, 1, 0.75, 1, 0.5, 0.5]):
+        if self.firmware_wrapper.env.use_constraint_penalty and np.any(np.abs(next_obs) > self.firmware_wrapper.env.constraints.state_constraints[0].upper_bounds):
             unsafe_rew = np.log(rew)
             unsafe_rew -= 1.0
             unsafe_rew = np.exp(unsafe_rew)
