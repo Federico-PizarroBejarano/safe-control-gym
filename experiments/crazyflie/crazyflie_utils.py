@@ -1,6 +1,8 @@
 import sys
 sys.path.insert(0, '/home/federico/GitHub/safe-control-gym')
 
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -9,14 +11,16 @@ from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivat
 
 def calc_error(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
     if not CERTIFIED:
-        folder = f'{MODEL}_uncert'
+        folder = 'uncert'
     else:
-        folder = f'{MODEL}_cert'
+        folder = 'cert'
 
-    states = np.load(f'./all_trajs/test{TEST}/{folder}/states.npy')
-    actions = np.load(f'./all_trajs/test{TEST}/{folder}/actions.npy')
-    ref_traj = np.load(f'./all_trajs/test{TEST}/{folder}/traj_goal.npy')
-    corrections = np.load(f'./all_trajs/test{TEST}/{folder}/corrections.npy')
+    with open(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{MODEL}/{folder}/test{TEST}.pkl', 'rb') as file:
+        pickle_data = pickle.load(file)
+    states = pickle_data['states']
+    actions = pickle_data['actions']
+    ref_traj = pickle_data['traj_goal']
+    corrections = pickle_data['corrections']
 
     A = np.array([[0.9885, 0.0419, -0.0005, 0.0, -0.0032, 0.0354],
             [-0.0862, 1.0142, -0.0037, 0.0004, -0.0236, 0.2658],
@@ -56,13 +60,14 @@ def calc_error(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
 
 def plot_traj(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
     if not CERTIFIED:
-        folder = f'{MODEL}_uncert'
+        folder = 'uncert'
     else:
-        folder = f'{MODEL}_cert'
+        folder = 'cert'
 
-    states = np.load(f'./all_trajs/test{TEST}/{folder}/states.npy')
-    actions = np.load(f'./all_trajs/test{TEST}/{folder}/actions.npy')
-    goal_traj = np.load(f'./all_trajs/test{TEST}/{folder}/traj_goal.npy')
+    with open(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{MODEL}/{folder}/test{TEST}.pkl', 'rb') as file:
+        pickle_data = pickle.load(file)
+    states = pickle_data['states']
+    goal_traj = pickle_data['traj_goal']
 
     estimated_vel = []
     bad_estimated_vel = []
@@ -182,26 +187,6 @@ def gen_traj(CTRL_FREQ, EPISODE_LEN_SEC, plot=False):
         plt.show()
 
     return full_trajectory
-
-
-def get_max_chatter(CERTIFIED, COST_FUNCTION, M):
-    chatter_widths = []
-    for TEST in range(0, 5):
-        if not CERTIFIED:
-            folder = 'uncert'
-        else:
-            folder = 'cert/' + COST_FUNCTION + '_cost'
-            if COST_FUNCTION == 'precomputed':
-                folder += '/m' + str(M)
-
-        states = np.load(f'./all_trajs/test{TEST}/{folder}/states.npy')
-        min_x = np.min(states[:, 0])
-        min_index = np.argmin(states[:, 0])
-        max_x = np.max(states[min_index:min_index + 20, 0])
-        chatter_widths.append(max_x - min_x)
-
-    chatter_widths = np.array(chatter_widths)
-    print(f'Max Chatter: {chatter_widths.mean()} w STD: {chatter_widths.std()}')
 
 
 if __name__ == '__main__':

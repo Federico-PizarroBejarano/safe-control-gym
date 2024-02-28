@@ -58,11 +58,13 @@ def load_all_models(algo):
                           'rmse': [],
                           'feasible': []
                           }
-            traj_goal = np.load(f'./all_trajs/test0/{model}_{suffix}/traj_goal.npy')
             for test in range(5):
-                model_data['states'].append(np.load(f'./all_trajs/test{test}/{model}_{suffix}/states.npy'))
-                model_data['certified_action'].append(np.load(f'./all_trajs/test{test}/{model}_{suffix}/actions.npy'))
-                model_data['corrections'].append(np.load(f'./all_trajs/test{test}/{model}_{suffix}/corrections.npy'))
+                with open(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{model}/cert/test{test}.pkl', 'rb') as file:
+                    pickle_data = pickle.load(file)
+                traj_goal = pickle_data['traj_goal']
+                model_data['states'].append(pickle_data['states'])
+                model_data['certified_action'].append(pickle_data['actions'])
+                model_data['corrections'].append(pickle_data['corrections'])
 
                 model_data['uncertified_action'].append(model_data['certified_action'][-1] - model_data['corrections'][-1])
 
@@ -298,7 +300,7 @@ def create_paper_plot(data_extractor):
                 fig.savefig(f'./results_cf/{algo_name}/graphs/{suffix.replace("_", "")}/{image_suffix}.png', dpi=300)
             else:
                 fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
-            # tikzplotlib.save(f'./all_trajs/{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
+            # tikzplotlib.save(f'./{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
     if plot is True:
         plt.show()
 

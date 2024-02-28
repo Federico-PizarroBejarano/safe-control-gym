@@ -268,9 +268,6 @@ def identify_system():
     states = data['state'][-2][:, [0,1,2,3,6,7]]
     actions = data['certified_action'][-2]
 
-    # states = np.load(f'./all_trajs/test0/mpsf_10_uncert/states.npy')[:, [0,1,2,3,6,7]]
-    # actions = np.load(f'./all_trajs/test0/mpsf_10_uncert/actions.npy')
-
     errors = []
     next_states = [states[0, :]]
 
@@ -304,8 +301,6 @@ def linear_regression():
         data = pickle.load(f)
     states = data['state'][-2][:, [0,1,2,3,6,7]]
     actions = data['certified_action'][-2]
-    # states = np.load(f'./all_trajs/test0/mpsf_10_uncert/states.npy')[:, [0,1,2,3,6,7,9,10]]
-    # actions = np.load(f'./all_trajs/test0/mpsf_10_uncert/actions.npy')
     n = states.shape[1]
 
     X = np.hstack((states[:-1, :], actions[:, :]))

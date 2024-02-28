@@ -2,6 +2,7 @@ import sys
 sys.path.insert(0, '/home/federico/GitHub/safe-control-gym')
 
 from functools import partial
+import pickle
 
 import numpy as np
 
@@ -238,14 +239,14 @@ class Controller():
             args = []
             if save_data is True:
                 if not CERTIFY:
-                    folder = f'{MODEL}_uncert'
+                    folder = 'uncert'
                 else:
-                    folder = f'{MODEL}_cert'
-                mkdirs(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}')
-                np.save(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}/traj_goal.npy', self.full_trajectory)
-                np.save(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}/states.npy', np.array(self.recorded_obs))
-                np.save(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}/actions.npy', np.array(self.actions))
-                np.save(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}/corrections.npy', np.array(self.corrections))
+                    folder = 'cert'
+
+                pickle_data = {'states': np.array(self.recorded_obs), 'actions': np.array(self.actions), 'corrections': np.array(self.corrections), 'traj_goal': self.full_trajectory}
+                mkdirs(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{MODEL}/{folder}')
+                with open(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{MODEL}/{folder}/test{TEST}.pkl', 'wb') as file:
+                    pickle.dump(pickle_data, file)
         else:
             command_type = Command(0)  # None.
             args = []
