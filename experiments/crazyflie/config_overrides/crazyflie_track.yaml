@@ -24,7 +24,24 @@ task_config:
     init_q: 0
     init_r: 0
   randomized_init: False
-  randomized_inertial_prop: False
+  randomized_inertial_prop: True
+  inertial_prop_randomization_info:
+    M:
+      distrib: 'uniform'
+      low: -0.0025
+      high: 0.0025
+    Ixx:
+      distrib: 'uniform'
+      low: -0.1e-5
+      high: 0.1e-5
+    Iyy:
+      distrib: 'uniform'
+      low: -0.1e-5
+      high: 0.1e-5
+    Izz:
+      distrib: 'uniform'
+      low: -0.1e-5
+      high: 0.1e-5
 
   init_state_randomization_info:
     init_x:
@@ -87,7 +104,7 @@ task_config:
     proj_normal: [0, 1, 1]
 
   inertial_prop:
-    M: 0.03775
+    M: 0.0345
     Ixx: 1.4e-5
     Iyy: 1.4e-5
     Izz: 2.17e-5
@@ -114,3 +131,11 @@ task_config:
       constrained_variable: input
   done_on_out_of_bound: True
   done_on_violation: False
+
+  disturbances:
+    observation:
+      - disturbance_func: white_noise
+        std: 0.002
+    dynamics:
+      - disturbance_func: white_noise
+        std: 0.2

@@ -10,7 +10,6 @@ from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.io import savemat, loadmat
 
 from experiments.crazyflie.crazyflie_utils import gen_traj
 from safe_control_gym.envs.benchmark_env import Task
@@ -38,8 +37,8 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
 
     config.algo_config['training'] = False
-    config.task_config['init_state'] = None
-    config.task_config['randomized_init'] = True
+    # config.task_config['init_state'] = None
+    # config.task_config['randomized_init'] = True
 
     CTRL_FREQ = config.task_config['ctrl_freq']
     CTRL_DT = 1 / CTRL_FREQ
@@ -172,28 +171,28 @@ def run(gui=False, plot=False, training=False, certify=True, curr_path='.', num_
             plt.legend()
             plt.show()
 
-            plt.plot(states[-1][:, 0], label='x')
-            plt.plot(states[-1][:, 2], label='y')
-            plt.plot(states[-1][:, 4], label='z')
-            plt.legend()
-            plt.show()
+            # plt.plot(states[-1][:, 0], label='x')
+            # plt.plot(states[-1][:, 2], label='y')
+            # plt.plot(states[-1][:, 4], label='z')
+            # plt.legend()
+            # plt.show()
 
-            plt.plot(states[-1][:, 1], label='x vel')
-            plt.plot(states[-1][:, 3], label='y vel')
-            plt.plot(states[-1][:, 5], label='z vel')
-            plt.legend()
-            plt.show()
+            # plt.plot(states[-1][:, 1], label='x vel')
+            # plt.plot(states[-1][:, 3], label='y vel')
+            # plt.plot(states[-1][:, 5], label='z vel')
+            # plt.legend()
+            # plt.show()
 
-            plt.plot(states[-1][:, 0], label='x traj')
-            plt.plot(states[-1][:, 2], label='y traj')
-            plt.plot(full_trajectory[:, 0], label='ref')
-            plt.legend()
-            plt.show()
+            # plt.plot(states[-1][:, 0], label='x traj')
+            # plt.plot(states[-1][:, 2], label='y traj')
+            # plt.plot(full_trajectory[:, 0], label='ref')
+            # plt.legend()
+            # plt.show()
 
-            plt.plot(actions_uncert[-1][:, 0], label='roll')
-            plt.plot(actions_uncert[-1][:, 1], label='pitch')
-            plt.legend()
-            plt.show()
+            # plt.plot(actions_uncert[-1][:, 0], label='roll')
+            # plt.plot(actions_uncert[-1][:, 1], label='pitch')
+            # plt.legend()
+            # plt.show()
 
     results = {
         'state': states,

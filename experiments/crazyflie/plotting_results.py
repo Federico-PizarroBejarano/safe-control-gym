@@ -20,7 +20,10 @@ from safe_control_gym.utils.plotting import load_from_logs
 plot = False
 save_figs = True
 
-ordered_models = ['mpsf_0.1', 'mpsf_1', 'mpsf_10', 'none', 'none_cpen']
+suffix = '_dm'
+# suffix = ''
+
+ordered_models = [f'mpsf_0.1{suffix}', f'mpsf_1{suffix}', f'mpsf_10{suffix}', f'none{suffix}', f'none_cpen{suffix}']
 
 
 def load_all_models(algo):
@@ -291,8 +294,11 @@ def create_paper_plot(data_extractor):
         if REAL:
             fig.savefig(f'./results_cf/{algo_name}/graphs/real/{image_suffix}.png', dpi=300)
         else:
-            fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
-        # tikzplotlib.save(f'./all_trajs/{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
+            if suffix != '':
+                fig.savefig(f'./results_cf/{algo_name}/graphs/{suffix.replace("_", "")}/{image_suffix}.png', dpi=300)
+            else:
+                fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
+            # tikzplotlib.save(f'./all_trajs/{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
     if plot is True:
         plt.show()
 
@@ -307,13 +313,13 @@ def plot_all_logs(algo):
     '''
     all_results = {}
 
-    for model in os.listdir(f'./models/rl_models/{algo}/'):
+    for model in ordered_models:
         all_results[model] = [load_from_logs(f'./models/rl_models/{algo}/{model}/logs/')]
 
     # all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/safe_explorer_ppo/none/logs/')
     # all_results['cpo'] = load_from_logs(f'./models/rl_models/cpo/none/logs/')
 
-    for key in all_results['none'][0].keys():
+    for key in all_results[ordered_models[0]][0].keys():
         plot_log(algo, key, all_results)
 
 
@@ -353,12 +359,15 @@ def plot_log(algo, key, all_results):
         plt.show()
     if save_figs:
         image_suffix = key.replace('/', '__')
-        fig.savefig(f'./results_cf/{algo}/graphs/{image_suffix}.png', dpi=300)
+        if suffix != '':
+            fig.savefig(f'./results_cf/{algo}/graphs/{suffix.replace("_", "")}/{image_suffix}.png', dpi=300)
+        else:
+            fig.savefig(f'./results_cf/{algo}/graphs/{image_suffix}.png', dpi=300)
     plt.close()
 
 
 if __name__ == '__main__':
-    REAL = True
+    REAL = False
     CERTIFIED = True
     algo_name = 'ppo'
     all_results = load_all_models(algo_name)

@@ -34,8 +34,8 @@ def train():
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = True
-    config.task_config['init_state'] = None
-    config.task_config['randomized_init'] = True
+    # config.task_config['init_state'] = None
+    # config.task_config['randomized_init'] = True
 
     shutil.rmtree(config.output_dir, ignore_errors=True)
 
