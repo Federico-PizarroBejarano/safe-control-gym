@@ -20,7 +20,7 @@ from safe_control_gym.utils.plotting import load_from_logs
 plot = False
 save_figs = True
 
-suffix = '_dm'
+suffix = '_dm_s5'
 # suffix = ''
 
 ordered_models = [f'mpsf_0.1{suffix}', f'mpsf_1{suffix}', f'mpsf_10{suffix}', f'none{suffix}', f'none_cpen{suffix}']
@@ -297,7 +297,7 @@ def create_paper_plot(data_extractor):
             fig.savefig(f'./results_cf/{algo_name}/graphs/real/{image_suffix}.png', dpi=300)
         else:
             if suffix != '':
-                fig.savefig(f'./results_cf/{algo_name}/graphs/{suffix.replace("_", "")}/{image_suffix}.png', dpi=300)
+                fig.savefig(f'./results_cf/{algo_name}/graphs/dm/{image_suffix}.png', dpi=300)
             else:
                 fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
             # tikzplotlib.save(f'./{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
@@ -362,7 +362,7 @@ def plot_log(algo, key, all_results):
     if save_figs:
         image_suffix = key.replace('/', '__')
         if suffix != '':
-            fig.savefig(f'./results_cf/{algo}/graphs/{suffix.replace("_", "")}/{image_suffix}.png', dpi=300)
+            fig.savefig(f'./results_cf/{algo}/graphs/dm/{image_suffix}.png', dpi=300)
         else:
             fig.savefig(f'./results_cf/{algo}/graphs/{image_suffix}.png', dpi=300)
     plt.close()
