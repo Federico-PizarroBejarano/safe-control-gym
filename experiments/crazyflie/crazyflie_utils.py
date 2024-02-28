@@ -15,6 +15,7 @@ def calc_error(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
 
     states = np.load(f'./all_trajs/test{TEST}/{folder}/states.npy')
     actions = np.load(f'./all_trajs/test{TEST}/{folder}/actions.npy')
+    ref_traj = np.load(f'./all_trajs/test{TEST}/{folder}/traj_goal.npy')
     corrections = np.load(f'./all_trajs/test{TEST}/{folder}/corrections.npy')
 
     A = np.array([[0.9885, 0.0419, -0.0005, 0.0, -0.0032, 0.0354],
@@ -37,11 +38,16 @@ def calc_error(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
         next_est = np.squeeze(A @ curr_obs) + np.squeeze(B @ actions[i, :])
         errors.append(np.squeeze(next_obs) - np.squeeze(next_est))
 
+    error = states[:, [0,2]] - ref_traj[:, [0,2]]
+    dist = np.sum(2 * error * error, axis=1)
+    reward = np.sum(np.exp(-dist))
+
     print('Model Errors: ', np.linalg.norm(errors))
     print('NUM ERRORS POS: ', np.sum(np.abs(states[:, [0,2]]) >= 0.95))
     print('NUM ERRORS VEL: ', np.sum(np.abs(states[:, [1,3]]) >= 2))
-    print('NUM ERRORS ANGLE: ', np.sum(np.abs(states[:, [6,7]]) >= 0.785))
+    print('NUM ERRORS ANGLE: ', np.sum(np.abs(states[:, [6,7]]) >= 0.25))
     print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(actions.reshape(-1, 1), CTRL_FREQ)))
+    print('Reward: ', reward)
 
     if CERTIFIED:
         print('Max Correction: ', np.max(np.abs(corrections)))
@@ -68,34 +74,39 @@ def plot_traj(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
         prev_vel = (1 - alpha) * prev_vel + alpha * est_vel
         estimated_vel.append(prev_vel)
 
-    plt.plot(states[:, 0], label='x')
-    plt.plot(states[:, 2], label='y')
-    plt.plot(states[:, 4], label='z')
-    plt.legend()
-    plt.show()
+    # plt.plot(states[:, 0], label='x')
+    # plt.plot(states[:, 2], label='y')
+    # plt.plot(states[:, 4], label='z')
+    # plt.legend()
+    # plt.show()
 
-    plt.plot(states[:, 0], label='x traj')
-    plt.plot(goal_traj[:, 0], label='x ref')
-    plt.plot(states[:, 2], label='y traj')
-    plt.plot(goal_traj[:, 2], label='y ref')
-    plt.legend()
-    plt.show()
+    # plt.plot(states[:, 0], label='x traj')
+    # plt.plot(goal_traj[:, 0], label='x ref')
+    # plt.plot(states[:, 2], label='y traj')
+    # plt.plot(goal_traj[:, 2], label='y ref')
+    # plt.legend()
+    # plt.show()
 
     plt.plot(states[:, 0], states[:, 2], label='x-y')
     plt.plot(goal_traj[:, 0], goal_traj[:, 2], label='ref')
     plt.legend()
     plt.show()
 
-    plt.plot(actions[:, 0], label='roll')
-    plt.plot(actions[:, 1], label='pitch')
-    plt.legend()
-    plt.show()
+    # plt.plot(actions[:, 0], label='roll cmd')
+    # plt.plot(actions[:, 1], label='pitch cmd')
+    # plt.legend()
+    # plt.show()
 
-    plt.plot(states[:, 1], label='x vel')
-    plt.plot(states[:, 3], label='y vel')
-    plt.plot(states[:, 5], label='z vel')
-    plt.legend()
-    plt.show()
+    # plt.plot(states[:, 1], label='x vel')
+    # plt.plot(states[:, 3], label='y vel')
+    # plt.plot(states[:, 5], label='z vel')
+    # plt.legend()
+    # plt.show()
+
+    # plt.plot(states[:, 6], label='roll')
+    # plt.plot(states[:, 7], label='pitch')
+    # plt.legend()
+    # plt.show()
 
     # plt.plot(states[:, 1], label='vel x')
     # plt.plot(goal_traj[:, 1], label='ref vel')
@@ -200,6 +211,8 @@ if __name__ == '__main__':
 
     # gen_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=15, plot=True)
     # gen_input_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
-    # plot_traj(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, MODEL=MODEL)
     # get_max_chatter(CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
-    calc_error(CTRL_FREQ=25, TEST=TEST, CERTIFIED=CERTIFIED, MODEL=MODEL)
+
+    for test in range(5):
+        plot_traj(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)
+        calc_error(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)

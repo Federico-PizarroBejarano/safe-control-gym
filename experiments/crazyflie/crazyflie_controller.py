@@ -10,11 +10,12 @@ from safe_control_gym.controllers.firmware.firmware_wrapper import Command
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.utils.registration import make
+from safe_control_gym.utils.utils import mkdirs
 
 save_data = True
 TEST = 0
-MODEL = 'none'
-CERTIFY = True
+MODEL = 'mpsf_10'
+CERTIFY = False
 
 algo = 'ppo'
 task = 'quadrotor'
@@ -89,8 +90,8 @@ task_config = {
         {'constraint_form': 'bounded_constraint',
          'constrained_variable': 'state',
          'active_dims': [0,1,2,3,6,7],
-         'upper_bounds': [0.95, 2, 0.95, 2, 0.785, 0.785],
-         'lower_bounds': [-0.95, -2, -0.95, -2, -0.785, -0.785]},
+         'upper_bounds': [0.95, 2, 0.95, 2, 0.25, 0.25],
+         'lower_bounds': [-0.95, -2, -0.95, -2, -0.25, -0.25]},
         {'constraint_form': 'default_constraint',
          'constrained_variable': 'input',
          }
@@ -108,7 +109,7 @@ sf_config = {
     'warmstart': True,
     'integration_algo': 'rk4',
     'use_terminal_set': False,
-    'cost_function': 'one_step_cost',
+    'cost_function': 'precomputed_cost',
     'mpsc_cost_horizon': 10,
     'decay_factor': 0.85,
     'prior_info': {
@@ -136,23 +137,13 @@ class Controller():
         # Save environment and conrol parameters.
         self.CTRL_FREQ = initial_info['ctrl_freq']
         self.CTRL_DT = 1.0 / self.CTRL_FREQ
-        self.initial_obs = initial_obs
 
         # Create trajectory.
         self.full_trajectory = gen_traj(self.CTRL_FREQ, task_config['episode_len_sec'])
 
-        self.prev_xvel = 0
-        self.prev_yvel = 0
-        self.prev_x = 0
-        self.prev_y = 0
+        self.prev_pos = np.squeeze(initial_obs)[[0,2,4,6,7]]
+        self.prev_vel = np.squeeze(initial_obs)[[1,3,5,9,10]]
         self.alpha = 0.3
-
-        self.prev_roll = 0
-        self.prev_pitch = 0
-
-        self.static_RP = []
-        self.bias_roll = 0.0
-        self.bias_pitch = 0.0
 
         # Reset counters and buffers.
         self.reset()
@@ -177,23 +168,15 @@ class Controller():
         iteration = int(ep_time * self.CTRL_FREQ)
         z_height = 1
 
-        self.filter_velocity(iteration, obs)
+        self.low_pass_state(obs)
 
-        if iteration < self.CTRL_FREQ:
-            self.static_RP.append([obs[6], obs[7]])
-            command_type = Command(0)  # None.
-            args = []
-        elif iteration == self.CTRL_FREQ:
-            self.bias_roll = np.mean([angle[0] for angle in self.static_RP])
-            self.bias_pitch = np.mean([angle[1] for angle in self.static_RP])
-            print(f'Biased Roll: {self.bias_roll}, Biased Pitch: {self.bias_pitch}')
+        if iteration == 0:
             print(f'Iter: {iteration} - Take off.')
-
             height = z_height
             duration = 2
             command_type = Command(2)  # Take-off.
             args = [height, duration]
-        elif iteration >= 3 * self.CTRL_FREQ and iteration < 4 * self.CTRL_FREQ:
+        elif iteration >= 2 * self.CTRL_FREQ and iteration < 3 * self.CTRL_FREQ:
             print(f'Iter: {iteration} - Re-centering at (0, 0, z_height).')
             target_pos = np.array([0, 0, z_height])
             target_vel = np.zeros(3)
@@ -202,9 +185,9 @@ class Controller():
             target_rpy_rates = np.zeros(3)
             command_type = Command(1)  # cmdFullState.
             args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates]
-        elif iteration >= 4 * self.CTRL_FREQ and iteration < 19 * self.CTRL_FREQ:
+        elif iteration >= 3 * self.CTRL_FREQ and iteration < 18 * self.CTRL_FREQ:
             print(f'Iter: {iteration} - Executing Trajectory.')
-            step = iteration - 4 * self.CTRL_FREQ
+            step = iteration - 3 * self.CTRL_FREQ
             info = {'current_step': step*20}
 
             curr_obs = obs[[0,1,2,3,6,7]].reshape((6, 1))
@@ -225,31 +208,31 @@ class Controller():
 
             self.recorded_obs.append(obs)
             self.actions.append(new_act)
-        elif iteration == 19 * self.CTRL_FREQ:
+        elif iteration == 18 * self.CTRL_FREQ:
             self.return_path_pos = np.linspace(obs[[0, 2, 4]], [0, 0, z_height], 4 * self.CTRL_FREQ)
             self.return_path_vel = np.linspace(obs[[1, 3, 5]], [0, 0, 0], 4 * self.CTRL_FREQ)
             command_type = Command(1)  # cmdFullState.
             args = [self.return_path_pos[0], self.return_path_vel[0], np.zeros(3), 0.0, np.zeros(3)]
-        elif iteration > 19 * self.CTRL_FREQ and iteration < 23 * self.CTRL_FREQ:
+        elif iteration > 18 * self.CTRL_FREQ and iteration < 22 * self.CTRL_FREQ:
             print(f'Iter: {iteration} - Re-centering at (0, 0, z_height).')
-            target_pos = self.return_path_pos[iteration - 19 * self.CTRL_FREQ]
-            target_vel = self.return_path_pos[iteration - 19 * self.CTRL_FREQ]
+            target_pos = self.return_path_pos[iteration - 18 * self.CTRL_FREQ]
+            target_vel = self.return_path_pos[iteration - 18 * self.CTRL_FREQ]
             target_acc = np.zeros(3)
             target_yaw = 0.0
             target_rpy_rates = np.zeros(3)
             command_type = Command(1)  # cmdFullState.
             args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates]
-        elif iteration == 23 * self.CTRL_FREQ:
+        elif iteration == 22 * self.CTRL_FREQ:
             print(f'Iter: {iteration} - Setpoint Stop.')
             command_type = Command(6)  # Notify setpoint stop.
             args = []
-        elif iteration == 23 * self.CTRL_FREQ + 1:
+        elif iteration == 22 * self.CTRL_FREQ + 1:
             print(f'Iter: {iteration} - Landing.')
             height = 0.1
             duration = 2
             command_type = Command(3)  # Land.
             args = [height, duration]
-        elif iteration == 25 * self.CTRL_FREQ:
+        elif iteration == 24 * self.CTRL_FREQ:
             print(f'Iter: {iteration} - Terminating.')
             command_type = Command(-1)  # Terminate.
             args = []
@@ -258,6 +241,7 @@ class Controller():
                     folder = f'{MODEL}_uncert'
                 else:
                     folder = f'{MODEL}_cert'
+                mkdirs(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}')
                 np.save(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}/traj_goal.npy', self.full_trajectory)
                 np.save(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}/states.npy', np.array(self.recorded_obs))
                 np.save(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/test{TEST}/{folder}/actions.npy', np.array(self.actions))
@@ -266,33 +250,18 @@ class Controller():
             command_type = Command(0)  # None.
             args = []
 
-        self.prev_obs = obs
-
         return command_type, args
 
-    def filter_velocity(self, iteration, obs):
-        # Velocity
-        if iteration > 0:
-            est_xvel = (obs[0] - self.prev_x) / self.CTRL_DT
-            est_yvel = (obs[2] - self.prev_y) / self.CTRL_DT
-            self.prev_xvel = (1 - self.alpha) * self.prev_xvel + self.alpha * est_xvel
-            self.prev_yvel = (1 - self.alpha) * self.prev_yvel + self.alpha * est_yvel
-        self.prev_x = obs[0]
-        self.prev_y = obs[2]
-        obs[1] = self.prev_xvel
-        obs[3] = self.prev_yvel
 
-        # Angles
-        obs[6] -= self.bias_roll
-        obs[7] -= self.bias_pitch
+    def low_pass_state(self, obs):
+        vel_mask = [1,3,5,9,10]
+        pos_mask = [0,2,4,6,7]
 
-        if abs(obs[6]) > 1:
-            obs[6] = self.prev_roll
-        if abs(obs[7]) > 1:
-            obs[7] = self.prev_pitch
+        est_vel = (obs[pos_mask] - self.prev_pos) / self.CTRL_DT
+        self.prev_vel = (1 - self.alpha) * self.prev_vel + self.alpha * est_vel
+        self.prev_pos = obs[pos_mask]
+        obs[vel_mask] = self.prev_vel
 
-        self.prev_roll = obs[6]
-        self.prev_pitch = obs[7]
 
     def setup_controllers(self):
         task_name = 'stab' if task_config['task'] == Task.STABILIZATION else 'track'
@@ -308,7 +277,7 @@ class Controller():
                          **algo_config)
         if algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
             # Load state_dict from trained.
-            self.ctrl.load(path=f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/models/rl_models/{algo}/{MODEL}/model_latest.pt')
+            self.ctrl.load(path=f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/models/rl_models/{algo}/{MODEL}/model_best.pt')
 
             # Remove temporary files and directories
             # self.shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -332,5 +301,6 @@ class Controller():
         self.recorded_obs = []
         self.actions = []
         self.corrections = []
-        self.prev_obs = np.zeros((12, 1))
+        self.prev_pos = np.zeros((5,))
+        self.prev_vel = np.zeros((5,))
         self.setup_controllers()

@@ -312,6 +312,7 @@ class BoundedConstraint(LinearConstraint):
         self.lower_bounds = np.array(lower_bounds, ndmin=1)
         self.upper_bounds = np.array(upper_bounds, ndmin=1)
         dim = self.lower_bounds.shape[0]
+        self.active_dims = active_dims
         if active_dims is not None and isinstance(active_dims, list):
             assert self.lower_bounds.shape[0] == len(active_dims), '[Error] active_dims and lower_bounds must have the same dimension.'
         if active_dims is not None and isinstance(active_dims, int):

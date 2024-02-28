@@ -68,7 +68,7 @@ class NL_MPSC(MPSC):
 
         self.n = 6
         self.m = 2
-        self.q = 6
+        self.q = self.n
 
         super().__init__(env_func, horizon, q_lin, r_lin, integration_algo, warmstart, additional_constraints, use_terminal_set, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
@@ -76,10 +76,8 @@ class NL_MPSC(MPSC):
         self.soften_constraints = soften_constraints
         self.slack_cost = slack_cost
 
-        state_lower_bounds = self.env.constraints.state_constraints[0].lower_bounds
-        state_upper_bounds = self.env.constraints.state_constraints[0].upper_bounds
-        self.state_constraint = BoundedConstraint(self.env, state_lower_bounds, state_upper_bounds, ConstrainedVariableType.STATE, active_dims=[0,1,2,3,6,7])
-        self.input_constraint = BoundedConstraint(self.env, [-0.785, -0.785], [0.785, 0.785], ConstrainedVariableType.INPUT, active_dims=[0, 1])
+        self.state_constraint = self.env.constraints.state_constraints[0]
+        self.input_constraint = BoundedConstraint(self.env, [-0.25, -0.25], [0.25, 0.25], ConstrainedVariableType.INPUT, active_dims=[0, 1])
 
         [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
         [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
@@ -185,19 +183,16 @@ class NL_MPSC(MPSC):
         # Create set of error residuals.
         w = np.load('./models/traj_data/errors.npy')
         print('MEAN ERROR PER DIM:', np.mean(w, axis=0))
-        self.model_bias = np.mean(w, axis=0)
-        self.set_dynamics()
 
-        w = w - np.mean(w, axis=0)
         normed_w = np.linalg.norm(w, axis=1)
-        self.max_w_per_dim = np.mean(w, axis=0) + 1 * np.std(w, axis=0)
-        self.max_w = np.mean(normed_w) + 1 * np.std(normed_w)
+        self.max_w_per_dim = np.mean(np.abs(w), axis=0) # + 2 * np.std(np.abs(w), axis=0)
+        self.max_w = np.mean(normed_w) # + 2 * np.std(normed_w)
 
         print('MAX ERROR:', np.max(normed_w))
         print('STD ERROR:', np.mean(normed_w) + 3 * np.std(normed_w))
         print('MEAN ERROR:', np.mean(normed_w))
-        print('MAX ERROR PER DIM:', np.max(w, axis=0))
-        print('STD ERROR PER DIM:', np.mean(w, axis=0) + 3 * np.std(w, axis=0))
+        print('MAX ERROR PER DIM:', np.max(np.abs(w), axis=0))
+        print('STD ERROR PER DIM:', np.mean(np.abs(w), axis=0) + 3 * np.std(np.abs(w), axis=0))
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
 
     def synthesize_lyapunov(self):

@@ -80,7 +80,7 @@ class MPSC(BaseSafetyFilter, ABC):
         self.reset()
         self.dt = self.model.dt
 
-        self.model.nx = 6
+        self.model.nx = len(self.env.constraints.state_constraints[0].active_dims)
         self.model.nu = 2
 
         self.Q = get_cost_weight_matrix(q_lin, self.model.nx)
@@ -304,7 +304,7 @@ class MPSC(BaseSafetyFilter, ABC):
             certified_action (ndarray): The certified action
             success (bool): Whether the safety filtering was successful or not.
         '''
-        uncertified_action = np.clip(uncertified_action.reshape((self.model.nu,1)), np.array([[-0.785, -0.785]]).T, np.array([[0.785, 0.785]]).T)
+        uncertified_action = np.clip(uncertified_action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
         self.results_dict['uncertified_action'].append(uncertified_action)
         success = True
 
@@ -324,7 +324,7 @@ class MPSC(BaseSafetyFilter, ABC):
                 if self.integration_algo == 'LTI':
                     action = np.squeeze(action) + np.squeeze(self.U_EQ)
                 action = np.squeeze(action)
-                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.785, -0.785]]).T, np.array([[0.785, 0.785]]).T)
+                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
 
                 if np.linalg.norm(clipped_action - action) >= 0.01:
                     success = False
@@ -333,7 +333,7 @@ class MPSC(BaseSafetyFilter, ABC):
                 action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
                 if self.integration_algo == 'LTI':
                     action += np.squeeze(self.U_EQ)
-                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.785, -0.785]]).T, np.array([[0.785, 0.785]]).T)
+                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
 
                 success = False
                 certified_action = clipped_action

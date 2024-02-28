@@ -27,7 +27,7 @@ from safe_control_gym.envs.env_wrappers.vectorized_env import make_vec_envs
 from safe_control_gym.math_and_models.normalization import (BaseNormalizer, MeanStdNormalizer,
                                                             RewardStdNormalizer)
 from safe_control_gym.utils.logging import ExperimentLogger
-from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_random_state
+from safe_control_gym.utils.utils import get_random_state, set_random_state
 
 
 class PPO(BaseController):
@@ -204,7 +204,7 @@ class PPO(BaseController):
             obs = torch.FloatTensor(extended_obs).to(self.device)
             action = self.agent.ac.act(obs)
 
-        action = np.clip(np.squeeze([action]), [-0.785, -0.785], [0.785, 0.785])
+        action = np.clip(np.squeeze([action]), [-0.25, -0.25], [0.25, 0.25])
 
         return action
 
@@ -279,7 +279,7 @@ class PPO(BaseController):
             with torch.no_grad():
                 unsafe_action, v, logp = self.agent.ac.step(torch.FloatTensor(extended_obs).to(self.device))
 
-            action = np.clip(np.squeeze(unsafe_action.copy()), [-0.785, -0.785], [0.785, 0.785])
+            action = np.clip(np.squeeze(unsafe_action.copy()), [-0.25, -0.25], [0.25, 0.25])
             scaled_unsafe_action = action.copy()
 
             # Adding safety filter

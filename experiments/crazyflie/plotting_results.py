@@ -5,13 +5,13 @@ import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
-import tikzplotlib
-from matplotlib.legend import Legend
-from matplotlib.lines import Line2D
+# import tikzplotlib
+# from matplotlib.legend import Legend
+# from matplotlib.lines import Line2D
 
-Line2D._us_dashSeq = property(lambda self: self._dash_pattern[1])
-Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
-Legend._ncol = property(lambda self: self._ncols)
+# Line2D._us_dashSeq = property(lambda self: self._dash_pattern[1])
+# Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
+# Legend._ncol = property(lambda self: self._ncols)
 
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
 from safe_control_gym.utils.plotting import load_from_logs
@@ -35,9 +35,50 @@ def load_all_models(algo):
 
     all_results = {}
 
+    if not CERTIFIED:
+        suffix = 'uncert'
+    else:
+        suffix = 'cert'
+
     for model in ordered_models:
-        with open(f'./results_cf/{algo}/{model}.pkl', 'rb') as f:
-            all_results[model] = pickle.load(f)
+        if not REAL:
+            with open(f'./results_cf/{algo}/{model}.pkl', 'rb') as f:
+                all_results[model] = pickle.load(f)
+        else:
+            model_data = {'states': [],
+                          'certified_action': [],
+                          'corrections': [],
+                          'uncertified_action': [],
+                          'rewards': [],
+                          'constraint_violations': [],
+                          'length': [],
+                          'rmse': [],
+                          'feasible': []
+                          }
+            traj_goal = np.load(f'./all_trajs/test0/{model}_{suffix}/traj_goal.npy')
+            for test in range(5):
+                model_data['states'].append(np.load(f'./all_trajs/test{test}/{model}_{suffix}/states.npy'))
+                model_data['certified_action'].append(np.load(f'./all_trajs/test{test}/{model}_{suffix}/actions.npy'))
+                model_data['corrections'].append(np.load(f'./all_trajs/test{test}/{model}_{suffix}/corrections.npy'))
+
+                model_data['uncertified_action'].append(model_data['certified_action'][-1] - model_data['corrections'][-1])
+
+                error = model_data['states'][-1][:, [0,2]] - traj_goal[:, [0,2]]
+                dist = np.sum(2 * error * error, axis=1)
+                reward = np.sum(np.exp(-dist))
+                model_data['rewards'].append(reward)
+
+                constr_viols = np.sum(np.sum(np.abs(model_data['states'][-1][:, [0,1,2,3,6,7]]) > np.array([[0.95, 2, 0.95, 2, 0.25, 0.25]]), axis=1) > 0)
+                model_data['constraint_violations'].append(constr_viols)
+
+                model_data['length'].append(len(model_data['states'][-1]))
+                model_data['feasible'].append(len(model_data['states'][-1]))
+
+                err = np.sum(model_data['states'][-1] * model_data['states'][-1], axis=1)
+                rmse = np.mean(err)**0.5
+                model_data['rmse'].append(rmse)
+
+            all_results[model] = model_data
 
     return all_results
 
@@ -247,11 +288,13 @@ def create_paper_plot(data_extractor):
 
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
-        fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
+        if REAL:
+            fig.savefig(f'./results_cf/{algo_name}/graphs/real/{image_suffix}.png', dpi=300)
+        else:
+            fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
         # tikzplotlib.save(f'./all_trajs/{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
     if plot is True:
         plt.show()
-
 
 
 def plot_all_logs(algo):
@@ -315,6 +358,8 @@ def plot_log(algo, key, all_results):
 
 
 if __name__ == '__main__':
+    REAL = True
+    CERTIFIED = True
     algo_name = 'ppo'
     all_results = load_all_models(algo_name)
 
@@ -330,4 +375,5 @@ if __name__ == '__main__':
     create_paper_plot(extract_constraint_violations)
     create_paper_plot(extract_length)
 
-    plot_all_logs(algo_name)
+    if not REAL:
+        plot_all_logs(algo_name)
