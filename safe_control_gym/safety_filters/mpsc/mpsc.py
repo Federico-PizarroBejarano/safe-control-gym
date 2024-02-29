@@ -306,44 +306,26 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
         uncertified_action = np.clip(uncertified_action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
         self.results_dict['uncertified_action'].append(uncertified_action)
-        success = True
 
         self.before_optimization(current_state)
         iteration = self.extract_step(info)
         action, feasible = self.solve_optimization(current_state, uncertified_action, iteration)
         self.results_dict['feasible'].append(feasible)
 
-        if feasible:
+        if feasible and np.sum(self.slack_prev) < 0.01:
             self.kinf = 0
             certified_action = action
         else:
-            self.kinf += 1
-            if (self.kinf <= self.horizon - 1 and self.z_prev is not None and self.v_prev is not None):
-                action = np.squeeze(self.v_prev[:, self.kinf]) + \
-                    np.squeeze(self.lqr_gain @ (current_state.reshape((self.model.nx, 1)) - self.z_prev[:, self.kinf].reshape((self.model.nx, 1))))
-                if self.integration_algo == 'LTI':
-                    action = np.squeeze(action) + np.squeeze(self.U_EQ)
-                action = np.squeeze(action)
-                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
-
-                if np.linalg.norm(clipped_action - action) >= 0.01:
-                    success = False
-                certified_action = clipped_action
-            else:
-                action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
-                if self.integration_algo == 'LTI':
-                    action += np.squeeze(self.U_EQ)
-                clipped_action = np.clip(action.reshape((self.model.nu,1)), np.array([[-0.25, -0.25]]).T, np.array([[0.25, 0.25]]).T)
-
-                success = False
-                certified_action = clipped_action
+            action = np.squeeze(self.lqr_gain @ current_state)
+            clipped_action = np.clip(action, np.array([-0.25, -0.25]), np.array([0.25, 0.25]))
+            certified_action = clipped_action
 
         certified_action = np.squeeze(np.array(certified_action))
         self.results_dict['kinf'].append(self.kinf)
         self.results_dict['certified_action'].append(certified_action)
         self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
 
-        return certified_action, success
+        return certified_action, True
 
     def setup_results_dict(self):
         '''Setup the results dictionary to store run information.'''

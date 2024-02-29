@@ -104,7 +104,7 @@ task_config = {
 
 sf_config = {
     'r_lin': [2],
-    'q_lin': [0.008, 1.85, 0.008, 1.85, 10, 10],
+    'q_lin': [0.8, 1.85, 0.8, 1.85, 10, 10],
     'use_acados': True,
     'horizon': 10,
     'warmstart': True,

@@ -684,6 +684,10 @@ class NL_MPSC(MPSC):
         self.L_u_sym = cs.MX(self.L_u)
         self.l_sym = cs.MX(self.l_xu)
 
+        self.P = solve_discrete_are(self.Ad, self.Bd, self.Q, self.R)
+        btp = np.dot(self.Bd.T, self.P)
+        self.lqr_gain = -np.dot(np.linalg.inv(self.R + np.dot(btp, self.Bd)), np.dot(btp, self.Ad))
+
         self.setup_optimizer()
 
     def save(self, path):
