@@ -46,7 +46,7 @@ task_config:
   init_state_randomization_info:
     init_x:
       distrib: 'uniform'
-      low: -0.95
+      low: -0.5
       high: 0.95
     init_x_dot:
       distrib: 'uniform'
@@ -121,7 +121,7 @@ task_config:
         - 0.25
         - 0.25
       lower_bounds:
-        - -0.95
+        - -0.5
         - -2
         - -0.95
         - -2

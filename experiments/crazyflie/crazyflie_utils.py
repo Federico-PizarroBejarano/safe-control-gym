@@ -47,7 +47,7 @@ def calc_error(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
     reward = np.sum(np.exp(-dist))
 
     print('Model Errors: ', np.linalg.norm(errors))
-    print('NUM ERRORS POS: ', np.sum(np.abs(states[:, [0,2]]) >= 0.95))
+    print('NUM ERRORS POS: ', np.sum(states[:, [0,2]] >= 0.95) + np.sum(states[:, [0,2]] <= [-0.5, -0.95]))
     print('NUM ERRORS VEL: ', np.sum(np.abs(states[:, [1,3]]) >= 2))
     print('NUM ERRORS ANGLE: ', np.sum(np.abs(states[:, [6,7]]) >= 0.25))
     print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(actions.reshape(-1, 1), CTRL_FREQ)))

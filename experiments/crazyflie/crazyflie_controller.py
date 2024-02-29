@@ -92,7 +92,7 @@ task_config = {
          'constrained_variable': 'state',
          'active_dims': [0,1,2,3,6,7],
          'upper_bounds': [0.95, 2, 0.95, 2, 0.25, 0.25],
-         'lower_bounds': [-0.95, -2, -0.95, -2, -0.25, -0.25]},
+         'lower_bounds': [-0.5, -2, -0.95, -2, -0.25, -0.25]},
         {'constraint_form': 'default_constraint',
          'constrained_variable': 'input',
          }

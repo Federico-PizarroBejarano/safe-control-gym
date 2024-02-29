@@ -20,7 +20,7 @@ from safe_control_gym.utils.plotting import load_from_logs
 plot = False
 save_figs = True
 
-suffix = '_dm_s5'
+suffix = '_dm_t1'
 # suffix = ''
 
 ordered_models = [f'mpsf_0.1{suffix}', f'mpsf_1{suffix}', f'mpsf_10{suffix}', f'none{suffix}', f'none_cpen{suffix}']
@@ -73,6 +73,7 @@ def load_all_models(algo):
                 reward = np.sum(np.exp(-dist))
                 model_data['rewards'].append(reward)
 
+                # TODO fix this
                 constr_viols = np.sum(np.sum(np.abs(model_data['states'][-1][:, [0,1,2,3,6,7]]) > np.array([[0.95, 2, 0.95, 2, 0.25, 0.25]]), axis=1) > 0)
                 model_data['constraint_violations'].append(constr_viols)
 
@@ -297,7 +298,7 @@ def create_paper_plot(data_extractor):
             fig.savefig(f'./results_cf/{algo_name}/graphs/real/{image_suffix}.png', dpi=300)
         else:
             if suffix != '':
-                fig.savefig(f'./results_cf/{algo_name}/graphs/dm/{image_suffix}.png', dpi=300)
+                fig.savefig(f'./results_cf/{algo_name}/graphs/{suffix[1:]}/{image_suffix}.png', dpi=300)
             else:
                 fig.savefig(f'./results_cf/{algo_name}/graphs/{image_suffix}.png', dpi=300)
             # tikzplotlib.save(f'./{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
@@ -362,7 +363,7 @@ def plot_log(algo, key, all_results):
     if save_figs:
         image_suffix = key.replace('/', '__')
         if suffix != '':
-            fig.savefig(f'./results_cf/{algo}/graphs/dm/{image_suffix}.png', dpi=300)
+            fig.savefig(f'./results_cf/{algo}/graphs/{suffix[1:]}/{image_suffix}.png', dpi=300)
         else:
             fig.savefig(f'./results_cf/{algo}/graphs/{image_suffix}.png', dpi=300)
     plt.close()
