@@ -47,7 +47,7 @@ def calc_error(CTRL_FREQ, TEST=0, CERTIFIED=False, MODEL='none'):
     reward = np.sum(np.exp(-dist))
 
     print('Model Errors: ', np.linalg.norm(errors))
-    print('NUM ERRORS POS: ', np.sum(states[:, [0,2]] >= 0.95) + np.sum(states[:, [0,2]] <= [-0.5, -0.95]))
+    print('NUM ERRORS POS: ', np.sum(np.abs(states[:, [0,2]]) >= 0.95))
     print('NUM ERRORS VEL: ', np.sum(np.abs(states[:, [1,3]]) >= 2))
     print('NUM ERRORS ANGLE: ', np.sum(np.abs(states[:, [6,7]]) >= 0.25))
     print('Rate of change (inputs): ', np.linalg.norm(get_discrete_derivative(actions.reshape(-1, 1), CTRL_FREQ)))
@@ -190,14 +190,16 @@ def gen_traj(CTRL_FREQ, EPISODE_LEN_SEC, plot=False):
 
 
 if __name__ == '__main__':
-    TEST = 0
     CERTIFIED = True
-    MODEL = 'none'
+    suffix = '_dm'
 
     # gen_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=15, plot=True)
     # gen_input_traj(CTRL_FREQ=25, EPISODE_LEN_SEC=20, plot=True)
     # get_max_chatter(CERTIFIED=CERTIFIED, COST_FUNCTION=COST_FUNCTION, M=M)
 
-    for test in range(5):
-        plot_traj(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)
-        calc_error(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)
+    for model in ['mpsf_0.1', 'mpsf_1', 'mpsf_10', 'none_cpen', 'none']:
+        MODEL = model + suffix
+        for test in range(5):
+            print(f'MODEL: {MODEL}, TEST: {test}')
+            plot_traj(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)
+            calc_error(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)

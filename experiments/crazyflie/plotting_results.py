@@ -20,7 +20,7 @@ from safe_control_gym.utils.plotting import load_from_logs
 plot = False
 save_figs = True
 
-suffix = '_dm_t1'
+suffix = '_dm'
 # suffix = ''
 
 ordered_models = [f'mpsf_0.1{suffix}', f'mpsf_1{suffix}', f'mpsf_10{suffix}', f'none{suffix}', f'none_cpen{suffix}']
@@ -39,9 +39,9 @@ def load_all_models(algo):
     all_results = {}
 
     if not CERTIFIED:
-        suffix = 'uncert'
+        is_cert = 'uncert'
     else:
-        suffix = 'cert'
+        is_cert = 'cert'
 
     for model in ordered_models:
         if not REAL:
@@ -59,12 +59,16 @@ def load_all_models(algo):
                           'feasible': []
                           }
             for test in range(5):
-                with open(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{model}/cert/test{test}.pkl', 'rb') as file:
+                with open(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{model}/{is_cert}/test{test}.pkl', 'rb') as file:
                     pickle_data = pickle.load(file)
                 traj_goal = pickle_data['traj_goal']
                 model_data['states'].append(pickle_data['states'])
                 model_data['certified_action'].append(pickle_data['actions'])
-                model_data['corrections'].append(pickle_data['corrections'])
+
+                if not CERTIFIED:
+                    model_data['corrections'].append(np.zeros(pickle_data['actions'].shape))
+                else:
+                    model_data['corrections'].append(pickle_data['corrections'])
 
                 model_data['uncertified_action'].append(model_data['certified_action'][-1] - model_data['corrections'][-1])
 
@@ -295,7 +299,11 @@ def create_paper_plot(data_extractor):
     image_suffix = data_extractor.__name__.replace('extract_', '')
     if save_figs:
         if REAL:
-            fig.savefig(f'./results_cf/{algo_name}/graphs/real/{image_suffix}.png', dpi=300)
+            if not CERTIFIED:
+                is_cert = 'uncert'
+            else:
+                is_cert = 'cert'
+            fig.savefig(f'./results_cf/{algo_name}/graphs/real_{is_cert}/{image_suffix}.png', dpi=300)
         else:
             if suffix != '':
                 fig.savefig(f'./results_cf/{algo_name}/graphs/{suffix[1:]}/{image_suffix}.png', dpi=300)
@@ -370,7 +378,7 @@ def plot_log(algo, key, all_results):
 
 
 if __name__ == '__main__':
-    REAL = False
+    REAL = True
     CERTIFIED = True
     algo_name = 'ppo'
     all_results = load_all_models(algo_name)
