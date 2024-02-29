@@ -15,8 +15,11 @@ from safe_control_gym.utils.utils import mkdirs
 
 save_data = True
 TEST = 0
-MODEL = 'mpsf_10'
-CERTIFY = False
+suffix = '_dm'
+model_name = 'mpsf_0.1'
+CERTIFY = True
+
+MODEL = model_name + suffix
 
 algo = 'ppo'
 task = 'quadrotor'
