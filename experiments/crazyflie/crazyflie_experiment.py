@@ -263,10 +263,15 @@ def env_reset(env, mpsf):
 def identify_system():
     A,B = linear_regression()
 
-    with open(f'./results_cf/ppo/mpsf_1.pkl', 'rb') as f:
+    print_numpy(A)
+    print_numpy(B)
+    print(A)
+    print(B)
+
+    with open(f'./all_trajs/mpsf_10/cert/test0.pkl', 'rb') as f:
         data = pickle.load(f)
-    states = data['state'][-2][:, [0,1,2,3,6,7]]
-    actions = data['certified_action'][-2]
+    states = data['states'][:, [0,1,2,3,6,7]]
+    actions = data['actions']
 
     errors = []
     next_states = [states[0, :]]
@@ -278,18 +283,18 @@ def identify_system():
         errors.append(np.squeeze(states[i+1,:]) - np.squeeze(pred_next_state))
 
     errors = np.array(errors)
-    errors[:, 0][errors[:, 0] > 0.0005] = 0.0005
-    errors[:, 0][errors[:, 0] < -0.0005] = -0.0005
-    errors[:, 2][errors[:, 2] > 0.0003] = 0.0003
-    errors[:, 2][errors[:, 2] < -0.0003] = -0.0003
+    # errors[:, 0][errors[:, 0] > 0.0005] = 0.0005
+    # errors[:, 0][errors[:, 0] < -0.0005] = -0.0005
+    # errors[:, 2][errors[:, 2] > 0.0003] = 0.0003
+    # errors[:, 2][errors[:, 2] < -0.0003] = -0.0003
     next_states = np.array(next_states)
 
-    # plt.plot(states[:, 0], label='x')
-    # plt.plot(states[:, 2], label='y')
-    # plt.plot(next_states[:, 0], label='pred_x')
-    # plt.plot(next_states[:, 2], label='pred_y')
-    # plt.legend()
-    # plt.show()
+    plt.plot(states[:, 0], label='x')
+    plt.plot(states[:, 2], label='y')
+    plt.plot(next_states[:, 0], label='pred_x')
+    plt.plot(next_states[:, 2], label='pred_y')
+    plt.legend()
+    plt.show()
 
     np.save('./models/traj_data/errors.npy', errors)
 
@@ -297,13 +302,13 @@ def identify_system():
 
 
 def linear_regression():
-    with open(f'./results_cf/ppo/none.pkl', 'rb') as f:
+    with open(f'./all_trajs/mpsf_10/cert/test0.pkl', 'rb') as f:
         data = pickle.load(f)
-    states = data['state'][-2][:, [0,1,2,3,6,7]]
-    actions = data['certified_action'][-2]
+    states = data['states'][:, [0,1,2,3,6,7]]
+    actions = data['actions']
     n = states.shape[1]
 
-    X = np.hstack((states[:-1, :], actions[:, :]))
+    X = np.hstack((states[:-1, :], actions[:-1, :]))
     y = states[1:, :]
 
     lamb = 0.02
@@ -314,7 +319,7 @@ def linear_regression():
 
     A = np.atleast_2d(theta.T[:n,:n])
     B = np.atleast_2d(theta.T[:,n:])
-    y_est2 = A @ states[:-1, :].T + B @ actions[:, :].T
+    y_est2 = A @ states[:-1, :].T + B @ actions[:-1, :].T
     LIN_err = np.linalg.norm(y_est2.T - y)
     print(f'LIN ERROR: {LIN_err}')
 
