@@ -58,7 +58,7 @@ def load_all_models(algo):
                           'rmse': [],
                           'feasible': []
                           }
-            for test in range(5):
+            for test in range(len(os.listdir(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{model}/{is_cert}'))):
                 with open(f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/all_trajs/{model}/{is_cert}/test{test}.pkl', 'rb') as file:
                     pickle_data = pickle.load(file)
                 traj_goal = pickle_data['traj_goal']
