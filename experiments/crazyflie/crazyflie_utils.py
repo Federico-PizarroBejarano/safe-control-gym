@@ -203,3 +203,4 @@ if __name__ == '__main__':
             print(f'MODEL: {MODEL}, TEST: {test}')
             plot_traj(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)
             calc_error(CTRL_FREQ=25, TEST=test, CERTIFIED=CERTIFIED, MODEL=MODEL)
+        print('--------------------')

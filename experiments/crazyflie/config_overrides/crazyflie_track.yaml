@@ -24,7 +24,7 @@ task_config:
     init_q: 0
     init_r: 0
   randomized_init: False
-  randomized_inertial_prop: True
+  randomized_inertial_prop: False
   inertial_prop_randomization_info:
     M:
       distrib: 'uniform'
@@ -46,7 +46,7 @@ task_config:
   init_state_randomization_info:
     init_x:
       distrib: 'uniform'
-      low: -0.5
+      low: -0.95
       high: 0.95
     init_x_dot:
       distrib: 'uniform'
@@ -132,10 +132,10 @@ task_config:
   done_on_out_of_bound: True
   done_on_violation: False
 
-  disturbances:
-    observation:
-      - disturbance_func: white_noise
-        std: 0.002
-    dynamics:
-      - disturbance_func: white_noise
-        std: 0.2
+  # disturbances:
+  #   observation:
+  #     - disturbance_func: white_noise
+  #       std: 0.002
+  #   dynamics:
+  #     - disturbance_func: white_noise
+  #       std: 0.2

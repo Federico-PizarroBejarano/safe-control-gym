@@ -39,7 +39,7 @@ else
     SF_PEN_TAG="_$4"
 fi
 
-TAG="$1${CONSTR_PEN_TAG}${SF_PEN_TAG}_dm_t1"
+TAG="$1${CONSTR_PEN_TAG}${SF_PEN_TAG}_dm"
 echo $TAG $SYS $ALGO $TASK
 
 python3 ./train_rl.py \

@@ -114,7 +114,7 @@ sf_config = {
     'integration_algo': 'rk4',
     'use_terminal_set': False,
     'cost_function': 'precomputed_cost',
-    'mpsc_cost_horizon': 10,
+    'mpsc_cost_horizon': 2,
     'decay_factor': 0.85,
     'prior_info': {
         'prior_prop': None,
@@ -171,6 +171,9 @@ class Controller():
 
         iteration = int(ep_time * self.CTRL_FREQ)
         z_height = 1
+        x_offset = 0.0
+        y_offset = 0.0
+        flip_traj = False
 
         self.low_pass_state(obs)
 
@@ -182,7 +185,7 @@ class Controller():
             args = [height, duration]
         elif iteration >= 2 * self.CTRL_FREQ and iteration < 3 * self.CTRL_FREQ:
             print(f'Iter: {iteration} - Re-centering at (0, 0, z_height).')
-            target_pos = np.array([0, 0, z_height])
+            target_pos = np.array([x_offset, y_offset, z_height])
             target_vel = np.zeros(3)
             target_acc = np.zeros(3)
             target_yaw = 0.0
@@ -193,6 +196,18 @@ class Controller():
             print(f'Iter: {iteration} - Executing Trajectory.')
             step = iteration - 3 * self.CTRL_FREQ
             info = {'current_step': step*20}
+
+            obs[0] -= x_offset
+            obs[2] -= y_offset
+
+            if flip_traj:
+                old_obs = obs.copy()
+                obs[0] = old_obs[2]
+                obs[1] = old_obs[3]
+                obs[2] = -old_obs[0]
+                obs[3] = -old_obs[1]
+                obs[6] = old_obs[7]
+                obs[7] = -old_obs[6]
 
             curr_obs = obs[[0,1,2,3,6,7]].reshape((6, 1))
 
@@ -207,13 +222,18 @@ class Controller():
                 else:
                     self.corrections.append([0,0])
 
+            if flip_traj:
+                new_act = np.array([-new_act[1], new_act[0]])
+            else:
+                new_act = np.array([new_act[0], new_act[1]])
+
             command_type = Command(7)  # cmdVel
             args = [new_act[0]*180.0/np.pi, new_act[1]*180.0/np.pi, 0, 0]
 
             self.recorded_obs.append(obs)
             self.actions.append(new_act)
         elif iteration == 18 * self.CTRL_FREQ:
-            self.return_path_pos = np.linspace(obs[[0, 2, 4]], [0, 0, z_height], 4 * self.CTRL_FREQ)
+            self.return_path_pos = np.linspace(obs[[0, 2, 4]], [x_offset, y_offset, z_height], 4 * self.CTRL_FREQ)
             self.return_path_vel = np.linspace(obs[[1, 3, 5]], [0, 0, 0], 4 * self.CTRL_FREQ)
             command_type = Command(1)  # cmdFullState.
             args = [self.return_path_pos[0], self.return_path_vel[0], np.zeros(3), 0.0, np.zeros(3)]
@@ -283,7 +303,7 @@ class Controller():
                          **algo_config)
         if algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
             # Load state_dict from trained.
-            self.ctrl.load(path=f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/models/rl_models/{algo}/{MODEL}/model_best.pt')
+            self.ctrl.load(path=f'/home/federico/GitHub/safe-control-gym/experiments/crazyflie/models/rl_models/{algo}/{MODEL}/model_latest.pt')
 
             # Remove temporary files and directories
             # self.shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
