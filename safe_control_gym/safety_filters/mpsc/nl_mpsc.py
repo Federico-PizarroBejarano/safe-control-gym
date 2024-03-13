@@ -231,14 +231,14 @@ class NL_MPSC(MPSC):
 
         w = w - np.mean(w, axis=0)
         normed_w = np.linalg.norm(w, axis=1)
-        self.max_w_per_dim = np.minimum(np.max(w, axis=0), np.mean(w, axis=0) + 3 * np.std(w, axis=0))
+        self.max_w_per_dim = np.minimum(np.max(np.abs(w), axis=0), np.mean(np.abs(w), axis=0) + 3 * np.std(np.abs(w), axis=0))
         self.max_w = min(np.max(normed_w), np.mean(normed_w) + 3 * np.std(normed_w))
 
         print('MAX ERROR:', np.max(normed_w))
         print('STD ERROR:', np.mean(normed_w) + 3 * np.std(normed_w))
         print('MEAN ERROR:', np.mean(normed_w))
-        print('MAX ERROR PER DIM:', np.max(w, axis=0))
-        print('STD ERROR PER DIM:', np.mean(w, axis=0) + 3 * np.std(w, axis=0))
+        print('MAX ERROR PER DIM:', np.max(np.abs(w), axis=0))
+        print('STD ERROR PER DIM:', np.mean(np.abs(w), axis=0) + 3 * np.std(np.abs(w), axis=0))
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
 
         # if self.integration_algo == 'LTI':

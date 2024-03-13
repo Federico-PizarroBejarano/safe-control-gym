@@ -9,10 +9,6 @@ for SYS in quadrotor_3D; do
                 sbatch train_model.sbatch mpsf True True $SYS $TASK $ALGO False 1000 $SEED #mpsf_sr_pen_1000
                 sbatch train_model.sbatch none False False $SYS $TASK $ALGO False False $SEED #none
                 sbatch train_model.sbatch none False False $SYS $TASK $ALGO True False $SEED #none_cpen
-                if [ "$ALGO" == 'ppo' ]; then
-                    sbatch train_model.sbatch none False False $SYS $TASK safe_explorer_ppo False False $SEED #safe-ppo
-                    sbatch train_model.sbatch none False False $SYS $TASK cpo False False $SEED #cpo
-                fi
             done
         done
     done
