@@ -3,10 +3,7 @@
 import os
 import pickle
 import sys
-from collections import defaultdict
-from inspect import signature
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -15,16 +12,10 @@ from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative, high_frequency_content
 from safe_control_gym.utils.plotting import load_from_logs
 
-# from scipy.signal import savgol_filter
-
-
 plot = False
 save_figs = True
 ordered_algos = ['lqr', 'ppo', 'sac']
 # ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
-
-# cost_colors = {'one_step':'cornflowerblue', 'constant': 'goldenrod', 'regularized': 'pink', 'lqr':'tomato', 'precomputed':'limegreen', 'learned':'yellow'}
-cost_colors = {'one_step': 'cornflowerblue', 'regularized': 'pink', 'precomputed M=2': 'limegreen', 'precomputed M=5': 'forestgreen', 'precomputed M=10': 'darkgreen'}
 
 U_EQs = {
     'cartpole': 0,
@@ -101,14 +92,6 @@ def load_all_models(system, task, algo):
                 all_results[model].append(pickle.load(f))
         consolidate_multiple_seeds(all_results, model)
 
-    with open(f'./results_mpsc/{system}/{task}/safe_explorer_ppo/results_{system}_{task}_safe_explorer_ppo_none.pkl', 'rb') as f:
-        all_results['safe_ppo'] = pickle.load(f)
-        all_results['safe_ppo_cert'] = all_results['safe_ppo']
-
-    with open(f'./results_mpsc/{system}/{task}/cpo/results_{system}_{task}_cpo_none.pkl', 'rb') as f:
-        all_results['cpo'] = pickle.load(f)
-        all_results['cpo_cert'] = all_results['cpo']
-
     return all_results
 
 
@@ -131,145 +114,6 @@ def consolidate_multiple_seeds(all_results, model):
 
     all_results[model]['cert_results'] = data['cert_results']
     all_results[model]['uncert_results'] = data['uncert_results']
-
-
-def plot_experiment(system, task, mpsc_cost_horizon, data_extractor):
-    '''Plots the results of every MPSC cost function for a specific experiment.
-
-    Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
-        data_extractor (lambda): A function that extracts the necessary data from the results.
-    '''
-
-    all_results = load_all_algos(system, task, mpsc_cost_horizon)
-
-    if len(signature(data_extractor).parameters) > 1:
-        show_uncertified = True
-    else:
-        show_uncertified = False
-
-    fig = plt.figure(figsize=(16.0, 10.0))
-    ax = fig.add_subplot(111)
-
-    uncertified_data = []
-    cert_data = defaultdict(list)
-    labels = []
-
-    for algo in ordered_algos:
-        if algo not in all_results:
-            continue
-        labels.append(algo.upper())
-
-        for cost in ordered_costs:
-            raw_data = all_results[algo][cost]
-            cert_data[cost].append(data_extractor(raw_data))
-            if show_uncertified and cost == 'one_step':
-                uncertified_data.append(data_extractor(raw_data, certified=False))
-
-    num_bars = len(ordered_costs) + show_uncertified + 1
-    width = 1 / (num_bars + 1)
-    widths = [width] * len(labels)
-    x = np.arange(1, len(labels) + 1)
-
-    box_plots = {}
-    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-
-    cost_names = []
-    if show_uncertified:
-        cost_names.append('Uncertified')
-        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars - 1) / 2.0 * width, widths=widths, patch_artist=True, medianprops=medianprops)
-        for patch in box_plots['uncertified']['boxes']:
-            patch.set_facecolor('plum')
-
-    for idx, cost in enumerate(ordered_costs):
-        cost_name = cost.replace('_', ' ').title()
-        if cost_name == 'Lqr':
-            cost_name = 'LQR'
-        cost_names.append(f'{cost_name} Cost')
-        position = ((num_bars - 1) / 2.0 - idx - show_uncertified) * width
-        box_plots[cost] = ax.boxplot(cert_data[cost], positions=x - position, widths=widths, patch_artist=True, medianprops=medianprops)
-
-        for patch in box_plots[cost]['boxes']:
-            patch.set_facecolor(cost_colors[cost])
-
-    ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
-    if ylabel == 'Rmse':
-        ylabel = 'RMSE'
-    ax.set_ylabel(ylabel, weight='bold', fontsize=25, labelpad=10)
-    task_title = 'Stabilization' if task == 'stab' else 'Trajectory Tracking'
-    ax.set_title(f'{system.title()} {task_title} {ylabel} with M={mpsc_cost_horizon}', weight='bold', fontsize=25)
-
-    ax.set_xticks(x, labels, weight='bold', fontsize=25)
-    first_boxes = [box_plots[cost]['boxes'][0] for cost in ordered_costs]
-    if show_uncertified:
-        first_boxes = [box_plots['uncertified']['boxes'][0]] + first_boxes
-    ax.legend(first_boxes, cost_names, loc='upper right', fontsize=25)
-
-    fig.tight_layout()
-
-    ax.set_ylim(ymin=0)
-    ax.yaxis.grid(True)
-    if plot is True:
-        plt.show()
-
-    image_suffix = data_extractor.__name__.replace('extract_', '')
-    if save_figs:
-        fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_{image_suffix}_m{mpsc_cost_horizon}.png', dpi=300)
-    plt.close()
-
-
-def plot_violations(system, task, mpsc_cost_horizon):
-    '''Plots the constraint violations of every controller for a specific experiment.
-
-    Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
-    '''
-
-    all_results = load_all_algos(system, task, mpsc_cost_horizon)
-
-    fig = plt.figure(figsize=(16.0, 10.0))
-    ax = fig.add_subplot(111)
-
-    labels = []
-    data = []
-
-    for algo in ordered_algos:
-        if algo not in all_results:
-            continue
-        labels.append(algo.upper())
-
-        one_step_cost = all_results[algo]['one_step']
-        data.append(extract_constraint_violations(one_step_cost, certified=False))
-
-    ax.set_ylabel('Number of Constraint Violations', weight='bold', fontsize=25, labelpad=10)
-    task_title = 'Stabilization' if task == 'stab' else 'Trajectory Tracking'
-    ax.set_title(f'{system.title()} {task_title} Constraint Violations with M={mpsc_cost_horizon}', weight='bold', fontsize=25)
-
-    x = np.arange(1, len(labels) + 1)
-    ax.set_xticks(x, labels, weight='bold', fontsize=25)
-
-    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))
-
-    cm = plt.cm.get_cmap('inferno', len(labels) + 2)
-    colors = [cm(i) for i in range(1, len(labels) + 1)]
-    for patch, color in zip(bplot['boxes'], colors):
-        patch.set_facecolor(color)
-
-    fig.tight_layout()
-
-    ax.set_ylim(ymin=0)
-    ax.yaxis.grid(True)
-
-    if plot is True:
-        plt.show()
-    if save_figs:
-        fig.savefig(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/graphs/{system}_{task}_constraint_violations.png', dpi=300)
-    plt.close()
 
 
 def extract_magnitude_of_corrections(results_data):
@@ -696,94 +540,6 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
         plt.show()
 
 
-def create_paper_plot(system, task, data_extractor):
-    '''Plots the results of every paper MPSC cost function for a specific experiment.
-
-    Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
-        data_extractor (lambda): A function that extracts the necessary data from the results.
-    '''
-
-    if len(signature(data_extractor).parameters) > 1:
-        show_uncertified = True
-    else:
-        show_uncertified = False
-
-    fig = plt.figure(figsize=(16.0, 10.0))
-    ax = fig.add_subplot(111)
-
-    uncertified_data = []
-    cert_data = defaultdict(list)
-
-    labels = [algo.upper() for algo in ordered_algos]
-
-    ordered_cost_ids = ['one_step', 'regularized', 'precomputed M=2', 'precomputed M=5', 'precomputed M=10']
-    for cost_name in ordered_cost_ids:
-        if cost_name in ['one_step', 'regularized']:
-            all_results = load_all_algos(system, task, 10)
-            cost = cost_name
-        else:
-            M = int(cost_name.split('=')[1])
-            all_results = load_all_algos(system, task, M)
-            cost = 'precomputed'
-
-        for algo in ordered_algos:
-            raw_data = all_results[algo][cost]
-            cert_data[cost_name].append(data_extractor(raw_data))
-            if show_uncertified and cost == 'one_step':
-                uncertified_data.append(data_extractor(raw_data, certified=False))
-
-    num_bars = len(ordered_cost_ids) + show_uncertified
-    width = 1 / (num_bars + 1)
-    widths = [width] * len(labels)
-    x = np.arange(1, len(labels) + 1)
-
-    box_plots = {}
-    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-    flierprops = {'marker': 'o', 'markersize': 3}
-
-    cost_names = []
-    if show_uncertified:
-        cost_names.append('Uncertified')
-        box_plots['uncertified'] = ax.boxplot(uncertified_data, positions=x - (num_bars - 1) / 2.0 * width, widths=widths, patch_artist=True, medianprops=medianprops, flierprops=flierprops)
-        for patch in box_plots['uncertified']['boxes']:
-            patch.set_facecolor('plum')
-
-    for idx, cost_id in enumerate(ordered_cost_ids):
-        cost = cost_id.split(' ')[0]
-        cost_name = cost_id.title()
-        if cost_name == 'Lqr':
-            cost_name = 'LQR'
-        cost_names.append(f'{cost_name} Cost')
-        position = ((num_bars - 1) / 2.0 - idx - show_uncertified) * width
-        box_plots[cost_id] = ax.boxplot(cert_data[cost_id], positions=x - position, widths=widths, patch_artist=True, medianprops=medianprops)
-
-        for patch in box_plots[cost_id]['boxes']:
-            patch.set_facecolor(cost_colors[cost_id])
-
-    ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
-    if ylabel == 'Rmse':
-        ylabel = 'RMSE'
-    ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
-
-    ax.set_xticks(x, labels, weight='bold', fontsize=45)
-    ax.set_xlim([0.5, len(labels) + 0.5])
-
-    fig.tight_layout()
-
-    ax.set_ylim(ymin=0)
-    ax.yaxis.grid(True)
-    if plot is True:
-        plt.show()
-
-    image_suffix = data_extractor.__name__.replace('extract_', '')
-    if save_figs:
-        fig.savefig(f'./results_mpsc/{system}_{task}_{image_suffix}.png', dpi=300)
-    plt.close()
-
-
 def plot_model_comparisons(system, task, algo, data_extractor):
     '''Plots the constraint violations of every controller for a specific experiment.
 
@@ -799,26 +555,12 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     ax = fig.add_subplot(111)
 
     labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'))
-    if 'cert' not in data_extractor.__name__:
-        labels = labels + ['safe_ppo_cert']
-        labels = labels + ['cpo_cert']
-    elif 'uncert' in data_extractor.__name__:
-        labels = labels + ['safe_ppo']
-        labels = labels + ['cpo']
-    else:
-        labels = labels + ['safe_ppo'] + ['safe_ppo_cert']
-        labels = labels + ['cpo'] + ['cpo_cert']
-
-    labels = [label for label in labels if '_es' not in label]
 
     data = []
 
     for model in labels:
         exp_data = all_results[model]
-        if model == 'safe_ppo' or model == 'cpo':
-            data.append(data_extractor(exp_data, certified=False))
-        else:
-            data.append(data_extractor(exp_data))
+        data.append(data_extractor(exp_data))
 
     ylabel = data_extractor.__name__.replace('extract_', '').replace('_', ' ').title()
     ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
@@ -829,9 +571,9 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
     bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))
 
-    cm = mpl.colormaps['inferno']
-    colors = [cm(i / len(labels)) for i in range(1, len(labels) + 1)]
-    for patch, color in zip(bplot['boxes'], colors):
+    colors = {'mpsf_sr_pen_1': 'lightgreen', 'mpsf_sr_pen_10': 'limegreen', 'mpsf_sr_pen_100': 'forestgreen', 'mpsf_sr_pen_1000': 'darkgreen', 'none': 'cornflowerblue', 'none_cpen': 'plum'}
+
+    for patch, color in zip(bplot['boxes'], colors.values()):
         patch.set_facecolor(color)
 
     fig.tight_layout()
@@ -910,17 +652,13 @@ def plot_log(system, task, algo, key, all_results):
     labels = sorted(all_results.keys())
     labels = [label for label in labels if '_es' not in label]
 
-    colors = plt.colormaps['tab20'].colors
+    colors = {'mpsf_sr_pen_1': 'lightgreen', 'mpsf_sr_pen_10': 'limegreen', 'mpsf_sr_pen_100': 'forestgreen', 'mpsf_sr_pen_1000': 'darkgreen', 'none': 'cornflowerblue', 'none_cpen': 'plum'}
 
-    for i, model in enumerate(labels):
-        if key == 'loss/critic_loss' and model == 'safe_ppo':
-            continue
-        if key in ['loss/policy_loss', 'loss/critic_loss'] and model == 'cpo':
-            continue
+    for model in labels:
         x = all_results[model][0][key][1]
         all_data = np.array([values[key][3] for values in all_results[model]])
-        ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[i])
-        ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[i], facecolor=colors[i])
+        ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[model])
+        ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[model], facecolor=colors[model])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
     ax.legend()
@@ -1014,37 +752,3 @@ if __name__ == '__main__':
     if task_name == 'stab':
         plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
         plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)
-
-    # mpsc_cost_horizon_num = 2
-
-    # dataframe = generate_dataframe()
-    # create_table(dataframe, 'cartpole')
-    # create_table(dataframe, 'quadrotor_2D')
-    # create_table(dataframe, 'quadrotor_3D')
-
-    # for system_name in ['cartpole', 'quadrotor_2D', 'quadrotor_3D']:
-    #     for task_name in ['stab', 'track']:
-    #         plot_violations(system_name, task_name, mpsc_cost_horizon_num)
-
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_inputs)
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rate_of_change_of_corrections)
-
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_high_frequency_content)
-
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_magnitude_of_corrections)
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_max_correction)
-
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_simulation_time)
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_rmse)
-
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_corrections)
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_number_of_correction_intervals)
-
-    #         plot_experiment(system_name, task_name, mpsc_cost_horizon_num, extract_constraint_violations)
-
-    # Plotting a single experiment
-    # algo_name = 'lqr'
-    # mpsc_cost_name = 'one_step'
-    # one_result = load_one_experiment(system=system_name, task=task_name, algo=algo_name, mpsc_cost_horizon=mpsc_cost_horizon_num)
-    # results = one_result[mpsc_cost_name]
-    # plot_trajectories(results['config'], results['X_GOAL'], results['uncert_results'], results['cert_results'])
