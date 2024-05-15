@@ -2,8 +2,8 @@
 
 import logging
 import os
-from collections import defaultdict
 import time
+from collections import defaultdict
 
 import imageio
 import numpy as np

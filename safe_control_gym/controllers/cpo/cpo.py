@@ -499,7 +499,7 @@ class CPO(BaseController):
         state_constraints = np.maximum(info['constraint_values'][:nx], info['constraint_values'][nx:nx * 2])
         constraint_width = info['constraint_values'][:nx] + info['constraint_values'][nx:nx * 2]
         state_cost = np.divide(state_constraints, -constraint_width / 2) + 0.0001
-        return np.sum([max(s,0) for s in state_cost])
+        return np.sum([max(s, 0) for s in state_cost])
 
     def normalizeAction(self, a):
         return normalize(a, self.action_bound_max, self.action_bound_min)

@@ -14,8 +14,6 @@ from safe_control_gym.utils.plotting import load_from_logs
 
 plot = False
 save_figs = True
-ordered_algos = ['lqr', 'ppo', 'sac']
-# ordered_algos = ['lqr', 'pid', 'ppo', 'sac']
 
 U_EQs = {
     'cartpole': 0,
@@ -25,51 +23,6 @@ U_EQs = {
 
 met = MetricExtractor()
 met.verbose = False
-
-
-def load_one_experiment(system, task, algo, mpsc_cost_horizon):
-    '''Loads the results of every MPSC cost function for a specific experiment.
-
-    Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        algo (str): The controller being used.
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
-
-    Returns:
-        all_results (dict): A dictionary containing all the results.
-    '''
-
-    all_results = {}
-
-    for cost in ordered_costs:
-        with open(f'./results_mpsc/{system}/{task}/m{mpsc_cost_horizon}/results_{system}_{task}_{algo}_{cost}_cost_m{mpsc_cost_horizon}.pkl', 'rb') as f:
-            all_results[cost] = pickle.load(f)
-
-    return all_results
-
-
-def load_all_algos(system, task, mpsc_cost_horizon):
-    '''Loads the results of every MPSC cost function for a specific experiment with every algo.
-
-    Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
-
-    Returns:
-        all_results (dict): A dictionary containing all the results.
-    '''
-
-    all_results = {}
-
-    for algo in ['lqr', 'pid', 'ppo', 'sac']:
-        if system == 'cartpole' and algo == 'pid':
-            continue
-
-        all_results[algo] = load_one_experiment(system, task, algo, mpsc_cost_horizon)
-
-    return all_results
 
 
 def load_all_models(system, task, algo):
@@ -566,7 +519,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
 
     x = np.arange(1, len(labels) + 1)
-    ax.set_xticks(x, labels, weight='bold', fontsize=15, rotation=45, ha='right')
+    ax.set_xticks(x, labels, weight='bold', fontsize=15, rotation=30, ha='right')
 
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
     bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))
@@ -629,9 +582,6 @@ def plot_all_logs(system, task, algo):
         for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
             all_results[model].append(load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/{seed}/logs/'))
 
-    # all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/{system}/{task}/safe_explorer_ppo/none/logs/')
-    # all_results['cpo'] = load_from_logs(f'./models/rl_models/{system}/{task}/cpo/none/logs/')
-
     for key in all_results['none'][0].keys():
         plot_log(system, task, algo, key, all_results)
 
@@ -655,12 +605,13 @@ def plot_log(system, task, algo, key, all_results):
     colors = {'mpsf_sr_pen_1': 'lightgreen', 'mpsf_sr_pen_10': 'limegreen', 'mpsf_sr_pen_100': 'forestgreen', 'mpsf_sr_pen_1000': 'darkgreen', 'none': 'cornflowerblue', 'none_cpen': 'plum'}
 
     for model in labels:
-        x = all_results[model][0][key][1]
+        x = all_results[model][0][key][1] / 1000
         all_data = np.array([values[key][3] for values in all_results[model]])
         ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[model])
         ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[model], facecolor=colors[model])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
+    ax.set_xlabel('Training Episodes')
     ax.legend()
 
     fig.tight_layout()

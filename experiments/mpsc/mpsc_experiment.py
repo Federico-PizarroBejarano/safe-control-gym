@@ -163,7 +163,7 @@ def determine_feasible_starting_points(num_points=100):
     # Define arguments.
     fac = ConfigFactory()
     config = fac.merge()
-    config.sf_config.cost_function='one_step_cost'
+    config.sf_config.cost_function = 'one_step_cost'
 
     task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
     if config.task == Environment.QUADROTOR:
