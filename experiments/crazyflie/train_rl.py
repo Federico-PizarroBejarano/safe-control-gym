@@ -2,14 +2,13 @@
 
 import os
 import shutil
-import yaml
 import sys
-sys.path.insert(0, '/home/federico/GitHub/safe-control-gym')
-
 from functools import partial
 
-import numpy as np
+sys.path.insert(0, '/home/federico/GitHub/safe-control-gym')
+
 import munch
+import yaml
 
 from experiments.crazyflie.crazyflie_utils import gen_traj
 from safe_control_gym.utils.configuration import ConfigFactory
@@ -68,7 +67,6 @@ def train():
                 env_func,
                 checkpoint_path=os.path.join(config.output_dir, 'model_latest.pt'),
                 output_dir=config.output_dir,
-                seed=1,
                 **config.algo_config)
 
     ctrl.firmware_wrapper = firmware_wrapper

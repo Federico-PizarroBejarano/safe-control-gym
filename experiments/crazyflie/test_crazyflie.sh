@@ -39,7 +39,13 @@ else
     SF_PEN_TAG="_$4"
 fi
 
-TAG="$1${CONSTR_PEN_TAG}${SF_PEN_TAG}_dm"
+if [ -z "$5" ]; then
+    SEED=1337
+else
+    SEED=$5
+fi
+
+TAG="$1${CONSTR_PEN_TAG}${SF_PEN_TAG}"
 echo $TAG $SYS $ALGO $TASK
 
 python3 ./train_rl.py \
@@ -50,14 +56,17 @@ python3 ./train_rl.py \
         ./config_overrides/crazyflie_${TASK}.yaml \
         ./config_overrides/${ALGO}_crazyflie.yaml \
         ./config_overrides/nl_mpsc.yaml \
-    --output_dir ./models/rl_models/${ALGO}/${TAG} \
+    --output_dir ./models/rl_models/${ALGO}/${TAG}/seed_${SEED} \
     --kv_overrides \
         sf_config.cost_function=one_step_cost \
         algo_config.filter_train_actions=$FILTER \
         algo_config.penalize_sf_diff=$FILTER \
         algo_config.use_safe_reset=$FILTER \
         algo_config.sf_penalty=$4 \
-        task_config.use_constraint_penalty=$3
+        task_config.use_constraint_penalty=$3 \
+        task_config.seed=${SEED} \
+        algo_config.seed=${SEED} \
+        sf_config.seed=${SEED}
 
 python3 ./crazyflie_experiment.py \
     --task quadrotor \
@@ -67,7 +76,7 @@ python3 ./crazyflie_experiment.py \
         ./config_overrides/crazyflie_${TASK}.yaml \
         ./config_overrides/${ALGO}_crazyflie.yaml \
         ./config_overrides/nl_mpsc.yaml \
-    --output_dir ./models/rl_models/${ALGO}/${TAG} \
+    --output_dir ./models/rl_models/${ALGO}/${TAG}/seed_${SEED} \
     --kv_overrides \
         sf_config.cost_function=precomputed_cost \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
@@ -75,4 +84,7 @@ python3 ./crazyflie_experiment.py \
         algo_config.penalize_sf_diff=$FILTER \
         algo_config.use_safe_reset=$FILTER \
         algo_config.sf_penalty=$4 \
-        task_config.use_constraint_penalty=$3
+        task_config.use_constraint_penalty=$3 \
+        task_config.seed=${SEED} \
+        algo_config.seed=${SEED} \
+        sf_config.seed=${SEED}

@@ -15,9 +15,6 @@ from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative, high_frequency_content
 from safe_control_gym.utils.plotting import load_from_logs
 
-# from scipy.signal import savgol_filter
-
-
 plot = False
 save_figs = True
 ordered_algos = ['lqr', 'ppo', 'sac']
@@ -785,8 +782,6 @@ def plot_model_comparisons(system, task, algo, data_extractor):
         labels = labels + ['safe_ppo'] + ['safe_ppo_cert']
         labels = labels + ['cpo'] + ['cpo_cert']
 
-    labels = [label for label in labels if '_es' not in label]
-
     data = []
 
     for model in labels:
@@ -882,7 +877,6 @@ def plot_log(system, task, algo, key, all_results):
     ax = fig.add_subplot(111)
 
     labels = sorted(all_results.keys())
-    labels = [label for label in labels if '_es' not in label]
 
     colors = plt.colormaps['tab20'].colors
 
@@ -891,7 +885,7 @@ def plot_log(system, task, algo, key, all_results):
             continue
         if key in ['loss/policy_loss', 'loss/critic_loss'] and model == 'cpo':
             continue
-        y = all_results[model][key][3]  # savgol_filter(all_results[model][key][3], window_length=15, polyorder=3)
+        y = all_results[model][key][3]
         ax.plot(all_results[model][key][1], y, label=model, color=colors[i])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)

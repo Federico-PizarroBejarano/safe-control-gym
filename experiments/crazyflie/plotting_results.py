@@ -5,16 +5,16 @@ import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
-# import tikzplotlib
-# from matplotlib.legend import Legend
-# from matplotlib.lines import Line2D
-
-# Line2D._us_dashSeq = property(lambda self: self._dash_pattern[1])
-# Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
-# Legend._ncol = property(lambda self: self._ncols)
+import tikzplotlib
+from matplotlib.legend import Legend
+from matplotlib.lines import Line2D
 
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
 from safe_control_gym.utils.plotting import load_from_logs
+
+Line2D._us_dashSeq = property(lambda self: self._dash_pattern[1])
+Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
+Legend._ncol = property(lambda self: self._ncols)
 
 
 plot = False
@@ -72,13 +72,13 @@ def load_all_models(algo):
 
                 model_data['uncertified_action'].append(model_data['certified_action'][-1] - model_data['corrections'][-1])
 
-                error = model_data['states'][-1][:, [0,2]] - traj_goal[:, [0,2]]
+                error = model_data['states'][-1][:, [0, 2]] - traj_goal[:, [0, 2]]
                 dist = np.sum(2 * error * error, axis=1)
                 reward = np.sum(np.exp(-dist))
                 model_data['rewards'].append(reward)
 
                 # TODO fix this
-                constr_viols = np.sum(np.sum(np.abs(model_data['states'][-1][:, [0,1,2,3,6,7]]) > np.array([[0.95, 2, 0.95, 2, 0.25, 0.25]]), axis=1) > 0)
+                constr_viols = np.sum(np.sum(np.abs(model_data['states'][-1][:, [0, 1, 2, 3, 6, 7]]) > np.array([[0.95, 2, 0.95, 2, 0.25, 0.25]]), axis=1) > 0)
                 model_data['constraint_violations'].append(constr_viols)
 
                 model_data['length'].append(len(model_data['states'][-1]))
@@ -224,6 +224,7 @@ def extract_constraint_violations(results_data):
     num_violations = np.asarray(results_data['constraint_violations'])
     return num_violations
 
+
 def extract_rate_of_change(results_data):
     '''Extracts the rate of change of a signal from an experiment's data.
 
@@ -243,6 +244,7 @@ def extract_rate_of_change(results_data):
         total_derivatives.append(np.linalg.norm(derivative, 'fro'))
 
     return total_derivatives
+
 
 def extract_reward(results_data):
     '''Extracts the mean reward from an experiment's data.
@@ -318,17 +320,15 @@ def plot_all_logs(algo):
     '''Plots comparative plots of all the logs.
 
     Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
         mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
     '''
     all_results = {}
 
     for model in ordered_models:
-        all_results[model] = [load_from_logs(f'./models/rl_models/{algo}/{model}/logs/')]
-
-    # all_results['safe_ppo'] = load_from_logs(f'./models/rl_models/safe_explorer_ppo/none/logs/')
-    # all_results['cpo'] = load_from_logs(f'./models/rl_models/cpo/none/logs/')
+        all_results[model] = []
+        for seed in os.listdir(f'./models/rl_models/{algo}/{model}/'):
+            if 'seed' in seed:
+                all_results[model].append(load_from_logs(f'./models/rl_models/{algo}/{model}/{seed}/logs/'))
 
     for key in all_results[ordered_models[0]][0].keys():
         plot_log(algo, key, all_results)
@@ -345,22 +345,30 @@ def plot_log(algo, key, all_results):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = sorted(all_results.keys())
-    labels = [label for label in labels if '_es' not in label]
+    labels = [f'mpsf_0.1{suffix}', f'mpsf_1{suffix}', f'mpsf_10{suffix}', f'none{suffix}', f'none_cpen{suffix}']
 
-    colors = plt.colormaps['tab20'].colors
+    colors = {f'mpsf_0.1{suffix}': 'limegreen', f'mpsf_1{suffix}': 'forestgreen', f'mpsf_10{suffix}': 'darkgreen', f'none{suffix}': 'cornflowerblue', f'none_cpen{suffix}': 'plum'}
 
-    for i, model in enumerate(labels):
-        if key == 'loss/critic_loss' and model == 'safe_ppo':
-            continue
-        if key in ['loss/policy_loss', 'loss/critic_loss'] and model == 'cpo':
-            continue
-        x = all_results[model][0][key][1]
+    names = {
+        f'mpsf_0.1{suffix}': r'\textbf{Ours \$\boldsymbol{\alpha=10^{-1}}\$}',
+        f'mpsf_1{suffix}': r'\textbf{Ours \$\boldsymbol{\alpha=10^0}\$}',
+        f'mpsf_10{suffix}': r'\textbf{Ours \$\boldsymbol{\alpha=10^1}\$}',
+        f'none{suffix}': 'Standard',
+        f'none_cpen{suffix}': 'Constr. Pen.'
+    }
+
+    for model in labels:
+        x = all_results[model][0][key][1] / 1000
         all_data = np.array([values[key][3] for values in all_results[model]])
-        ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[i])
-        ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[i], facecolor=colors[i])
+        ax.plot(x, np.mean(all_data, axis=0), label=names[model], color=colors[model])
+        ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[model], facecolor=colors[model])
 
-    ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
+    ylabels = {
+        'stat_eval/ep_return': 'Episode Return',
+        'stat/ep_constraint_violation': 'Episode Constraint Violations'
+    }
+    ax.set_ylabel(ylabels[key] if key in ylabels else key, weight='bold', fontsize=45, labelpad=10)
+    ax.set_xlabel('Training Episodes')
     ax.legend()
 
     fig.tight_layout()
@@ -374,26 +382,27 @@ def plot_log(algo, key, all_results):
             fig.savefig(f'./results_cf/{algo}/graphs/{suffix[1:]}/{image_suffix}.png', dpi=300)
         else:
             fig.savefig(f'./results_cf/{algo}/graphs/{image_suffix}.png', dpi=300)
+            tikzplotlib.save(f'./{image_suffix}.tex', axis_height='2.2in', axis_width='3.5in')
     plt.close()
 
 
 if __name__ == '__main__':
-    REAL = True
+    REAL = False
     CERTIFIED = True
     algo_name = 'ppo'
     all_results = load_all_models(algo_name)
 
-    create_paper_plot(extract_magnitude_of_corrections)
-    create_paper_plot(extract_percent_magnitude_of_corrections)
-    create_paper_plot(extract_max_correction)
-    create_paper_plot(extract_percent_max_correction)
-    create_paper_plot(extract_rate_of_change)
-    create_paper_plot(extract_number_of_corrections)
-    create_paper_plot(extract_feasible_iterations)
-    create_paper_plot(extract_reward)
-    create_paper_plot(extract_rmse)
-    create_paper_plot(extract_constraint_violations)
-    create_paper_plot(extract_length)
+    # create_paper_plot(extract_magnitude_of_corrections)
+    # create_paper_plot(extract_percent_magnitude_of_corrections)
+    # create_paper_plot(extract_max_correction)
+    # create_paper_plot(extract_percent_max_correction)
+    # create_paper_plot(extract_rate_of_change)
+    # create_paper_plot(extract_number_of_corrections)
+    # create_paper_plot(extract_feasible_iterations)
+    # create_paper_plot(extract_reward)
+    # create_paper_plot(extract_rmse)
+    # create_paper_plot(extract_constraint_violations)
+    # create_paper_plot(extract_length)
 
     if not REAL:
         plot_all_logs(algo_name)
