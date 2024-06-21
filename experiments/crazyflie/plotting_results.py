@@ -387,22 +387,22 @@ def plot_log(algo, key, all_results):
 
 
 if __name__ == '__main__':
-    REAL = False
+    REAL = True
     CERTIFIED = True
     algo_name = 'ppo'
     all_results = load_all_models(algo_name)
 
-    # create_paper_plot(extract_magnitude_of_corrections)
-    # create_paper_plot(extract_percent_magnitude_of_corrections)
-    # create_paper_plot(extract_max_correction)
-    # create_paper_plot(extract_percent_max_correction)
-    # create_paper_plot(extract_rate_of_change)
-    # create_paper_plot(extract_number_of_corrections)
-    # create_paper_plot(extract_feasible_iterations)
-    # create_paper_plot(extract_reward)
-    # create_paper_plot(extract_rmse)
-    # create_paper_plot(extract_constraint_violations)
-    # create_paper_plot(extract_length)
+    create_paper_plot(extract_magnitude_of_corrections)
+    create_paper_plot(extract_percent_magnitude_of_corrections)
+    create_paper_plot(extract_max_correction)
+    create_paper_plot(extract_percent_max_correction)
+    create_paper_plot(extract_rate_of_change)
+    create_paper_plot(extract_number_of_corrections)
+    create_paper_plot(extract_feasible_iterations)
+    create_paper_plot(extract_reward)
+    create_paper_plot(extract_rmse)
+    create_paper_plot(extract_constraint_violations)
+    create_paper_plot(extract_length)
 
     if not REAL:
         plot_all_logs(algo_name)
