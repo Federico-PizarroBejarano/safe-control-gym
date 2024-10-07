@@ -232,6 +232,7 @@ class PPO(BaseController):
         ep_returns, ep_lengths = [], []
         frames = []
         total_return = 0
+        start = time.time()
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=info)
 
@@ -244,9 +245,6 @@ class PPO(BaseController):
                 action = env.normalize_action(certified_action)
             else:
                 self.safety_filter.ocp_solver.reset()
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
-                    action = self.env.envs[0].normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))
             obs, rew, done, info = env.step(action)
@@ -268,7 +266,11 @@ class PPO(BaseController):
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
         ep_returns = np.asarray(ep_returns)
-        eval_results = {'ep_returns': ep_returns, 'ep_lengths': ep_lengths}
+        eval_results = {
+            'ep_returns': ep_returns,
+            'ep_lengths': ep_lengths,
+            'elapsed_time': time.time() - start
+        }
         if len(frames) > 0:
             eval_results['frames'] = frames
         # Other episodic stats from evaluation env.
@@ -301,9 +303,6 @@ class PPO(BaseController):
                     action = self.env.envs[0].normalize_action(certified_action)
                 else:
                     self.safety_filter.ocp_solver.reset()
-                    certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                    if success and self.filter_train_actions is True:
-                        action = self.env.envs[0].normalize_action(certified_action)
 
             action = np.atleast_2d(np.squeeze([action]))
             next_obs, rew, done, info = self.env.step(action)
@@ -363,8 +362,7 @@ class PPO(BaseController):
         self.logger.add_scalars(
             {
                 'step': step,
-                'step_time': results['elapsed_time'],
-                'progress': step / self.max_env_steps
+                'progress': step / self.max_env_steps,
             },
             step,
             prefix='time',
@@ -387,7 +385,8 @@ class PPO(BaseController):
                 'ep_length': ep_lengths.mean(),
                 'ep_return': ep_returns.mean(),
                 'ep_reward': (ep_returns / ep_lengths).mean(),
-                'ep_constraint_violation': ep_constraint_violation.mean()
+                'ep_constraint_violation': ep_constraint_violation.mean(),
+                'step_time': results['elapsed_time'],
             },
             step,
             prefix='stat')
@@ -405,7 +404,8 @@ class PPO(BaseController):
                     'ep_return': eval_ep_returns.mean(),
                     'ep_reward': (eval_ep_returns / eval_ep_lengths).mean(),
                     'constraint_violation': eval_constraint_violation.mean(),
-                    'mse': eval_mse.mean()
+                    'mse': eval_mse.mean(),
+                    'step_time': results['eval']['elapsed_time'],
                 },
                 step,
                 prefix='stat_eval')
@@ -438,6 +438,5 @@ class PPO(BaseController):
                 _, success = self.safety_filter.certify_action(unextended_obs, action, info)
                 if not success:
                     self.safety_filter.ocp_solver.reset()
-                    _, success = self.safety_filter.certify_action(unextended_obs, action, info)
 
         return obs, info

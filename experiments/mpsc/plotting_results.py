@@ -12,8 +12,7 @@ from safe_control_gym.experiments.base_experiment import MetricExtractor
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative, high_frequency_content
 from safe_control_gym.utils.plotting import load_from_logs
 
-plot = False
-save_figs = True
+plot = True  # Saves figure if False
 
 U_EQs = {
     'cartpole': 0,
@@ -26,11 +25,12 @@ met.verbose = False
 
 
 def load_all_models(system, task, algo):
-    '''Loads the results of every MPSC cost function for a specific experiment with every algo.
+    '''Loads the results of every experiment.
 
     Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
+        system (str): The system to be plotted.
+        task (str): The task to be plotted (either 'stab' or 'track').
+        algo (str): The controller to be plotted.
 
     Returns:
         all_results (dict): A dictionary containing all the results.
@@ -38,10 +38,10 @@ def load_all_models(system, task, algo):
 
     all_results = {}
 
-    for model in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'):
+    for model in ordered_models:
         all_results[model] = []
-        for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
-            with open(f'./results_mpsc/{system}/{task}/{algo}/results_{system}_{task}_{algo}_{model}/{seed}.pkl', 'rb') as f:
+        for seed in os.listdir(f'./results_mpsc/{system}/{task}/{algo}/results_{system}_{task}_{algo}_{model}/'):
+            with open(f'./results_mpsc/{system}/{task}/{algo}/results_{system}_{task}_{algo}_{model}/{seed}', 'rb') as f:
                 all_results[model].append(pickle.load(f))
         consolidate_multiple_seeds(all_results, model)
 
@@ -497,9 +497,10 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     '''Plots the constraint violations of every controller for a specific experiment.
 
     Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+        system (str): The system to be plotted.
+        task (str): The task to be plotted (either 'stab' or 'track').
+        algo (str): The controller to be plotted.
+        data_extractor (func): The function which extracts the desired data.
     '''
 
     all_results = load_all_models(system, task, algo)
@@ -507,11 +508,11 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = sorted(os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'))
+    labels = ordered_models
 
     data = []
 
-    for model in labels:
+    for model in ordered_models:
         exp_data = all_results[model]
         data.append(data_extractor(exp_data))
 
@@ -522,24 +523,71 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     ax.set_xticks(x, labels, weight='bold', fontsize=15, rotation=30, ha='right')
 
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels))
-
-    colors = {'mpsf_sr_pen_1': 'lightgreen', 'mpsf_sr_pen_10': 'limegreen', 'mpsf_sr_pen_100': 'forestgreen', 'mpsf_sr_pen_1000': 'darkgreen', 'none': 'cornflowerblue', 'none_cpen': 'plum'}
+    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
 
     for patch, color in zip(bplot['boxes'], colors.values()):
         patch.set_facecolor(color)
 
     fig.tight_layout()
 
-    if data_extractor != extract_reward_cert:
-        ax.set_ylim(ymin=0)
     ax.yaxis.grid(True)
 
     if plot is True:
         plt.show()
-    if save_figs:
+    else:
         image_suffix = data_extractor.__name__.replace('extract_', '')
-        fig.savefig(f'./results_mpsc/{system}/{task}/{algo}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+        fig.savefig(f'./results_mpsc/{image_suffix}.png', dpi=300)
+    plt.close()
+
+
+def plot_step_time(system, task, algo):
+    '''Plots the constraint violations of every controller for a specific experiment.
+
+    Args:
+        system (str): The system to be plotted.
+        task (str): The task to be plotted (either 'stab' or 'track').
+        algo (str): The controller to be plotted.
+    '''
+
+    all_results = {}
+    for model in ordered_models:
+        all_results[model] = []
+        for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
+            all_results[model].append(load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/{seed}/logs/'))
+
+    fig = plt.figure(figsize=(16.0, 10.0))
+    ax = fig.add_subplot(111)
+
+    labels = ordered_models
+
+    data = []
+
+    for model in ordered_models:
+        datum = np.array([values['stat/step_time'][3] for values in all_results[model]]).flatten()
+        data.append(datum)
+
+    ylabel = 'Training Time per Step [ms]'
+    ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
+
+    x = np.arange(1, len(labels) + 1)
+    ax.set_xticks(x, labels, weight='bold', fontsize=15, rotation=30, ha='right')
+
+    medianprops = dict(linestyle='--', linewidth=2.5, color='black')
+    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
+
+    for patch, color in zip(bplot['boxes'], colors.values()):
+        patch.set_facecolor(color)
+
+    fig.tight_layout()
+
+    ax.set_ylim(ymin=0)
+    ax.yaxis.grid(True)
+
+    if plot is True:
+        plt.show()
+    else:
+        image_suffix = 'step_time'
+        fig.savefig(f'./results_mpsc/{image_suffix}.png', dpi=300)
     plt.close()
 
 
@@ -571,43 +619,40 @@ def plot_all_logs(system, task, algo):
     '''Plots comparative plots of all the logs.
 
     Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
+        system (str): The system to be plotted.
+        task (str): The task to be plotted (either 'stab' or 'track').
+        algo (str): The controller to be plotted.
     '''
     all_results = {}
 
-    for model in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/'):
+    for model in ordered_models:
         all_results[model] = []
         for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
             all_results[model].append(load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/{seed}/logs/'))
 
-    for key in all_results['none'][0].keys():
-        plot_log(system, task, algo, key, all_results)
+    for key in all_results[ordered_models[0]][0].keys():
+        if key == 'stat_eval/ep_return':
+            plot_log(key, all_results)
+        if key == 'stat/constraint_violation':
+            plot_log(key, all_results)
 
 
-def plot_log(system, task, algo, key, all_results):
+def plot_log(key, all_results):
     '''Plots a comparative plot of the log 'key'.
 
     Args:
-        system (str): The system to be controlled.
-        task (str): The task to be completed (either 'stab' or 'track').
-        mpsc_cost_horizon (str): The cost horizon used by the smooth MPSC cost functions.
         key (str): The name of the log to be plotted.
         all_results (dict): A dictionary of all the logged results for all models.
     '''
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = sorted(all_results.keys())
-    labels = [label for label in labels if '_es' not in label]
+    labels = ordered_models
 
-    colors = {'mpsf_sr_pen_1': 'lightgreen', 'mpsf_sr_pen_10': 'limegreen', 'mpsf_sr_pen_100': 'forestgreen', 'mpsf_sr_pen_1000': 'darkgreen', 'none': 'cornflowerblue', 'none_cpen': 'plum'}
-
-    for model in labels:
+    for model, label in zip(ordered_models, labels):
         x = all_results[model][0][key][1] / 1000
         all_data = np.array([values[key][3] for values in all_results[model]])
-        ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[model])
+        ax.plot(x, np.mean(all_data, axis=0), label=label, color=colors[model])
         ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[model], facecolor=colors[model])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
@@ -619,14 +664,25 @@ def plot_log(system, task, algo, key, all_results):
 
     if plot is True:
         plt.show()
-    if save_figs:
+    else:
         image_suffix = key.replace('/', '__')
-        fig.savefig(f'./results_mpsc/{system}/{task}/{algo}/graphs/{system}_{task}_{image_suffix}.png', dpi=300)
+        fig.savefig(f'./results_mpsc/{image_suffix}.png', dpi=300)
     plt.close()
 
 
 if __name__ == '__main__':
-    ordered_costs = ['one_step', 'regularized', 'precomputed']
+    ordered_models = ['none', 'none_cpen_0.01', 'none_cpen_0.1', 'none_cpen_1', 'mpsf_sr_pen_0.1', 'mpsf_sr_pen_1', 'mpsf_sr_pen_10', 'mpsf_sr_pen_100']
+
+    colors = {
+        'none': 'cornflowerblue',
+        'none_cpen_0.01': 'plum',
+        'none_cpen_0.1': 'mediumorchid',
+        'none_cpen_1': 'darkorchid',
+        'mpsf_sr_pen_0.1': 'lightgreen',
+        'mpsf_sr_pen_1': 'limegreen',
+        'mpsf_sr_pen_10': 'forestgreen',
+        'mpsf_sr_pen_100': 'darkgreen',
+    }
 
     def extract_rate_of_change_of_inputs(results_data, certified=True):
         return extract_rate_of_change(results_data, certified, order=1, mode='input')
@@ -682,6 +738,7 @@ if __name__ == '__main__':
         algo_name = sys.argv[3]
 
     plot_all_logs(system_name, task_name, algo_name)
+    plot_step_time(system_name, task_name, algo_name)
     plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_percent_magnitude_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)

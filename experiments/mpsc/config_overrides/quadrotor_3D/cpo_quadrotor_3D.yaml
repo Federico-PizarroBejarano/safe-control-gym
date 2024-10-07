@@ -1,8 +1,8 @@
 algo: cpo
 algo_config:
   # Model args
-  hidden1: 128
-  hidden2: 128
+  hidden1: 256
+  hidden2: 256
 
   # Optim args
   discount_factor: 0.98
@@ -16,15 +16,15 @@ algo_config:
   cost_d: 0.0
 
   # Runner args
-  max_steps: 1000
-  num_epochs: 4000
-  value_epochs: 150
+  max_steps: 2000
+  num_epochs: 5000
+  value_epochs: 300
   eval_batch_size: 20
 
   # Misc
-  log_interval: 40
+  log_interval: 50
   save_interval: 0
   num_checkpoints: 0
-  eval_interval: 40
+  eval_interval: 50
   eval_save_best: True
   tensorboard: False

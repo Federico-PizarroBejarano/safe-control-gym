@@ -70,8 +70,10 @@ fi
 
 if [ "$8" = False ]; then
     SF_PEN_TAG=''
+    CONSTR_PEN_VAL=0
 else
     SF_PEN_TAG="_$8"
+    CONSTR_PEN_VAL=$8
 fi
 
 if [ -z "$9" ]; then
@@ -103,6 +105,7 @@ python3 train_rl.py \
     --kv_overrides \
         task_config.init_state=None \
         task_config.use_constraint_penalty=${CONSTR_PEN} \
+        task_config.constraint_penalty=${CONSTR_PEN_VAL} \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \
@@ -116,4 +119,3 @@ python3 train_rl.py \
         sf_config.seed=${SEED} \
 
 ./mpsc_experiment.sh $TAG $SYS $TASK $ALGO $SEED
-# python plotting_results.py $SYS $TASK $ALGO
