@@ -7,7 +7,6 @@ examples/mpsc/unsafe_rl_temp_data/
 examples/pid/*data/
 #
 experiments/mpsc/temp-data/
-experiments/mpsc/unsafe_rl_temp_data/
 experiments/mpsc/models/rl_models/
 experiments/mpsc/results*/
 #
