@@ -273,7 +273,11 @@ class LINEAR_MPSC(MPSC):
         self.tightened_state_constraint = tightened_state_constraint_func(env=self.env,
                                                                           constrained_variable=ConstrainedVariableType.STATE)
 
-    def setup_optimizer(self):
+    def setup_acados_optimizer(self):
+        '''Setup the certifying MPC problem.'''
+        raise NotImplementedError
+
+    def setup_casadi_optimizer(self):
         '''Setup the certifying MPC problem.'''
 
         # Horizon parameter.
