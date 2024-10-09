@@ -13,6 +13,7 @@ experiments/mpsc/results*/
 experiments/crazyflie/temp-data/
 experiments/crazyflie/models/rl_models/
 experiments/crazyflie/results*/
+experiments/crazyflie/all_trajs/
 #
 results/
 z_docstring.py
