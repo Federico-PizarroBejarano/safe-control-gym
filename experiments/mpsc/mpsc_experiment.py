@@ -72,7 +72,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
 
     if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
         # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/seed_{config.task_config.seed}/model_latest.pt')
+        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/model_latest.pt')
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -364,17 +364,10 @@ def run_multiple_models(plot=True, model=None):
                        'config': config,
                        'X_GOAL': X_GOAL}
 
-        os.makedirs(f'./results_mpsc/{system}/{task}/{config.algo}/results_{system}_{task}_{config.algo}_{model}/', exist_ok=True)
-        with open(f'./results_mpsc/{system}/{task}/{config.algo}/results_{system}_{task}_{config.algo}_{model}/seed_{config.task_config.seed}.pkl', 'wb') as f:
+        os.makedirs('./results_mpsc', exist_ok=True)
+        with open(f'./results_mpsc/{model}.pkl', 'wb') as f:
             pickle.dump(all_results, f)
 
 
 if __name__ == '__main__':
-    # run()
-    # run_uncertified_trajectory()
-    # determine_feasible_starting_points(num_points=100)
-    # run_multiple(plot=False)
-    if '--model=' in sys.argv:
-        run_multiple_models(plot=False, model='none')
-    else:
-        run_multiple_models(plot=False, model=sys.argv[-1].split('=')[1])
+    run_multiple_models(plot=False, model=sys.argv[-1].split('=')[1])

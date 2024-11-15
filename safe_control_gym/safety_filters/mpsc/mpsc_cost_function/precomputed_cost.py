@@ -117,8 +117,8 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
 
-            if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
-                raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
+            # if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
+            #     raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
             v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
 

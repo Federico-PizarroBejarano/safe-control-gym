@@ -9,113 +9,41 @@
 #SBATCH --gres=gpu:0
 #SBATCH --qos=normal
 
-# SYS='cartpole'
-# SYS='quadrotor_2D'
 SYS='quadrotor_3D'
-
-# TASK='stab'
 TASK='track'
-
 ALGO='ppo'
-# ALGO='cpo'
-# ALGO='sac'
-# ALGO='safe_explorer_ppo'
-
-if [ "$4" ]; then
-  SYS=$4
-fi
-if [ "$5" ]; then
-  TASK=$5
-fi
-if [ "$6" ]; then
-  ALGO=$6
-fi
-
-# SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'
 
-if [ "$1" = 'm_mpsf' ]; then
-    MPSC_COST='precomputed_cost'
-    FILTER='True'
-elif [ "$1" = 'mpsf' ]; then
-    MPSC_COST='one_step_cost'
-    FILTER='True'
-else
-    MPSC_COST='one_step_cost'
-    FILTER='False'
-fi
+MPSC_COST='precomputed_cost'
 
-MPSC_COST_HORIZON=2
-DECAY_FACTOR=0.85
+MPSC_COST_HORIZON=$2
+DECAY_FACTOR=$3
+SF_PENALTY=1.0
 
-if [ "$2" = 'True' ]; then
-    SAFE_RESET_TAG='_sr'
-else
-    SAFE_RESET_TAG=''
-fi
-
-if [ "$3" = 'True' ]; then
-    PENALIZE_SF_TAG='_pen'
-else
-    PENALIZE_SF_TAG=''
-fi
-
-if [ "$7" = True ]; then
-    CONSTR_PEN='True'
-    CONSTR_PEN_TAG='_cpen'
-else
-    CONSTR_PEN='False'
-    CONSTR_PEN_TAG=''
-fi
-
-if [ "$8" = False ]; then
-    SF_PEN_TAG=''
-    CONSTR_PEN_VAL=0
-else
-    SF_PEN_TAG="_$8"
-    CONSTR_PEN_VAL=$8
-fi
-
-if [ -z "$9" ]; then
-    SEED=1337
-else
-    SEED=$9
-fi
-
-TAG="$1${SAFE_RESET_TAG}${PENALIZE_SF_TAG}${CONSTR_PEN_TAG}${SF_PEN_TAG}"
+TAG="curriculum_$1_$2_$3"
 echo $TAG $SYS $ALGO $TASK
-
-if [ "$SYS" = 'cartpole' ]; then
-    SYS_NAME=$SYS
-else
-    SYS_NAME='quadrotor'
-fi
 
 # Train the unsafe controller/agent.
 python3 train_rl.py \
     --algo ${ALGO} \
-    --task ${SYS_NAME} \
+    --task 'quadrotor' \
     --safety_filter ${SAFETY_FILTER} \
     --overrides \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
         ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
-    --output_dir ./models/rl_models/${SYS}/${TASK}/${ALGO}/${TAG}/seed_${SEED}/ \
+    --output_dir ./models/rl_models/${TAG}/ \
     --seed 2 \
     --kv_overrides \
         task_config.init_state=None \
-        task_config.use_constraint_penalty=${CONSTR_PEN} \
-        task_config.constraint_penalty=${CONSTR_PEN_VAL} \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \
+        sf_config.max_decay_factor=${DECAY_FACTOR} \
         sf_config.soften_constraints=True \
         algo_config.filter_train_actions=${FILTER} \
-        algo_config.use_safe_reset=$2 \
-        algo_config.penalize_sf_diff=$3 \
-        algo_config.sf_penalty=$8 \
-        task_config.seed=${SEED} \
-        algo_config.seed=${SEED} \
-        sf_config.seed=${SEED} \
+        algo_config.use_safe_reset=${FILTER} \
+        algo_config.penalize_sf_diff=${FILTER} \
+        algo_config.sf_penalty=SF_PENALTY
 
-./mpsc_experiment.sh $TAG $SYS $TASK $ALGO $SEED
+./mpsc_experiment.sh $TAG $SYS $TASK $ALGO
