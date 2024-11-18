@@ -40,9 +40,8 @@ def load_all_models(system, task, algo):
 
     for model in ordered_models:
         all_results[model] = []
-        for seed in os.listdir(f'./results_mpsc/{system}/{task}/{algo}/results_{system}_{task}_{algo}_{model}/'):
-            with open(f'./results_mpsc/{system}/{task}/{algo}/results_{system}_{task}_{algo}_{model}/{seed}', 'rb') as f:
-                all_results[model].append(pickle.load(f))
+        with open(f'./results_mpsc/{model}.pkl', 'rb') as f:
+            all_results[model].append(pickle.load(f))
         consolidate_multiple_seeds(all_results, model)
 
     return all_results
@@ -525,7 +524,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
     bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
 
-    for patch, color in zip(bplot['boxes'], colors.values()):
+    for patch, color in zip(bplot['boxes'], colors):
         patch.set_facecolor(color)
 
     fig.tight_layout()
@@ -552,8 +551,7 @@ def plot_step_time(system, task, algo):
     all_results = {}
     for model in ordered_models:
         all_results[model] = []
-        for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
-            all_results[model].append(load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/{seed}/logs/'))
+        all_results[model].append(load_from_logs(f'./models/rl_models/{model}/logs/'))
 
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
@@ -575,7 +573,7 @@ def plot_step_time(system, task, algo):
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
     bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
 
-    for patch, color in zip(bplot['boxes'], colors.values()):
+    for patch, color in zip(bplot['boxes'], colors):
         patch.set_facecolor(color)
 
     fig.tight_layout()
@@ -627,8 +625,7 @@ def plot_all_logs(system, task, algo):
 
     for model in ordered_models:
         all_results[model] = []
-        for seed in os.listdir(f'./models/rl_models/{system}/{task}/{algo}/{model}/'):
-            all_results[model].append(load_from_logs(f'./models/rl_models/{system}/{task}/{algo}/{model}/{seed}/logs/'))
+        all_results[model].append(load_from_logs(f'./models/rl_models/{model}/logs/'))
 
     for key in all_results[ordered_models[0]][0].keys():
         if key == 'stat_eval/ep_return':
@@ -647,13 +644,11 @@ def plot_log(key, all_results):
     fig = plt.figure(figsize=(16.0, 10.0))
     ax = fig.add_subplot(111)
 
-    labels = ordered_models
-
-    for model, label in zip(ordered_models, labels):
+    for index, model in enumerate(ordered_models):
         x = all_results[model][0][key][1] / 1000
         all_data = np.array([values[key][3] for values in all_results[model]])
-        ax.plot(x, np.mean(all_data, axis=0), label=label, color=colors[model])
-        ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[model], facecolor=colors[model])
+        ax.plot(x, np.mean(all_data, axis=0), label=model, color=colors[index])
+        # ax.fill_between(x, np.min(all_data, axis=0), np.max(all_data, axis=0), alpha=0.3, edgecolor=colors[index], facecolor=colors[index])
 
     ax.set_ylabel(key, weight='bold', fontsize=45, labelpad=10)
     ax.set_xlabel('Training Episodes')
@@ -671,18 +666,8 @@ def plot_log(key, all_results):
 
 
 if __name__ == '__main__':
-    ordered_models = ['none', 'none_cpen_0.01', 'none_cpen_0.1', 'none_cpen_1', 'mpsf_sr_pen_0.1', 'mpsf_sr_pen_1', 'mpsf_sr_pen_10', 'mpsf_sr_pen_100']
-
-    colors = {
-        'none': 'cornflowerblue',
-        'none_cpen_0.01': 'plum',
-        'none_cpen_0.1': 'mediumorchid',
-        'none_cpen_1': 'darkorchid',
-        'mpsf_sr_pen_0.1': 'lightgreen',
-        'mpsf_sr_pen_1': 'limegreen',
-        'mpsf_sr_pen_10': 'forestgreen',
-        'mpsf_sr_pen_100': 'darkgreen',
-    }
+    ordered_models = [model for model in os.listdir('./models/rl_models/') if 'curriculum' in model]
+    colors = plt.cm.viridis(np.linspace(0, 1, len(ordered_models)))
 
     def extract_rate_of_change_of_inputs(results_data, certified=True):
         return extract_rate_of_change(results_data, certified, order=1, mode='input')

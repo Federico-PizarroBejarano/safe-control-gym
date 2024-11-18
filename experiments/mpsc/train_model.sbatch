@@ -41,9 +41,10 @@ python3 train_rl.py \
         sf_config.decay_factor=${DECAY_FACTOR} \
         sf_config.max_decay_factor=${DECAY_FACTOR} \
         sf_config.soften_constraints=True \
-        algo_config.filter_train_actions=${FILTER} \
-        algo_config.use_safe_reset=${FILTER} \
-        algo_config.penalize_sf_diff=${FILTER} \
-        algo_config.sf_penalty=SF_PENALTY
+        algo_config.filter_train_actions=True \
+        algo_config.use_safe_reset=True \
+        algo_config.penalize_sf_diff=True \
+        algo_config.sf_penalty=$SF_PENALTY \
+        algo_config.decay_factor_curriculum=$1
 
 ./mpsc_experiment.sh $TAG $SYS $TASK $ALGO

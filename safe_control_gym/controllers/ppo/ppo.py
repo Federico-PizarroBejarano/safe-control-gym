@@ -162,7 +162,8 @@ class PPO(BaseController):
               ):
         '''Performs learning (pre-training, training, fine-tuning, etc).'''
         while self.total_steps < self.max_env_steps:
-            self.safety_filter.decay_factor = self.safety_filter.max_decay_factor * (self.total_steps / self.max_env_steps)
+            if self.decay_factor_curriculum:
+                self.safety_filter.set_decay_factor(self.safety_filter.max_decay_factor * (self.total_steps / self.max_env_steps))
             results = self.train_step()
             # Checkpoint.
             if self.total_steps >= self.max_env_steps or (self.save_interval and self.total_steps % self.save_interval == 0):

@@ -1,11 +1,11 @@
 #!/bin/bash
 
-SYS='cartpole'
+# SYS='cartpole'
 # SYS='quadrotor_2D'
-# SYS='quadrotor_3D'
+SYS='quadrotor_3D'
 
-TASK='stab'
-# TASK='track'
+# TASK='stab'
+TASK='track'
 
 # ALGO='lqr'
 # ALGO='pid'

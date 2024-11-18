@@ -1040,12 +1040,6 @@ class NL_MPSC(MPSC):
         solver_json = 'acados_ocp_mpsf.json'
         ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
 
-        for stage in range(self.mpsc_cost_horizon):
-            ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)
-
-        for stage in range(self.mpsc_cost_horizon, self.horizon):
-            ocp_solver.cost_set(stage, 'W', 0 * ocp.cost.W)
-
         s_var = np.zeros((self.horizon + 1))
         g = np.zeros((self.horizon, self.p))
 
@@ -1057,4 +1051,14 @@ class NL_MPSC(MPSC):
             g[i, :] += (self.L_x @ self.X_mid) + (self.L_u @ self.U_mid)
             ocp_solver.constraints_set(i, 'ug', g[i, :])
 
+        self.ocp = ocp
         self.ocp_solver = ocp_solver
+
+        self.set_decay_factor(self.cost_function.decay_factor)
+
+    def set_decay_factor(self, new_decay_factor):
+        for stage in range(self.mpsc_cost_horizon):
+            self.ocp_solver.cost_set(stage, 'W', (new_decay_factor**stage) * self.ocp.cost.W)
+
+        for stage in range(self.mpsc_cost_horizon, self.horizon):
+            self.ocp_solver.cost_set(stage, 'W', 0 * self.ocp.cost.W)
