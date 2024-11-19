@@ -90,6 +90,7 @@ class PPO(BaseController):
 
         # Adding safety filter
         self.safety_filter = None
+        self.instance_idx = int(np.random.rand() * 1000000)
 
     def reset(self):
         '''Do initializations for training or evaluation.'''
@@ -307,7 +308,7 @@ class PPO(BaseController):
         info = self.info
         start = time.time()
         if self.safety_filter is not None and self.preserve_random_state is True:
-            self.save('./temp-data/saved_controller_prev.npy', save_only_random_seed=True)
+            self.save(f'./temp-data/saved_controller_prev_{self.instance_idx}.npy', save_only_random_seed=True)
         for _ in range(self.rollout_steps):
             with torch.no_grad():
                 action, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
