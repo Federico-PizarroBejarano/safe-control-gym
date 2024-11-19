@@ -20,7 +20,7 @@ MPSC_COST_HORIZON=$2
 DECAY_FACTOR=$3
 SF_PENALTY=1.0
 
-TAG="curriculum_$1_$2_$3"
+TAG="curriculum_$1_$2_$3_$4"
 echo $TAG $SYS $ALGO $TASK
 
 # Train the unsafe controller/agent.
@@ -45,6 +45,7 @@ python3 train_rl.py \
         algo_config.use_safe_reset=True \
         algo_config.penalize_sf_diff=True \
         algo_config.sf_penalty=$SF_PENALTY \
-        algo_config.decay_factor_curriculum=$1
+        algo_config.decay_factor_curriculum=$1 \
+        algo_config.preserve_random_state=$4
 
 ./mpsc_experiment.sh $TAG $SYS $TASK $ALGO

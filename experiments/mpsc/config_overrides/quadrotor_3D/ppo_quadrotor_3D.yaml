@@ -32,3 +32,5 @@ algo_config:
   penalize_sf_diff: True
   sf_penalty: 75
   use_safe_reset: True
+  decay_factor_curriculum: False
+  preserve_random_state: False
