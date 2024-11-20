@@ -53,6 +53,7 @@ def train():
 
     # Setup MPSC.
     if config.algo in ['ppo', 'sac']:
+        ctrl.model_name = config.output_dir.split('/')[-2]
         safety_filter = make(config.safety_filter,
                              env_func,
                              **config.sf_config)
