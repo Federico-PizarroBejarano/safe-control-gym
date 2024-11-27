@@ -628,9 +628,7 @@ def plot_all_logs(system, task, algo):
         all_results[model].append(load_from_logs(f'./models/rl_models/{model}/logs/'))
 
     for key in all_results[ordered_models[0]][0].keys():
-        if key == 'stat_eval/ep_return':
-            plot_log(key, all_results)
-        if key == 'stat/constraint_violation':
+        if key in ['stat/ep_return', 'stat_eval/ep_return', 'stat/constraint_violation']:
             plot_log(key, all_results)
 
 
@@ -666,7 +664,7 @@ def plot_log(key, all_results):
 
 
 if __name__ == '__main__':
-    ordered_models = [model for model in os.listdir('./models/rl_models/') if 'curriculum' in model]
+    ordered_models = sorted([model for model in os.listdir('./models/rl_models/') if 'curriculum' in model and '20' not in model])
     colors = plt.cm.viridis(np.linspace(0, 1, len(ordered_models)))
 
     def extract_rate_of_change_of_inputs(results_data, certified=True):
@@ -724,24 +722,24 @@ if __name__ == '__main__':
 
     plot_all_logs(system_name, task_name, algo_name)
     plot_step_time(system_name, task_name, algo_name)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_percent_magnitude_of_corrections)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_percent_max_correction)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_percent_magnitude_of_corrections)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_percent_max_correction)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_length_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_length_uncert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_cert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_uncert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_cert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_constraint_violations_uncert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_number_of_corrections)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_length_cert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_length_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_reward_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_failed_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_failed_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_feasible_iterations)
-    if task_name == 'stab':
-        plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
-        plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_reward_uncert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_failed_cert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_failed_uncert)
+    # plot_model_comparisons(system_name, task_name, algo_name, extract_feasible_iterations)
+    # if task_name == 'stab':
+    #     plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
+    #     plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)

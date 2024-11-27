@@ -93,6 +93,7 @@ class PPO(BaseController):
 
     def reset(self):
         '''Do initializations for training or evaluation.'''
+        self.env_state = {}
         if self.training:
             # set up stats tracking
             self.env.add_tracker('constraint_violation', 0)
@@ -124,10 +125,7 @@ class PPO(BaseController):
              ):
         '''Saves model params and experiment state to checkpoint path.'''
         if save_only_random_seed is True:
-            exp_state = {
-                'env_random_state': self.env.get_env_random_state()
-            }
-            torch.save(exp_state, path)
+            self.env_state[path] = self.env.get_env_random_state()
             return
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
@@ -150,10 +148,10 @@ class PPO(BaseController):
              load_only_random_seed=False,
              ):
         '''Restores model and experiment given checkpoint path.'''
-        state = torch.load(path)
         if load_only_random_seed is True:
-            self.env.set_env_random_state(state['env_random_state'])
+            self.env.set_env_random_state(self.env_state[path])
             return
+        state = torch.load(path)
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
         self.obs_normalizer.load_state_dict(state['obs_normalizer'])
@@ -257,7 +255,7 @@ class PPO(BaseController):
             success = False
             physical_action = env.denormalize_action(action)
             unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
-            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+            certified_action, success, jacobian = self.safety_filter.certify_action(unextended_obs, physical_action, info)
             if success:
                 action = env.normalize_action(certified_action)
             else:
@@ -307,7 +305,7 @@ class PPO(BaseController):
         info = self.info
         start = time.time()
         if self.safety_filter is not None and self.preserve_random_state is True:
-            self.save(f'./temp-data/saved_controller_prev_{self.model_name}.npy', save_only_random_seed=True)
+            self.save('prev', save_only_random_seed=True)
         for _ in range(self.rollout_steps):
             with torch.no_grad():
                 action, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
@@ -318,7 +316,7 @@ class PPO(BaseController):
             if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
                 physical_action = self.env.envs[0].denormalize_action(action)
                 unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                certified_action, success, jacobian = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
                 else:
@@ -455,7 +453,7 @@ class PPO(BaseController):
                 info['current_step'] = 1
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
-                _, success = self.safety_filter.certify_action(unextended_obs, action, info)
+                _, success, _ = self.safety_filter.certify_action(unextended_obs, action, info)
                 if not success:
                     self.safety_filter.ocp_solver.reset()
 

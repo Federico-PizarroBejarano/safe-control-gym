@@ -162,9 +162,10 @@ class MPSC(BaseSafetyFilter, ABC):
 
         if self.use_acados:
             action, feasible = self.solve_acados_optimization(obs, uncertified_action, iteration)
+            jacobian = None
         else:
-            action, feasible = self.solve_casadi_optimization(obs, uncertified_action, iteration)
-        return action, feasible
+            action, feasible, jacobian = self.solve_casadi_optimization(obs, uncertified_action, iteration)
+        return action, feasible, jacobian
 
     def solve_casadi_optimization(self,
                                   obs,
@@ -227,7 +228,7 @@ class MPSC(BaseSafetyFilter, ABC):
             print(e)
             feasible = False
             action = None
-        return action, feasible
+        return action, feasible, None
 
     def solve_acados_optimization(self,
                                   obs,
@@ -301,7 +302,7 @@ class MPSC(BaseSafetyFilter, ABC):
 
         self.before_optimization(current_state)
         iteration = self.extract_step(info)
-        action, feasible = self.solve_optimization(current_state, uncertified_action, iteration)
+        action, feasible, jacobian = self.solve_optimization(current_state, uncertified_action, iteration)
         self.results_dict['feasible'].append(feasible)
 
         if feasible:
@@ -334,7 +335,7 @@ class MPSC(BaseSafetyFilter, ABC):
         self.results_dict['certified_action'].append(certified_action)
         self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
 
-        return certified_action, success
+        return certified_action, success, jacobian
 
     def setup_results_dict(self):
         '''Setup the results dictionary to store run information.'''

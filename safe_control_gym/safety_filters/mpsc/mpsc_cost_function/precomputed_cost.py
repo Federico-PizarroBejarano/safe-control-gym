@@ -101,8 +101,8 @@ class PRECOMPUTED_COST(MPSC_COST):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
         elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.curr_training is True and self.uncertified_controller.preserve_random_state:
-            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr_{self.uncertified_controller.model_name}.npy', save_only_random_seed=True)
-            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev_{self.uncertified_controller.model_name}.npy', load_only_random_seed=True)
+            self.uncertified_controller.save('curr', save_only_random_seed=True)
+            self.uncertified_controller.load('prev', load_only_random_seed=True)
 
         for h in range(self.mpsc_cost_horizon):
             next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
@@ -136,7 +136,7 @@ class PRECOMPUTED_COST(MPSC_COST):
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
         elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.curr_training is True and self.uncertified_controller.preserve_random_state is True:
-            self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr_{self.uncertified_controller.model_name}.npy', load_only_random_seed=True)
-            self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev_{self.uncertified_controller.model_name}.npy', save_only_random_seed=True)
+            self.uncertified_controller.load('curr', load_only_random_seed=True)
+            self.uncertified_controller.save('prev', save_only_random_seed=True)
 
         return v_L

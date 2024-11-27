@@ -1,5 +1,5 @@
 #!/bin/bash
-sbatch train_model.sbatch False 1 1
+sbatch train_model.sbatch False 1 1 False
 for MPSC_COST_HORIZON in 2 5 10 20; do
     for DECAY_FACTOR in 0.25 0.5 0.75 1; do
         # Ignore precomputed differences
