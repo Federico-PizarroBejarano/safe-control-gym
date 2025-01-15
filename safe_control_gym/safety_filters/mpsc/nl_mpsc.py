@@ -1022,10 +1022,10 @@ class NL_MPSC(MPSC):
 
         # Slack
         ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = np.array([0.5] * self.p)
-        ocp.cost.Zl = np.array([0.5] * self.p)
-        ocp.cost.zu = np.array([0.5] * self.p)
-        ocp.cost.zl = np.array([0.5] * self.p)
+        ocp.cost.Zu = np.array([self.slack_cost] * self.p)
+        ocp.cost.Zl = np.array([self.slack_cost] * self.p)
+        ocp.cost.zu = np.array([self.slack_cost] * self.p)
+        ocp.cost.zl = np.array([self.slack_cost] * self.p)
 
         # Options
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'

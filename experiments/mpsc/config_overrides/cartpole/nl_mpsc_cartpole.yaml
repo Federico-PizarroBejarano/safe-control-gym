@@ -32,4 +32,4 @@ sf_config:
 
   # Softening
   soften_constraints: False
-  slack_cost: 2
+  slack_cost: 1000

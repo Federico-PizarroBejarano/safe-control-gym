@@ -237,14 +237,15 @@ class PPO(BaseController):
             action = self.select_action(obs=obs, info=info)
 
             # Adding safety filter
-            success = False
-            physical_action = env.denormalize_action(action)
-            unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
-            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-            if success:
-                action = env.normalize_action(certified_action)
-            else:
-                self.safety_filter.ocp_solver.reset()
+            if self.safety_filter is not None:
+                success = False
+                physical_action = env.denormalize_action(action)
+                unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
+                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+                if success:
+                    action = env.normalize_action(certified_action)
+                elif self.safety_filter.use_acados:
+                    self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
             obs, rew, done, info = env.step(action)
@@ -301,10 +302,10 @@ class PPO(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
-                else:
+                elif not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
-            action = np.atleast_2d(np.squeeze([action]))
+            action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
             if done[0] and self.use_safe_reset:
                 next_obs, info = self.env_reset(self.env, self.use_safe_reset)
@@ -436,7 +437,7 @@ class PPO(BaseController):
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
                 _, success = self.safety_filter.certify_action(unextended_obs, action, info)
-                if not success:
+                if not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
         return obs, info
