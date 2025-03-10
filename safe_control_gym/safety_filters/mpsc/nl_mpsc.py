@@ -986,7 +986,7 @@ class NL_MPSC(MPSC):
         nx, nu = self.model.nx, self.model.nu
         ny = nx + nu
 
-        ocp.dims.N = self.horizon
+        ocp.solver_options.N_horizon = self.horizon
 
         # set cost module
         ocp.cost.cost_type = 'LINEAR_LS'
@@ -1022,10 +1022,10 @@ class NL_MPSC(MPSC):
 
         # Slack
         ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = np.array([self.slack_cost] * self.p)
-        ocp.cost.Zl = np.array([self.slack_cost] * self.p)
-        ocp.cost.zu = np.array([self.slack_cost] * self.p)
-        ocp.cost.zl = np.array([self.slack_cost] * self.p)
+        ocp.cost.Zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+        ocp.cost.Zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+        ocp.cost.zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+        ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
 
         # Options
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
