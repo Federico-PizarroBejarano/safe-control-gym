@@ -14,6 +14,7 @@ Additional references:
 
 import os
 import time
+from multiprocessing import Pool
 
 import numpy as np
 import torch
@@ -102,7 +103,7 @@ class PPO(BaseController):
 
             self.total_steps = 0
             obs, info = self.env_reset(self.env, self.use_safe_reset)
-            self.info = info['n'][0]
+            self.info = info['n']
             self.true_obs = obs
             self.obs = self.obs_normalizer(obs)
         else:
@@ -160,7 +161,14 @@ class PPO(BaseController):
               env=None,
               **kwargs
               ):
+        global global_env
+        global_env = self.env.envs[0]
+        global global_safety_filter
+        global_safety_filter = self.safety_filter
+        self.multi_pool = Pool(self.rollout_batch_size)
+
         '''Performs learning (pre-training, training, fine-tuning, etc).'''
+        start_time = time.time()
         while self.total_steps < self.max_env_steps:
             results = self.train_step()
             # Checkpoint.
@@ -189,6 +197,7 @@ class PPO(BaseController):
             # Logging.
             if self.log_interval and self.total_steps % self.log_interval == 0:
                 self.log_step(results)
+                print('Elapsed Time: ', start_time - time.time())
 
     def select_action(self, obs, info=None):
         '''Determine the action to take at the current timestep.
@@ -238,13 +247,13 @@ class PPO(BaseController):
 
             # Adding safety filter
             if self.safety_filter is not None:
-                success = False
-                physical_action = env.denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
-                    action = env.normalize_action(certified_action)
-                elif self.safety_filter.use_acados:
+                data = {
+                    'action': action,
+                    'true_obs': true_obs,
+                    'info': info
+                }
+                action, _, _, success = certify_step(data)
+                if not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
@@ -295,23 +304,28 @@ class PPO(BaseController):
                 unsafe_action = action
 
             # Adding safety filter
-            success = False
             if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
-                physical_action = self.env.envs[0].denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success and self.filter_train_actions is True:
-                    action = self.env.envs[0].normalize_action(certified_action)
-                elif not success and self.safety_filter.use_acados:
+                data = []
+                for i in range(len(info)):
+                    data.append({
+                        'action': action[i],
+                        'true_obs': true_obs[i],
+                        'info': {'current_step': info[i]['current_step']}
+                    })
+                all_actions = list(self.multi_pool.map(certify_step, data))
+                action = np.stack([elem[0] for elem in all_actions], axis=0)
+                physical_action = np.stack([elem[1] for elem in all_actions], axis=0)
+                certified_action = np.stack([elem[2] for elem in all_actions], axis=0)
+                success = np.array([elem[3] for elem in all_actions])
+                if not all(success) and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
-            action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
             if done[0] and self.use_safe_reset:
                 next_obs, info = self.env_reset(self.env, self.use_safe_reset)
-            if self.penalize_sf_diff and success:
+            if self.penalize_sf_diff:
                 rew = np.log(rew)
-                rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
+                rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action, axis=1) * success
                 rew = np.exp(rew)
             next_true_obs = next_obs
             next_obs = self.obs_normalizer(next_obs)
@@ -332,7 +346,7 @@ class PPO(BaseController):
             rollouts.push({'obs': obs, 'act': unsafe_action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
             obs = next_obs
             true_obs = next_true_obs
-            info = info['n'][0]
+            info = info['n']
         self.obs = obs
         self.true_obs = true_obs
         self.info = info
@@ -424,13 +438,13 @@ class PPO(BaseController):
             obs (ndarray): The initial observation.
             info (dict): The initial info.
         '''
-        success = False
-        action = self.model.U_EQ
         obs, info = env.reset()
         if self.safety_filter is not None:
             self.safety_filter.reset_before_run()
 
         if use_safe_reset is True and self.safety_filter is not None:
+            success = False
+            action = self.model.U_EQ
             while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
                 obs, info = env.reset()
                 info['current_step'] = 1
@@ -441,3 +455,18 @@ class PPO(BaseController):
                     self.safety_filter.ocp_solver.reset()
 
         return obs, info
+
+
+def certify_step(data):
+    success = False
+    action = data['action']
+    physical_action = global_env.denormalize_action(action)
+    unextended_obs = np.squeeze(data['true_obs'])[:global_env.symbolic.nx]
+
+    certified_action, success = global_safety_filter.certify_action(unextended_obs, physical_action, data['info'])
+    if success:
+        action = global_env.normalize_action(certified_action)
+    action = np.array(action).reshape(global_env.symbolic.nu)
+    physical_action = np.array(physical_action).reshape(global_env.symbolic.nu)
+    certified_action = np.array(certified_action).reshape(global_env.symbolic.nu)
+    return action, physical_action, certified_action, success
