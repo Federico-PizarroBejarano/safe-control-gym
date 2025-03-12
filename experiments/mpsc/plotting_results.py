@@ -9,7 +9,7 @@ import numpy as np
 
 from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.experiments.base_experiment import MetricExtractor
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative, high_frequency_content
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
 from safe_control_gym.utils.plotting import load_from_logs
 
 plot = True  # Saves figure if False
@@ -236,34 +236,6 @@ def extract_constraint_violations(results_data, certified=True):
         num_violations = np.asarray(met.get_episode_constraint_violation_steps())
 
     return num_violations
-
-
-def extract_high_frequency_content(results_data, certified=True):
-    '''Extracts the high frequency content (HFC) from the inputs of an experiment's data.
-
-    Args:
-        results_data (dict): A dictionary containing all the data from the desired experiment.
-        certified (bool): Whether to extract the certified data or uncertified data.
-
-    Returns:
-        HFC (list): The list of HFCs for all experiments.
-    '''
-    n = min(results_data['cert_results']['current_clipped_action'][0].shape)
-
-    if certified:
-        all_actions = results_data['cert_results']['current_clipped_action']
-    else:
-        all_actions = results_data['uncert_results']['current_clipped_action']
-
-    HFC = []
-    for actions in all_actions:
-        if n == 1:
-            ctrl_freq = 15
-        elif n > 1:
-            ctrl_freq = 50
-        HFC.append(high_frequency_content(actions - U_EQs[system_name], ctrl_freq))
-
-    return np.squeeze(HFC)
 
 
 def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):

@@ -1,6 +1,5 @@
 '''Utility functions for Model Predictive Safety Certification.'''
 
-import pickle
 from enum import Enum
 from functools import partial
 from itertools import product
@@ -8,14 +7,8 @@ from itertools import product
 import cvxpy as cp
 import numpy as np
 import pytope as pt
-from scipy.fftpack import fft, fftfreq
-from scipy.optimize import minimize
-from sklearn.linear_model import BayesianRidge
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
-from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain
-from safe_control_gym.envs.benchmark_env import Environment, Task
+from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.envs.constraints import BoundedConstraint, LinearConstraint
 
 
@@ -156,31 +149,6 @@ def get_trajectory_on_horizon(env, iteration, horizon):
     return clipped_X_GOAL
 
 
-def high_frequency_content(signal, ctrl_freq):
-    '''Calculates the high frequency content of a signal.
-
-    Args:
-        signal (np.ndarray): A array of values.
-
-    Returns:
-        HFC (float): The high frequency content.
-    '''
-
-    N = max(signal.shape)
-    n = min(signal.shape)
-
-    if n == 1:
-        spectrum = fft(signal)
-        freq = fftfreq(len(spectrum), 1 / ctrl_freq)[:N // 2]
-        HFC = freq.T @ (2.0 / N * np.abs(spectrum[0:N // 2]))
-        return HFC
-    elif n > 1:
-        HFC = 0
-        for i in range(n):
-            HFC += high_frequency_content(signal[:, [i]], ctrl_freq)
-        return HFC
-
-
 def get_discrete_derivative(signal, ctrl_freq):
     '''Calculates the discrete derivative of a signal.
 
@@ -192,142 +160,3 @@ def get_discrete_derivative(signal, ctrl_freq):
     '''
     discrete_derivative = (signal[1:, :] - signal[:-1, :]) * ctrl_freq
     return discrete_derivative
-
-
-def approximate_LQR_gain(env, ctrl, config, curr_path='.'):
-    '''Calculates the optimal LQR gain given a set of trajectories. Does this by minimizing the difference
-    between the executed actions and the actions that would have been executed by the LQR controller.
-
-    Args:
-        env (BenchmarkEnv): The environment for the task.
-        ctrl (BaseController): The controller for the task.
-        config (dict): The configuration of the experiment.
-        curr_path (str): The current relative path to the experiment folder.
-
-    Returns:
-        best_K (np.ndarray): The optimal LQR gain for the given controller and system.
-    '''
-    if env.NAME == Environment.QUADROTOR:
-        system = f'quadrotor_{str(int(env.QUAD_TYPE))}D'
-    else:
-        system = env.NAME
-    task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
-    path = f'{curr_path}/models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl'
-    with open(path, 'rb') as f:
-        data = pickle.load(f)
-
-    model = ctrl.get_prior(env)
-    actions = np.vstack(data['action'])
-    states = np.vstack([data['state'][i][:-1, :] for i in range(len(data['state']))])
-
-    if task == 'stab':
-        state_errors = states - env.X_GOAL
-    else:
-        state_errors = states - np.tile(env.X_GOAL[:-1, :], (len(data['action']), 1))
-
-    Q = np.diag(np.ones((model.nx)))
-    R = 0.1 * np.diag(np.ones((model.nu)))
-    x0 = compute_lqr_gain(model, model.X_EQ, model.U_EQ, Q, R)
-    pattern = np.sign(x0)
-    x0 = np.abs(x0[0, :]).flatten()
-
-    best_K = minimize(fun=lqr_action_mismatch, x0=x0, args=(actions, state_errors, model.U_EQ, pattern)).x
-    best_K = pattern * best_K
-
-    return best_K
-
-
-def lqr_action_mismatch(K, actions, state_errors, U_EQ, pattern):
-    '''A dummy function used in approximate_LQR_gain to measure how incorrect the
-    LQR gain is for the given trajectory data.
-
-    Args:
-        K (np.ndarray): The gain to test. Only the first row of the gain, absolute valued.
-        actions (np.ndarray): All the actions taken by the controller in the experiment.
-        state_errors (np.ndarray): All the states of the system in the experiment.
-        U_EQ (np.ndarray): The equilibrium input of system.
-        pattern (np.ndarray): The pattern of positive/negative values for this gain.
-
-    Returns:
-        error (float): A measure of how badly the gain represents the controllers actions.
-    '''
-    K = (pattern * K).T
-    error = np.linalg.norm((actions - (-state_errors @ K + U_EQ)).flatten())
-    return error
-
-
-def get_error_parameters(states, actions, errors, degree):
-    '''Executes bayesian ridge regression on the states and actions
-    to determine the error between the nominal model and real system.
-
-    Args:
-        states (np.ndarray): The starting states recorded.
-        actions (np.ndarray): The actions recorded.
-        errors (np.ndarray): The model errors recorded.
-        degree (int): The degree of the polynomial features to use.
-
-    Returns:
-        error_parameters (list): A list of all the calculated parameters.
-    '''
-    func_inputs = np.hstack((states, actions))
-    brr_poly = make_pipeline(
-        PolynomialFeatures(degree=degree, include_bias=True),
-        StandardScaler(),
-        BayesianRidge(),
-    ).fit(func_inputs, errors)
-
-    powers = brr_poly.named_steps['polynomialfeatures'].powers_
-    means = brr_poly.named_steps['standardscaler'].mean_
-    stds = brr_poly.named_steps['standardscaler'].scale_
-    coefs = brr_poly.named_steps['bayesianridge'].coef_
-    intercept = brr_poly.named_steps['bayesianridge'].intercept_
-    sigmas = brr_poly.named_steps['bayesianridge'].sigma_
-    alpha = brr_poly.named_steps['bayesianridge'].alpha_
-
-    parameters = [powers, means, stds, coefs, intercept, sigmas, alpha]
-    return parameters
-
-
-def error_function(powers, means, stds, coefs, intercept, sigmas, alpha, num_stds, input_vec):
-    '''A function that executes the learned regression function to find the model
-    error on an input composed of concatenated state and input.
-
-    Args:
-        powers (np.ndarray): A list of the powers each input element is raised to,
-            to determine each feature.
-        means (np.ndarray): The means of each input channel.
-        stds (np.ndarray): The standard deciation of each input channel.
-        coefs (np.ndarray): The calculated coefficients of the regression.
-        intercept (float): The calculated intercept of the regression.
-        sigmas (np.ndarray): A value calculated to determine the standard
-            deviation of the regression.
-        alpha (float): A value calculated to determine the standard deviation
-            of the regression.
-        num_stds (int): The number of standard deviations in which to upper
-            bounds the error.
-        input_vec (np.ndarray): The value (state + action) to estimate the error from
-
-    Returns:
-        estimated_error (float): An upper bound on the estimated error,
-            within num_stds standard deviations.
-    '''
-    transformed_vec = []
-    for power in powers:
-        val = 1
-        for i, p in enumerate(power):
-            val *= input_vec[i]**p
-        transformed_vec.append(val)
-
-    final_val = 0
-    scaled_vec = []
-    for i, val in enumerate(transformed_vec):
-        val = (val - means[i]) / stds[i]
-        final_val += val * coefs[i]
-        scaled_vec.append(val)
-
-    final_val += intercept
-
-    sigmas_squared_data = sum(np.dot(scaled_vec, sigmas) * scaled_vec)
-    final_std = np.sqrt(sigmas_squared_data + (1.0 / alpha))
-
-    return final_val + final_std * num_stds
