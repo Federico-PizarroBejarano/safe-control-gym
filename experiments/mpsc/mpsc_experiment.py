@@ -3,7 +3,7 @@
 import os
 import pickle
 import shutil
-import sys
+# import sys
 from functools import partial
 
 import numpy as np
@@ -11,8 +11,7 @@ import numpy as np
 from experiments.mpsc.plotting_results import plot_trajectories
 from safe_control_gym.envs.benchmark_env import Cost, Environment, Task
 from safe_control_gym.experiments.base_experiment import BaseExperiment, MetricExtractor
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import (Cost_Function, get_discrete_derivative,
-                                                             high_frequency_content)
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, get_discrete_derivative
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
@@ -45,7 +44,7 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     if init_state is not None:
         config.task_config['init_state'] = init_state
     config.task_config['randomized_init'] = False
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
+    if config.algo in ['ppo', 'sac']:
         config.task_config['cost'] = Cost.RL_REWARD
         config.task_config['normalized_rl_action_space'] = True
     else:
@@ -70,9 +69,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                 **config.algo_config,
                 output_dir=curr_path + '/temp')
 
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
+    if config.algo in ['ppo', 'sac']:
         # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{model}/model_latest.pt')
+        ctrl.load(f'{curr_path}/models/rl_models/{config.algo}/{config.algo}_model_{system}_{task}.pt')
         ctrl.model_name = model
 
         # Remove temporary files and directories
@@ -95,11 +94,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
         if config.algo == 'pid':
             ctrl.save(f'{curr_path}/temp-data/saved_controller_prev.npy')
 
-    if config.sf_config.integration_algo == 'LTI':
-        linear_suffix = '_linear'
-    else:
-        linear_suffix = ''
-
     if training is True:
         train_env = env_func(randomized_init=True,
                              init_state=None,
@@ -108,9 +102,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                              disturbance=None,
                              )
         safety_filter.learn(env=train_env)
-        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}{linear_suffix}.pkl')
+        safety_filter.save(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
     else:
-        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}{linear_suffix}.pkl')
+        safety_filter.load(path=f'{curr_path}/models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
 
     # Run with safety filter
     experiment = BaseExperiment(env, ctrl, safety_filter=safety_filter)
@@ -135,8 +129,6 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     print('Total Number of Certified Iterations:', cert_metrics['average_length'])
     print('Number of Violations:', uncert_metrics['average_constraint_violation'])
     print('Number of Certified Violations:', cert_metrics['average_constraint_violation'])
-    print('HFC Uncertified:', high_frequency_content(uncert_results['current_physical_action'][0], config.task_config.ctrl_freq))
-    print('HFC Certified:', high_frequency_content(cert_results['current_physical_action'][0], config.task_config.ctrl_freq))
     derivative = get_discrete_derivative(uncert_results['current_physical_action'][0] - safety_filter.U_EQ[0], config.task_config.ctrl_freq)
     derivative = get_discrete_derivative(derivative, config.task_config.ctrl_freq)
     total_derivatives = np.linalg.norm(derivative, 'fro')
@@ -198,8 +190,7 @@ def determine_feasible_starting_points(num_points=100):
         if not success:
             safety_filter.ocp_solver.reset()
             _, success = safety_filter.certify_action(unextended_obs, physical_action, info)
-
-        if success and np.all(safety_filter.slack_prev < 1e-4):
+        elif np.all(safety_filter.slack_prev < 1e-4):
             starting_points += [init_state]
 
     generator_env.close()
@@ -207,115 +198,6 @@ def determine_feasible_starting_points(num_points=100):
 
     print(starting_points)
     np.save(f'./models/starting_points/{system}/starting_points_{system}_{task}.npy', starting_points)
-
-
-def run_multiple(plot=True):
-    '''Runs an experiment at every saved starting point.
-
-    Args:
-        plot (bool): Whether to plot the results.
-
-    Returns:
-        uncert_results (dict): The results of the uncertified experiments.
-        uncert_metrics (dict): The metrics of the uncertified experiments.
-        cert_results (dict): The results of the certified experiments.
-        cert_metrics (dict): The metrics of the certified experiments.
-    '''
-
-    fac = ConfigFactory()
-    config = fac.merge()
-
-    task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
-    if config.task == Environment.QUADROTOR:
-        system = f'quadrotor_{str(config.task_config.quad_type)}D'
-    else:
-        system = config.task
-
-    starting_points = np.load(f'./models/starting_points/{system}/starting_points_{system}_{task}_{config.algo}.npy')
-
-    for i in range(starting_points.shape[0]):
-        init_state = starting_points[i, :]
-        X_GOAL, uncert_results, _, cert_results, _ = run(plot=plot, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=init_state)
-        if i == 0:
-            all_uncert_results, all_cert_results = uncert_results, cert_results
-        else:
-            for key in all_cert_results.keys():
-                if key in all_uncert_results:
-                    all_uncert_results[key].append(uncert_results[key][0])
-                all_cert_results[key].append(cert_results[key][0])
-
-    met = MetricExtractor()
-    uncert_metrics = met.compute_metrics(data=all_uncert_results)
-    cert_metrics = met.compute_metrics(data=all_cert_results)
-
-    all_results = {'uncert_results': all_uncert_results,
-                   'uncert_metrics': uncert_metrics,
-                   'cert_results': all_cert_results,
-                   'cert_metrics': cert_metrics,
-                   'config': config,
-                   'X_GOAL': X_GOAL}
-
-    with open(f'./results_mpsc/{system}/{task}/m{config.sf_config.mpsc_cost_horizon}/results_{system}_{task}_{config.algo}_{config.sf_config.cost_function}_m{config.sf_config.mpsc_cost_horizon}.pkl', 'wb') as f:
-        pickle.dump(all_results, f)
-
-    return all_uncert_results, uncert_metrics, all_cert_results, cert_metrics
-
-
-def run_uncertified_trajectory(n_episodes=10):
-    '''Runs and saves several initializations of the uncertified trajectories.
-
-    Args:
-        n_episodes (int): The number of episodes to execute.
-    '''
-
-    # Define arguments.
-    fac = ConfigFactory()
-    config = fac.merge()
-    config.algo_config['training'] = False
-    config.task_config['randomized_init'] = False
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
-        config.task_config['cost'] = Cost.RL_REWARD
-        config.task_config['normalized_rl_action_space'] = True
-    else:
-        config.task_config['cost'] = Cost.QUADRATIC
-        config.task_config['normalized_rl_action_space'] = False
-
-    task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
-    if config.task == Environment.QUADROTOR:
-        system = f'quadrotor_{str(config.task_config.quad_type)}D'
-    else:
-        system = config.task
-
-    env_func = partial(make,
-                       config.task,
-                       **config.task_config)
-    env = env_func()
-
-    # Setup controller.
-    ctrl = make(config.algo,
-                env_func,
-                **config.algo_config,
-                output_dir='./temp')
-
-    if config.algo in ['ppo', 'sac', 'safe_explorer_ppo', 'cpo']:
-        # Load state_dict from trained.
-        ctrl.load(f'./models/rl_models/{system}/{task}/{config.algo}/none/model_latest.pt')
-
-        # Remove temporary files and directories
-        shutil.rmtree('./temp', ignore_errors=True)
-
-    # Run without safety filter
-    experiment = BaseExperiment(env, ctrl)
-    uncert_results, _ = experiment.run_evaluation(n_episodes=n_episodes)
-    experiment.close()
-
-    if len(np.unique([len(uncert_results['state'][i]) for i in range(n_episodes)])) > 1:
-        print('[ERROR] - One or more experiments failed. Lengths are: ')
-        print([len(uncert_results['state'][i]) for i in range(n_episodes)])
-        raise Exception()
-
-    with open(f'./models/trajectories/{system}/{config.algo}_data_{system}_{task}.pkl', 'wb') as f:
-        pickle.dump(uncert_results, f)
 
 
 def run_multiple_models(plot=True, model=None):
@@ -371,4 +253,9 @@ def run_multiple_models(plot=True, model=None):
 
 
 if __name__ == '__main__':
-    run_multiple_models(plot=False, model=sys.argv[-1].split('=')[1])
+    run()
+    # determine_feasible_starting_points(num_points=100)
+    # if '--model=' in sys.argv:
+    #     run_multiple_models(plot=False, model='none')
+    # else:
+    #     run_multiple_models(plot=False, model=sys.argv[-1].split('=')[1])

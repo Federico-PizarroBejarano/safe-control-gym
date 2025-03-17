@@ -25,8 +25,7 @@ from safe_control_gym.controllers.mpc.mpc_utils import discretize_linear_system,
 from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.safety_filters.cbf.cbf_utils import cartesian_product
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import \
-    Cost_Function  # , get_error_parameters, error_function
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 
 
 class NL_MPSC(MPSC):
@@ -240,18 +239,6 @@ class NL_MPSC(MPSC):
         print('MAX ERROR PER DIM:', np.max(np.abs(w), axis=0))
         print('STD ERROR PER DIM:', np.mean(np.abs(w), axis=0) + 3 * np.std(np.abs(w), axis=0))
         print('TOTAL ERRORS BY CHANNEL:', np.sum(np.abs(w), axis=0))
-
-        # if self.integration_algo == 'LTI':
-        #     degree = 1
-        #     num_stds = 2
-        # else:
-        #     degree = 2
-        #     num_stds = 3
-        # self.error_parameters = get_error_parameters(states, actions, normed_w, degree)
-        # def w_func(state, action):
-        #     input_vec = cs.horzcat(state.T, action.T)
-        #     return error_function(*self.error_parameters, num_stds, input_vec)
-        # self.w_func = w_func
 
     def synthesize_lyapunov(self):
         '''Synthesize the appropriate constants related to the lyapunov function of the system.'''
@@ -762,15 +749,6 @@ class NL_MPSC(MPSC):
         self.s_bar_f = parameters['s_bar_f']
         self.w_bar = parameters['w_bar']
         self.max_w = parameters['max_w']
-        # self.error_parameters = parameters['error_parameters']
-        # if self.integration_algo == 'LTI':
-        #     num_stds = 2
-        # else:
-        #     num_stds = 3
-        # def w_func(state, action):
-        #     input_vec = cs.horzcat(state.T, action.T)
-        #     return error_function(*self.error_parameters, num_stds, input_vec)
-        # self.w_func = w_func
         self.c_js = parameters['c_js']
         self.gamma = parameters['gamma']
         self.P_f = parameters['P_f']
@@ -986,7 +964,7 @@ class NL_MPSC(MPSC):
         nx, nu = self.model.nx, self.model.nu
         ny = nx + nu
 
-        ocp.dims.N = self.horizon
+        ocp.solver_options.N_horizon = self.horizon
 
         # set cost module
         ocp.cost.cost_type = 'LINEAR_LS'
@@ -1022,10 +1000,10 @@ class NL_MPSC(MPSC):
 
         # Slack
         ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = np.array([0.5] * self.p)
-        ocp.cost.Zl = np.array([0.5] * self.p)
-        ocp.cost.zu = np.array([0.5] * self.p)
-        ocp.cost.zl = np.array([0.5] * self.p)
+        ocp.cost.Zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+        ocp.cost.Zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+        ocp.cost.zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+        ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
 
         # Options
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
