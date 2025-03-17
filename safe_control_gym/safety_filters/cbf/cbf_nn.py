@@ -343,7 +343,7 @@ class CBF_NN(CBF):
                     uncertified_action = self.env.action_space.sample()
                 else:
                     uncertified_action = self.uncertified_controller.select_action(obs, info)
-                safe_action, _ = self.certify_action(obs, uncertified_action)
+                safe_action, _, _ = self.certify_action(obs, uncertified_action)
 
                 # Blend the safe and uncertified action
                 blended_input = (1 - input_blending_weight[i]) * uncertified_action + input_blending_weight[i] * safe_action

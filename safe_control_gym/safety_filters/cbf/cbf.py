@@ -239,7 +239,7 @@ class CBF(BaseSafetyFilter):
         self.results_dict['certified_action'].append(certified_action)
         self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
 
-        return certified_action, success
+        return certified_action, success, None
 
     def is_cbf(self,
                num_points: int = 100,
