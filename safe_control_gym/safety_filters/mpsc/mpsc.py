@@ -158,13 +158,14 @@ class MPSC(BaseSafetyFilter, ABC):
         Returns:
             action (ndarray): The certified action.
             feasible (bool): Whether the safety filtering was feasible or not.
+            jacobian (ndarray): The Jacobian of the applied action w.r.t. the uncertified action.
         '''
 
         if self.use_acados:
-            action, feasible = self.solve_acados_optimization(obs, uncertified_action, iteration)
-            jacobian = None
+            action, feasible, jacobian = self.solve_acados_optimization(obs, uncertified_action, iteration)
         else:
-            action, feasible, jacobian = self.solve_casadi_optimization(obs, uncertified_action, iteration)
+            action, feasible = self.solve_casadi_optimization(obs, uncertified_action, iteration)
+            jacobian = None
         return action, feasible, jacobian
 
     def solve_casadi_optimization(self,
@@ -228,7 +229,7 @@ class MPSC(BaseSafetyFilter, ABC):
             print(e)
             feasible = False
             action = None
-        return action, feasible, None
+        return action, feasible
 
     def solve_acados_optimization(self,
                                   obs,
@@ -245,20 +246,17 @@ class MPSC(BaseSafetyFilter, ABC):
         Returns:
             action (ndarray): The certified action.
             feasible (bool): Whether the safety filtering was feasible or not.
+            jacobian (ndarray): The Jacobian of the applied action w.r.t. the uncertified action.
         '''
 
         ocp_solver = self.ocp_solver
-        ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.atleast_1d(np.squeeze(uncertified_action)))))
-
-        if isinstance(self.cost_function, PRECOMPUTED_COST):
-            uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
-
-            for stage in range(1, self.mpsc_cost_horizon):
-                ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx)), uncert_input_traj[:, stage])))
+        ocp_solver.set_p_global_and_precompute_dependencies(np.atleast_1d(np.squeeze(uncertified_action)).astype(np.float64))
 
         # Solve the optimization problem.
         try:
             action = ocp_solver.solve_for_x0(x0_bar=obs)
+            jacobian = ocp_solver.eval_solution_sensitivity(0, 'p_global', return_sens_x=False)['sens_u']
+            print(np.round(jacobian, 3), np.linalg.norm(action - uncertified_action) * 10 > np.linalg.norm(action))
             self.cost_prev = ocp_solver.get_cost()
             self.slack_prev = np.zeros((self.horizon, self.p))
             x_val = np.zeros((self.horizon + 1, self.model.nx))
@@ -278,7 +276,7 @@ class MPSC(BaseSafetyFilter, ABC):
             print(e)
             feasible = False
             action = None
-        return action, feasible
+        return action, feasible, jacobian
 
     def certify_action(self,
                        current_state,
@@ -295,6 +293,7 @@ class MPSC(BaseSafetyFilter, ABC):
         Returns:
             certified_action (ndarray): The certified action
             success (bool): Whether the safety filtering was successful or not.
+            jacobian (ndarray): The Jacobian of the applied action w.r.t. the uncertified action.
         '''
         uncertified_action = np.clip(uncertified_action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
         self.results_dict['uncertified_action'].append(uncertified_action)

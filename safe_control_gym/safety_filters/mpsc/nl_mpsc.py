@@ -19,7 +19,7 @@ import numpy as np
 from acados_template import AcadosOcp, AcadosOcpSolver
 from acados_template.acados_model import AcadosModel
 from pytope import Polytope
-from scipy.linalg import block_diag, solve_discrete_are, sqrtm
+from scipy.linalg import solve_discrete_are, sqrtm
 
 from safe_control_gym.controllers.mpc.mpc_utils import discretize_linear_system, rk_discrete
 from safe_control_gym.envs.benchmark_env import Environment, Task
@@ -802,7 +802,7 @@ class NL_MPSC(MPSC):
             pickle.dump(parameters, f)
 
     def setup_casadi_optimizer(self):
-        '''Setup the certifying MPC problem.'''
+        '''Setup the certifying MPC problem in casadi.'''
 
         # Horizon parameter.
         horizon = self.horizon
@@ -917,15 +917,14 @@ class NL_MPSC(MPSC):
         self.opti_dict['cost'] = cost
 
     def setup_acados_optimizer(self):
-        '''setup_optimizer_acados'''
-        # create ocp object to formulate the OCP
+        '''Setup the certifying MPC problem in acados.'''
+        # Create ocp object to formulate the OCP
         ocp = AcadosOcp()
 
         # Setup model
         model = AcadosModel()
         model.x = self.model.x_sym
         model.u = self.model.u_sym
-        model.f_expl_expr = self.model.x_dot
 
         if self.env.NAME == Environment.CARTPOLE:
             x1_dot = cs.MX.sym('x1_dot')
@@ -957,38 +956,40 @@ class NL_MPSC(MPSC):
             xdot = cs.vertcat(x1_dot, vx_dot, y1_dot, vy_dot, z1_dot, vz_dot, phi1_dot, theta1_dot, psi1_dot, p1_body_dot, q1_body_dot, r1_body_dot)
 
         model.xdot = xdot
-        model.f_impl_expr = model.xdot - model.f_expl_expr
+        x, u = model.x, model.u
+        ode = cs.Function('ode', [x, u], [self.model.x_dot])
+        k1 = ode(x, u)
+        k2 = ode(x + self.dt / 2 * k1, u)
+        k3 = ode(x + self.dt / 2 * k2, u)
+        k4 = ode(x + self.dt * k3, u)
+        xf = x + self.dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+        model.disc_dyn_expr = xf
+
         model.name = 'mpsf'
         ocp.model = model
 
-        nx, nu = self.model.nx, self.model.nu
-        ny = nx + nu
+        u_L = cs.MX.sym('u_L', self.m)  # uncertified action
+        ocp.model.p_global = u_L
+        ocp.p_global_values = np.ones((self.m,))
 
-        ocp.solver_options.N_horizon = self.horizon
+        # Setup cost
+        ocp.cost.cost_type_0 = 'EXTERNAL'
+        ocp.cost.cost_type = 'EXTERNAL'
+        ocp.cost.cost_type_e = 'EXTERNAL'
 
-        # set cost module
-        ocp.cost.cost_type = 'LINEAR_LS'
-        ocp.cost.cost_type_e = 'LINEAR_LS'
+        ocp.model.cost_expr_ext_cost_0 = (ocp.model.u - ocp.model.p_global).T @ (ocp.model.u - ocp.model.p_global)
+        ocp.model.cost_expr_ext_cost = cs.MX.zeros(1)
+        ocp.model.cost_expr_ext_cost_e = cs.MX.zeros(1)
 
-        Q_mat = np.zeros((nx, nx))
-        ocp.cost.W_e = np.zeros((nx, nx))
-        R_mat = np.eye(nu)
-        ocp.cost.W = block_diag(Q_mat, R_mat)
+        # Slack
+        ocp.constraints.Jsg = np.eye(self.p)
+        ocp.cost.Zu = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
+        ocp.cost.Zl = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
+        ocp.cost.zu = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
+        ocp.cost.zl = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
 
-        ocp.cost.Vx = np.zeros((ny, nx))
-        ocp.cost.Vx[:nx, :] = np.eye(nx)
-        ocp.cost.Vu = np.zeros((ny, nu))
-        ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
-        ocp.cost.Vx_e = np.eye(nx)
-
-        ocp.model.cost_y_expr = cs.vertcat(model.x, model.u)
-        ocp.model.cost_y_expr_e = model.x
-
-        # Updated on each iteration
-        ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
-        ocp.cost.yref_e = self.model.X_EQ
-
-        # set constraints
+        # Setup constraints
         ocp.constraints.constr_type = 'BGH'
         ocp.constraints.constr_type_e = 'BGH'
 
@@ -998,22 +999,19 @@ class NL_MPSC(MPSC):
         ocp.constraints.lg = -1000 * np.ones((self.p))
         ocp.constraints.ug = np.zeros((self.p))
 
-        # Slack
-        ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-        ocp.cost.Zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-        ocp.cost.zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-        ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-
         # Options
-        ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
-        ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-        ocp.solver_options.hpipm_mode = 'BALANCE'
-        ocp.solver_options.integrator_type = 'ERK'
-        ocp.solver_options.nlp_solver_type = 'SQP_RTI'
-
-        # set prediction horizon
+        ocp.solver_options.N_horizon = self.horizon
         ocp.solver_options.tf = self.dt * self.horizon
+        ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
+        ocp.solver_options.hessian_approx = 'EXACT'
+        ocp.solver_options.hpipm_mode = 'BALANCE'
+        ocp.solver_options.integrator_type = 'DISCRETE'
+        ocp.solver_options.nlp_solver_type = 'SQP_RTI'
+        ocp.solver_options.with_solution_sens_wrt_params = True
+
+        # Additional options for improved robustness
+        ocp.solver_options.qp_solver_mu0 = 1e3  # makes HPIPM converge more robustly
+        ocp.solver_options.tol = 1e-8
 
         solver_json = 'acados_ocp_mpsf.json'
         ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
@@ -1035,8 +1033,9 @@ class NL_MPSC(MPSC):
         self.set_decay_factor(self.cost_function.decay_factor)
 
     def set_decay_factor(self, new_decay_factor):
-        for stage in range(self.mpsc_cost_horizon):
-            self.ocp_solver.cost_set(stage, 'W', (new_decay_factor**stage) * self.ocp.cost.W)
+        # for stage in range(self.mpsc_cost_horizon):
+        #     self.ocp_solver.cost_set(stage, 'W', (new_decay_factor**stage) * self.ocp.cost.W)
 
-        for stage in range(self.mpsc_cost_horizon, self.horizon):
-            self.ocp_solver.cost_set(stage, 'W', 0 * self.ocp.cost.W)
+        # for stage in range(self.mpsc_cost_horizon, self.horizon):
+        #     self.ocp_solver.cost_set(stage, 'W', 0 * self.ocp.cost.W)
+        pass
