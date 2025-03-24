@@ -9,10 +9,10 @@ task_config:
 
   init_state:
     init_x: 0.5
-    init_x_dot: 0
+    init_x_dot: 0.5
     init_z: 1.5
     init_z_dot: 0
-    init_theta: 0
+    init_theta: 0.1
     init_theta_dot: 0
   randomized_init: True
   randomized_inertial_prop: False

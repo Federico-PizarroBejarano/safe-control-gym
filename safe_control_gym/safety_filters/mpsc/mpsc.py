@@ -256,7 +256,7 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             action = ocp_solver.solve_for_x0(x0_bar=obs)
             jacobian = ocp_solver.eval_solution_sensitivity(0, 'p_global', return_sens_x=False)['sens_u']
-            print(np.round(jacobian, 3), np.linalg.norm(action - uncertified_action) * 10 > np.linalg.norm(action))
+            # print(np.round(jacobian, 3), np.linalg.norm(action - uncertified_action) * 10 > np.linalg.norm(action))
             self.cost_prev = ocp_solver.get_cost()
             self.slack_prev = np.zeros((self.horizon, self.p))
             x_val = np.zeros((self.horizon + 1, self.model.nx))
@@ -276,6 +276,7 @@ class MPSC(BaseSafetyFilter, ABC):
             print(e)
             feasible = False
             action = None
+            jacobian = np.zeros((self.model.nu, self.model.nu))
         return action, feasible, jacobian
 
     def certify_action(self,
