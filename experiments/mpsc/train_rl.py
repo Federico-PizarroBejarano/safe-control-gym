@@ -21,7 +21,7 @@ def train():
 
     TODO: Add restore functionality
     '''
-    # Create the configuration dictionary.
+    # Create the configuration dictionary
     fac = ConfigFactory()
     config = fac.merge()
     config.algo_config['training'] = True
@@ -36,14 +36,14 @@ def train():
     set_seed_from_config(config)
     set_device_from_config(config)
 
-    # Define function to create task/env.
+    # Define function to create task/env
     env_func = partial(make,
                        config.task,
                        output_dir=config.output_dir,
                        **config.task_config
                        )
 
-    # Create the controller/control_agent.
+    # Create the controller/control_agent
     ctrl = make(config.algo,
                 env_func,
                 checkpoint_path=os.path.join(config.output_dir, 'model_latest.pt'),
@@ -51,7 +51,7 @@ def train():
                 **config.algo_config)
     ctrl.reset()
 
-    # Setup MPSC.
+    # Setup MPSC
     if config.algo in ['ppo', 'sac']:
         safety_filter = make(config.safety_filter,
                              env_func,
@@ -68,15 +68,16 @@ def train():
 
         ctrl.safety_filter = safety_filter
 
-    # Training.
+    # Save the config
+    with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:
+        yaml.dump(munch.unmunchify(config), file, default_flow_style=False)
+
+    # Training
     start_time = time.time()
     ctrl.learn()
     config['logging'] = {'total_learning_time': time.time() - start_time}
     ctrl.close()
     print('Training done.')
-
-    with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:
-        yaml.dump(munch.unmunchify(config), file, default_flow_style=False)
 
     make_plots(config)
 
@@ -88,7 +89,7 @@ def make_plots(config):
             the experiment folder containing the logs.
         * save figures under `dir_path/plots/`.
     '''
-    # Define source and target log locations.
+    # Define source and target log locations
     log_dir = os.path.join(config.output_dir, 'logs')
     plot_dir = os.path.join(config.output_dir, 'plots')
     mkdirs(plot_dir)

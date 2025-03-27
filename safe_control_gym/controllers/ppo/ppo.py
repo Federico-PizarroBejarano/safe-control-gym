@@ -308,7 +308,10 @@ class PPO(BaseController):
             action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
             if done[0] and self.use_safe_reset:
+                prev_info = info['n'][0]
                 next_obs, info = self.env_reset(self.env, self.use_safe_reset)
+                info['n'][0]['terminal_info'] = prev_info['terminal_info']
+                info['n'][0]['terminal_observation'] = prev_info['terminal_observation']
             if self.penalize_sf_diff and success:
                 rew = np.log(rew)
                 rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
