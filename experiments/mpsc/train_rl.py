@@ -75,8 +75,10 @@ def train():
     # Training
     start_time = time.time()
     ctrl.learn()
-    config['logging'] = {'total_learning_time': time.time() - start_time}
     ctrl.close()
+
+    with open(os.path.join(config.output_dir, 'training_time.txt'), 'w', encoding='UTF-8') as f:
+        f.write('Total training time: ' + str(time.time() - start_time))
     print('Training done.')
 
     make_plots(config)
