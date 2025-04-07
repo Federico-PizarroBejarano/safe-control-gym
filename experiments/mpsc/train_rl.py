@@ -67,7 +67,7 @@ def train():
 
         safety_filter.load(path=f'./models/mpsc_parameters/{config.safety_filter}_{system}.pkl')
 
-        ctrl.safety_filter = safety_filter
+        ctrl.add_safety_filter(safety_filter)
 
     # Save the config
     with open(os.path.join(config.output_dir, 'config.yaml'), 'w', encoding='UTF-8') as file:

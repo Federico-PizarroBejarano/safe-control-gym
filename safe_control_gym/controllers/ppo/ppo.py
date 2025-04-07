@@ -19,7 +19,8 @@ import numpy as np
 import torch
 
 from safe_control_gym.controllers.base_controller import BaseController
-from safe_control_gym.controllers.ppo.ppo_utils import PPOAgent, PPOBuffer, compute_returns_and_advantages
+from safe_control_gym.controllers.ppo.ppo_utils import (PPOAgent, PPOBuffer, SafetyFilterLayer,
+                                                        compute_returns_and_advantages)
 from safe_control_gym.envs.env_wrappers.record_episode_statistics import (RecordEpisodeStatistics,
                                                                           VecRecordEpisodeStatistics)
 from safe_control_gym.envs.env_wrappers.vectorized_env import make_vec_envs
@@ -91,6 +92,12 @@ class PPO(BaseController):
         # Adding safety filter
         self.safety_filter = None
 
+    def add_safety_filter(self, safety_filter):
+        self.safety_filter = safety_filter
+        if self.filter_train_actions:
+            safety_filter_layer = SafetyFilterLayer(safety_filter, self.env.envs[0])
+            self.agent.ac.actor.safety_filter_layer = safety_filter_layer
+
     def reset(self):
         '''Do initializations for training or evaluation.'''
         self.curr_training = False
@@ -105,7 +112,6 @@ class PPO(BaseController):
             self.total_steps = 0
             obs, info = self.env_reset(self.env, self.use_safe_reset)
             self.info = info['n'][0]
-            self.true_obs = obs
             self.obs = self.obs_normalizer(obs)
         else:
             # Add episodic stats to be tracked.
@@ -170,8 +176,6 @@ class PPO(BaseController):
               ):
         '''Performs learning (pre-training, training, fine-tuning, etc).'''
         while self.total_steps < self.max_env_steps:
-            if self.decay_factor_curriculum:
-                self.safety_filter.set_decay_factor(self.safety_filter.max_decay_factor * (self.total_steps / self.max_env_steps))
             results = self.train_step()
             # Checkpoint.
             if self.total_steps >= self.max_env_steps or (self.save_interval and self.total_steps % self.save_interval == 0):
@@ -210,7 +214,7 @@ class PPO(BaseController):
         Returns:
             action (ndarray): The action chosen by the controller.
         '''
-
+        obs = obs.reshape(1, -1)
         if not training:
             with torch.no_grad():
                 obs = torch.FloatTensor(obs).to(self.device)
@@ -243,7 +247,6 @@ class PPO(BaseController):
                 env.add_tracker('mse', 0, mode='queue')
 
         obs, info = self.env_reset(env, True)
-        true_obs = obs
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
@@ -251,19 +254,6 @@ class PPO(BaseController):
         start = time.time()
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=info)
-
-            # Adding safety filter
-            if self.safety_filter is not None:
-                success = False
-                physical_action = env.denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
-                certified_action, success, jacobian = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
-                    action = env.normalize_action(certified_action)
-                elif self.safety_filter.use_acados:
-                    self.safety_filter.ocp_solver.reset()
-
-            action = np.atleast_2d(np.squeeze([action]))
             obs, rew, done, info = env.step(action)
             total_return += rew
 
@@ -278,7 +268,6 @@ class PPO(BaseController):
                 ep_lengths.append(info['episode']['l'])
                 obs, info = self.env_reset(env, True)
                 total_return = 0
-            true_obs = obs
             obs = self.obs_normalizer(obs)
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
@@ -303,26 +292,11 @@ class PPO(BaseController):
         self.obs_normalizer.unset_read_only()
         rollouts = PPOBuffer(self.env.observation_space, self.env.action_space, self.rollout_steps, self.rollout_batch_size)
         obs = self.obs
-        true_obs = self.true_obs
         info = self.info
         start = time.time()
-        if self.safety_filter is not None and self.preserve_random_state is True:
-            self.save('prev', save_only_random_seed=True)
         for _ in range(self.rollout_steps):
             with torch.no_grad():
                 action, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
-                unsafe_action = action
-
-            # Adding safety filter
-            success = False
-            if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
-                physical_action = self.env.envs[0].denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
-                certified_action, success, jacobian = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success and self.filter_train_actions is True:
-                    action = self.env.envs[0].normalize_action(certified_action)
-                elif not success and self.safety_filter.use_acados:
-                    self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
@@ -331,11 +305,6 @@ class PPO(BaseController):
                 next_obs, info = self.env_reset(self.env, self.use_safe_reset)
                 info['n'][0]['terminal_info'] = prev_info['terminal_info']
                 info['n'][0]['terminal_observation'] = prev_info['terminal_observation']
-            if self.penalize_sf_diff and success:
-                rew = np.log(rew)
-                rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
-                rew = np.exp(rew)
-            next_true_obs = next_obs
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
@@ -351,12 +320,10 @@ class PPO(BaseController):
                     terminal_val = self.agent.ac.critic(terminal_obs_tensor).squeeze().detach().cpu().numpy()
                     terminal_v[idx] = terminal_val
 
-            rollouts.push({'obs': obs, 'act': unsafe_action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
+            rollouts.push({'obs': obs, 'act': action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
             obs = next_obs
-            true_obs = next_true_obs
             info = info['n'][0]
         self.obs = obs
-        self.true_obs = true_obs
         self.info = info
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
@@ -458,6 +425,7 @@ class PPO(BaseController):
                 info['current_step'] = 1
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
+                self.safety_filter.ocp_solver.reset()
                 _, success, _ = self.safety_filter.certify_action(unextended_obs, action, info)
                 if not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()

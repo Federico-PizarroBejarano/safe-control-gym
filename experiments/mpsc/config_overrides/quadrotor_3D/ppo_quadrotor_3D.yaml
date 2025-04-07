@@ -9,7 +9,7 @@ algo_config:
 
   # optim args
   opt_epochs: 20
-  mini_batch_size: 256
+  mini_batch_size: 250
   actor_lr: 0.001
   critic_lr: 0.001
 

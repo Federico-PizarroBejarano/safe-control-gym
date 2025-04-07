@@ -256,7 +256,6 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             action = ocp_solver.solve_for_x0(x0_bar=obs)
             jacobian = ocp_solver.eval_solution_sensitivity(0, 'p_global', return_sens_x=False)['sens_u']
-            # print(np.round(jacobian, 3), np.linalg.norm(action - uncertified_action) * 10 > np.linalg.norm(action))
             self.cost_prev = ocp_solver.get_cost()
             self.slack_prev = np.zeros((self.horizon, self.p))
             x_val = np.zeros((self.horizon + 1, self.model.nx))
@@ -275,8 +274,8 @@ class MPSC(BaseSafetyFilter, ABC):
             print('Error Return Status:', ocp_solver.status)
             print(e)
             feasible = False
-            action = None
-            jacobian = np.zeros((self.model.nu, self.model.nu))
+            action = uncertified_action
+            jacobian = np.eye(self.model.nu)
         return action, feasible, jacobian
 
     def certify_action(self,
@@ -296,46 +295,19 @@ class MPSC(BaseSafetyFilter, ABC):
             success (bool): Whether the safety filtering was successful or not.
             jacobian (ndarray): The Jacobian of the applied action w.r.t. the uncertified action.
         '''
-        uncertified_action = np.clip(uncertified_action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
+        uncertified_action = np.array(uncertified_action).reshape((self.model.nu))
         self.results_dict['uncertified_action'].append(uncertified_action)
-        success = True
 
         self.before_optimization(current_state)
         iteration = self.extract_step(info)
-        action, feasible, jacobian = self.solve_optimization(current_state, uncertified_action, iteration)
+        certified_action, feasible, jacobian = self.solve_optimization(current_state, uncertified_action, iteration)
+
         self.results_dict['feasible'].append(feasible)
-
-        if feasible:
-            self.kinf = 0
-            certified_action = action
-        else:
-            self.kinf += 1
-            if (self.kinf <= self.horizon - 1 and self.z_prev is not None and self.v_prev is not None):
-                action = np.squeeze(self.v_prev[:, self.kinf]) + \
-                    np.squeeze(self.lqr_gain @ (current_state.reshape((self.model.nx, 1)) - self.z_prev[:, self.kinf].reshape((self.model.nx, 1))))
-                if self.integration_algo == 'LTI':
-                    action = np.squeeze(action) + np.squeeze(self.U_EQ)
-                action = np.squeeze(action)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
-
-                if np.linalg.norm(clipped_action - action) >= 0.01:
-                    success = False
-                certified_action = clipped_action
-            else:
-                action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
-                if self.integration_algo == 'LTI':
-                    action += np.squeeze(self.U_EQ)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
-
-                success = False
-                certified_action = clipped_action
-
-        certified_action = np.squeeze(np.array(certified_action))
-        self.results_dict['kinf'].append(self.kinf)
+        certified_action = np.array(certified_action).reshape((self.model.nu))
         self.results_dict['certified_action'].append(certified_action)
         self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
 
-        return certified_action, success, jacobian
+        return certified_action, feasible, jacobian
 
     def setup_results_dict(self):
         '''Setup the results dictionary to store run information.'''

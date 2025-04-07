@@ -9,24 +9,30 @@
 #SBATCH --gres=gpu:0
 #SBATCH --qos=normal
 
-SYS='quadrotor_3D'
+SYS='cartpole'
 TASK='track'
 ALGO='ppo'
 SAFETY_FILTER='nl_mpsc'
 
-MPSC_COST='precomputed_cost'
+MPSC_COST='one_step_cost'
 
-MPSC_COST_HORIZON=$2
-DECAY_FACTOR=$3
+MPSC_COST_HORIZON=1
+DECAY_FACTOR=1.0
 SF_PENALTY=1.0
 
-TAG="curriculum_$1_$2_$3_$4"
+TAG="grad_${SYS}_${TASK}_${ALGO}_uncert"
 echo $TAG $SYS $ALGO $TASK
+
+if [ "$SYS" = 'cartpole' ]; then
+    SYS_NAME=$SYS
+else
+    SYS_NAME='quadrotor'
+fi
 
 # Train the unsafe controller/agent.
 python3 train_rl.py \
     --algo ${ALGO} \
-    --task 'quadrotor' \
+    --task ${SYS_NAME} \
     --safety_filter ${SAFETY_FILTER} \
     --overrides \
         ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
@@ -39,13 +45,8 @@ python3 train_rl.py \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \
-        sf_config.max_decay_factor=${DECAY_FACTOR} \
         sf_config.soften_constraints=True \
-        algo_config.filter_train_actions=True \
-        algo_config.use_safe_reset=True \
-        algo_config.penalize_sf_diff=True \
-        algo_config.sf_penalty=$SF_PENALTY \
-        algo_config.decay_factor_curriculum=$1 \
-        algo_config.preserve_random_state=$4
-
-./mpsc_experiment.sh $TAG $SYS $TASK $ALGO
+        algo_config.filter_train_actions=False \
+        algo_config.use_safe_reset=False \
+        algo_config.penalize_sf_diff=False \
+        algo_config.sf_penalty=$SF_PENALTY

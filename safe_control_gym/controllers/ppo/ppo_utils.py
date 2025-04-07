@@ -163,12 +163,19 @@ class MLPActor(nn.Module):
         else:
             self.logstd = nn.Parameter(-0.5 * torch.ones(act_dim))
             self.dist_fn = lambda x: Normal(x, self.logstd.exp())
+        self.safety_filter_layer = None
 
     def forward(self,
                 obs,
                 act=None
                 ):
-        dist = self.dist_fn(self.pi_net(obs))
+        action = self.pi_net(obs)
+        if self.safety_filter_layer is not None:
+            action = self.safety_filter_layer.env.denormalize_action(action.clone())
+            action = self.safety_filter_layer(action, obs)
+            action = self.safety_filter_layer.env.normalize_action(action.clone())
+
+        dist = self.dist_fn(action)
         logp_a = None
         if act is not None:
             logp_a = dist.log_prob(act)
@@ -223,17 +230,62 @@ class MLPActorCritic(nn.Module):
              obs
              ):
         dist, _ = self.actor(obs)
-        a = dist.sample()
-        logp_a = dist.log_prob(a)
+        action = dist.sample()
+        logp_a = dist.log_prob(action)
         v = self.critic(obs)
-        return a.cpu().numpy(), v.cpu().numpy(), logp_a.cpu().numpy()
+        return action.cpu().numpy(), v.cpu().numpy(), logp_a.cpu().numpy()
 
     def act(self,
             obs
             ):
         dist, _ = self.actor(obs)
-        a = dist.mode()
-        return a.cpu().numpy()
+        action = dist.mode()
+        return action.cpu().numpy()
+
+
+class SafetyFilterLayer(nn.Module):
+    def __init__(self, safety_filter, env):
+        super(SafetyFilterLayer, self).__init__()
+        self.safety_filter = safety_filter
+        self.env = env
+
+    def forward(self, action, obs):
+        f = _SafetyFilterFunctionWrapper(self.safety_filter, self.env)
+        safe_action = f(action, obs)
+        return safe_action
+
+
+def _SafetyFilterFunctionWrapper(safety_filter, env):
+    class _SafetyFilterFunction(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, action, obs):
+            jacobians = []
+            new_action = action.clone().detach().cpu().numpy()
+            for i in range(action.shape[0]):
+                unextended_obs = obs[i, :env.symbolic.nx].detach().cpu().numpy()
+                physical_action = action[i, :].detach().cpu().numpy()
+                safety_filter.ocp_solver.reset()
+                certified_action, success, jacobian = safety_filter.certify_action(unextended_obs, physical_action)
+                if success:
+                    new_action[i, :] = certified_action
+                else:
+                    safety_filter.ocp_solver.reset()
+                jacobians.append(jacobian)
+
+            jacobian = np.stack(jacobians, axis=0)
+            ctx.save_for_backward(torch.tensor(jacobian, dtype=action.dtype))
+
+            return torch.tensor(new_action, dtype=action.dtype)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            jacobian, = ctx.saved_tensors
+            grad_output_reshaped = grad_output.unsqueeze(-1)
+            grad_action = torch.bmm(jacobian, grad_output_reshaped)
+            grad_action = grad_action.squeeze(-1)
+            return grad_action, None
+
+    return _SafetyFilterFunction.apply
 
 
 class PPOBuffer(object):
