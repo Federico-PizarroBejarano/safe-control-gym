@@ -802,7 +802,7 @@ class NL_MPSC(MPSC):
             pickle.dump(parameters, f)
 
     def setup_casadi_optimizer(self):
-        '''Setup the certifying MPC problem.'''
+        '''Setup the certifying MPC problem in casadi.'''
 
         # Horizon parameter.
         horizon = self.horizon
@@ -917,8 +917,8 @@ class NL_MPSC(MPSC):
         self.opti_dict['cost'] = cost
 
     def setup_acados_optimizer(self):
-        '''setup_optimizer_acados'''
-        # create ocp object to formulate the OCP
+        '''Setup the certifying MPC problem in acados.'''
+        # Create ocp object to formulate the OCP
         ocp = AcadosOcp()
 
         # Setup model
@@ -964,9 +964,7 @@ class NL_MPSC(MPSC):
         nx, nu = self.model.nx, self.model.nu
         ny = nx + nu
 
-        ocp.solver_options.N_horizon = self.horizon
-
-        # set cost module
+        # Set cost module
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
 
@@ -988,7 +986,7 @@ class NL_MPSC(MPSC):
         ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
         ocp.cost.yref_e = self.model.X_EQ
 
-        # set constraints
+        # Setup constraints
         ocp.constraints.constr_type = 'BGH'
         ocp.constraints.constr_type_e = 'BGH'
 
@@ -1006,14 +1004,13 @@ class NL_MPSC(MPSC):
         ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
 
         # Options
+        ocp.solver_options.N_horizon = self.horizon
+        ocp.solver_options.tf = self.dt * self.horizon
         ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
         ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
         ocp.solver_options.hpipm_mode = 'BALANCE'
         ocp.solver_options.integrator_type = 'ERK'
         ocp.solver_options.nlp_solver_type = 'SQP_RTI'
-
-        # set prediction horizon
-        ocp.solver_options.tf = self.dt * self.horizon
 
         solver_json = 'acados_ocp_mpsf.json'
         ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
