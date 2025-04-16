@@ -966,30 +966,18 @@ class NL_MPSC(MPSC):
 
         # Set cost module
         ocp.cost.cost_type = 'LINEAR_LS'
-        ocp.cost.cost_type_e = 'LINEAR_LS'
-
         Q_mat = np.zeros((nx, nx))
-        ocp.cost.W_e = np.zeros((nx, nx))
         R_mat = np.eye(nu)
         ocp.cost.W = block_diag(Q_mat, R_mat)
-
         ocp.cost.Vx = np.zeros((ny, nx))
-        ocp.cost.Vx[:nx, :] = np.eye(nx)
         ocp.cost.Vu = np.zeros((ny, nu))
         ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
-        ocp.cost.Vx_e = np.eye(nx)
-
-        ocp.model.cost_y_expr = cs.vertcat(model.x, model.u)
-        ocp.model.cost_y_expr_e = model.x
 
         # Updated on each iteration
         ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
-        ocp.cost.yref_e = self.model.X_EQ
 
         # Setup constraints
         ocp.constraints.constr_type = 'BGH'
-        ocp.constraints.constr_type_e = 'BGH'
-
         ocp.constraints.x0 = self.model.X_EQ
         ocp.constraints.C = self.L_x
         ocp.constraints.D = self.L_u
