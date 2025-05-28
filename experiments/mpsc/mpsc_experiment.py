@@ -111,15 +111,15 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
     experiment.close()
     safety_filter.close()
 
-    elapsed_time_uncert = uncert_results['timestamp'][0][-1] - uncert_results['timestamp'][0][0]
-    elapsed_time_cert = cert_results['timestamp'][0][-1] - cert_results['timestamp'][0][0]
+    elapsed_time_uncert = np.array(uncert_results['timestamp'])[:, -1] - np.array(uncert_results['timestamp'])[:, 0]
+    elapsed_time_cert = np.array(cert_results['timestamp'])[:, -1] - np.array(cert_results['timestamp'])[:, 0]
 
-    mpsc_results = cert_results['safety_filter_data'][0]
+    mpsc_results = cert_results['safety_filter_data']
     corrections = mpsc_results['correction'][0] * 10.0 > np.linalg.norm(cert_results['current_physical_action'][0] - safety_filter.U_EQ[0], axis=1)
     corrections = np.append(corrections, False)
 
-    print('Total Uncertified (s):', elapsed_time_uncert)
-    print('Total Certified Time (s):', elapsed_time_cert)
+    print('Total Uncertified Time (s):', np.mean(elapsed_time_uncert))
+    print('Total Certified Time (s):', np.mean(elapsed_time_cert))
     print('Number of Corrections:', np.sum(corrections))
     print('Sum of Corrections:', np.linalg.norm(mpsc_results['correction'][0]))
     print('Max Correction:', np.max(np.abs(mpsc_results['correction'][0])))
@@ -231,9 +231,14 @@ def run_multiple_models(plot=True, model=None):
                 all_uncert_results, all_cert_results = uncert_results, cert_results
             else:
                 for key in all_cert_results.keys():
-                    if key in all_uncert_results:
+                    if key in ['controller_data', 'safety_filter_data']:
+                        for sec_key in cert_results[key].keys():
+                            if key != 'safety_filter_data':
+                                all_uncert_results[key][sec_key].append(uncert_results[key][sec_key][0])
+                            all_cert_results[key][sec_key].append(cert_results[key][sec_key][0])
+                    else:
                         all_uncert_results[key].append(uncert_results[key][0])
-                    all_cert_results[key].append(cert_results[key][0])
+                        all_cert_results[key].append(cert_results[key][0])
 
         met = MetricExtractor()
         uncert_metrics = met.compute_metrics(data=all_uncert_results)

@@ -59,11 +59,16 @@ def consolidate_multiple_seeds(all_results, model):
 
     for k in data['cert_results'].keys():
         for i in range(1, len(all_data)):
-            data['cert_results'][k] += all_data[i]['cert_results'][k]
+            if k in ['controller_data', 'safety_filter_data']:
+                for sec_key in all_data[i]['cert_results'][k].keys():
+                    data['cert_results'][k][sec_key] += all_data[i]['cert_results'][k][sec_key]
+            else:
+                data['cert_results'][k] += all_data[i]['cert_results'][k]
 
     for k in data['uncert_results'].keys():
-        for i in range(1, len(all_data)):
-            data['uncert_results'][k] += all_data[i]['uncert_results'][k]
+        if k != 'controller_data':
+            for i in range(1, len(all_data)):
+                data['uncert_results'][k] += all_data[i]['uncert_results'][k]
 
     all_results[model]['cert_results'] = data['cert_results']
     all_results[model]['uncert_results'] = data['uncert_results']
@@ -79,28 +84,8 @@ def extract_magnitude_of_corrections(results_data):
         magn_of_corrections (list): The list of magnitude of corrections for all experiments.
     '''
 
-    magn_of_corrections = [np.linalg.norm(mpsc_results['correction'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    return magn_of_corrections
-
-
-def extract_percent_magnitude_of_corrections(results_data):
-    '''Extracts the percent magnitude of corrections from an experiment's data.
-
-    Args:
-        results_data (dict): A dictionary containing all the data from the desired experiment.
-
-    Returns:
-        magn_of_corrections (list): The list of percent magnitude of corrections for all experiments.
-    '''
-
-    N = len(results_data['cert_results']['state'][0]) - 1
-    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    corr = [(norm_uncert[i] - norm_cert[i]) for i in range(len(norm_cert))]
-    max_input = [np.maximum(np.linalg.norm(norm_uncert[i], axis=1), np.linalg.norm(norm_cert[i], axis=1)) for i in range(len(norm_cert))]
-    perc_change = [np.divide(np.linalg.norm(corr[i], axis=1), max_input[i]) for i in range(len(norm_cert))]
-    magn_of_corrections = [np.linalg.norm(elem) for elem in perc_change]
-
+    mpsc_results = results_data['cert_results']['safety_filter_data']
+    magn_of_corrections = np.linalg.norm(mpsc_results['correction'], axis=1)
     return magn_of_corrections
 
 
@@ -113,28 +98,8 @@ def extract_max_correction(results_data):
     Returns:
         max_corrections (list): The list of max corrections for all experiments.
     '''
-    max_corrections = [np.max(np.abs(mpsc_results['correction'][0])) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-
-    return max_corrections
-
-
-def extract_percent_max_correction(results_data):
-    '''Extracts the percent max correction from an experiment's data.
-
-    Args:
-        results_data (dict): A dictionary containing all the data from the desired experiment.
-
-    Returns:
-        max_corrections (list): The list of percent max corrections for all experiments.
-    '''
-    N = len(results_data['cert_results']['state'][0]) - 1
-    norm_uncert = [normalize_actions(mpsc_results['uncertified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    norm_cert = [normalize_actions(mpsc_results['certified_action'][0]).reshape((N, -1)) for mpsc_results in results_data['cert_results']['safety_filter_data']]
-    corr = [(norm_uncert[i] - norm_cert[i]) for i in range(len(norm_cert))]
-    max_input = [np.maximum(np.linalg.norm(norm_uncert[i], axis=1), np.linalg.norm(norm_cert[i], axis=1)) for i in range(len(norm_cert))]
-    perc_change = [np.divide(np.linalg.norm(corr[i], axis=1), max_input[i]) for i in range(len(norm_cert))]
-    max_corrections = [np.max(elem) for elem in perc_change]
-
+    mpsc_results = results_data['cert_results']['safety_filter_data']
+    max_corrections = np.max(np.abs(mpsc_results['correction']), axis=1)
     return max_corrections
 
 
@@ -147,7 +112,9 @@ def extract_number_of_corrections(results_data):
     Returns:
         num_corrections (list): The list of the number of corrections for all experiments.
     '''
-    num_corrections = [np.sum(mpsc_results['correction'][0] * 10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
+    corrections = np.array(results_data['cert_results']['safety_filter_data']['correction'])
+    input_magnitudes = np.array(results_data['cert_results']['current_clipped_action']) - U_EQs[system_name]
+    num_corrections = np.sum(corrections * 10.0 > np.linalg.norm(input_magnitudes, axis=2), axis=1)
     return num_corrections
 
 
@@ -160,7 +127,8 @@ def extract_feasible_iterations(results_data):
     Returns:
         feasible_iterations (list): The list of the number of feasible iterations for all experiments.
     '''
-    feasible_iterations = [np.sum(mpsc_results['feasible'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    mpsc_results = results_data['cert_results']['safety_filter_data']
+    feasible_iterations = np.sum(mpsc_results['feasible'], axis=1)
     return feasible_iterations
 
 
@@ -238,34 +206,28 @@ def extract_constraint_violations(results_data, certified=True):
     return num_violations
 
 
-def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
+def extract_rate_of_change(results_data, certified=True, order=1):
     '''Extracts the rate of change of a signal from an experiment's data.
 
     Args:
         results_data (dict): A dictionary containing all the data from the desired experiment.
         certified (bool): Whether to extract the certified data or uncertified data.
         order (int): Either 1 or 2, denoting the order of the derivative.
-        mode (string): Either 'input' or 'correction', denoting which signal to use.
 
     Returns:
         roc (list): The list of rate of changes.
     '''
     n = min(results_data['cert_results']['current_clipped_action'][0].shape)
 
-    if mode == 'input':
-        if certified:
-            all_signals = [actions - U_EQs[system_name] for actions in results_data['cert_results']['current_clipped_action']]
-        else:
-            all_signals = [actions - U_EQs[system_name] for actions in results_data['uncert_results']['current_clipped_action']]
-    elif mode == 'correction':
-        all_signals = [np.squeeze(mpsc_results['uncertified_action'][0]) - np.squeeze(mpsc_results['certified_action'][0]) for mpsc_results in results_data['cert_results']['safety_filter_data']]
+    if certified:
+        all_signals = [actions - U_EQs[system_name] for actions in results_data['cert_results']['current_clipped_action']]
+    else:
+        all_signals = [actions - U_EQs[system_name] for actions in results_data['uncert_results']['current_clipped_action']]
 
     total_derivatives = []
     for signal in all_signals:
         if n == 1:
             ctrl_freq = 15
-            if mode == 'correction':
-                signal = np.atleast_2d(signal).T
         elif n > 1:
             ctrl_freq = 50
         derivative = get_discrete_derivative(signal, ctrl_freq)
@@ -274,24 +236,6 @@ def extract_rate_of_change(results_data, certified=True, order=1, mode='input'):
         total_derivatives.append(np.linalg.norm(derivative, 'fro'))
 
     return total_derivatives
-
-
-def extract_number_of_correction_intervals(results_data):
-    '''Extracts the frequency the safety filter turns on or off from an experiment's data.
-
-    Args:
-        results_data (dict): A dictionary containing all the data from the desired experiment.
-
-    Returns:
-        num_correction_intervals (list): The list of number of times the filter starts correcting.
-    '''
-    all_corrections = [(mpsc_results['correction'][0] * 10.0 > np.linalg.norm(results_data['cert_results']['current_clipped_action'][i] - U_EQs[system_name], axis=1)) for i, mpsc_results in enumerate(results_data['cert_results']['safety_filter_data'])]
-
-    correction_frequency = []
-    for corrections in all_corrections:
-        correction_frequency.append((np.diff(corrections) != 0).sum())
-
-    return correction_frequency
 
 
 def extract_reward(results_data, certified):
@@ -314,49 +258,6 @@ def extract_reward(results_data, certified):
     return returns
 
 
-def extract_final_dist(results_data, certified):
-    '''Extracts the final distance from stabilization goal from an experiment's data.
-
-    Args:
-        results_data (dict): A dictionary containing all the data from the desired experiment.
-        certified (bool): Whether to extract the certified data or uncertified data.
-
-    Returns:
-        final_dist (list): The list of final distances.
-    '''
-    if certified:
-        data = results_data['cert_results']
-    else:
-        data = results_data['uncert_results']
-
-    if results_data['X_GOAL'].ndim < 2:
-        final_dists = [np.linalg.norm(results_data['X_GOAL'] - data['state'][i][-1]) for i in range(len(data['obs']))]
-    else:
-        final_dists = [np.linalg.norm(results_data['X_GOAL'][:len(data['state'][i][:, 0]), 0] - data['state'][i][:, 0]) for i in range(len(data['obs']))]
-
-    return final_dists
-
-
-def extract_failed(results_data, certified):
-    '''Extracts the percent failed from an experiment's data.
-
-    Args:
-        results_data (dict): A dictionary containing all the data from the desired experiment.
-        certified (bool): Whether to extract the certified data or uncertified data.
-
-    Returns:
-        failed (list): The percent failed.
-    '''
-    if certified:
-        data = results_data['cert_results']
-    else:
-        data = results_data['uncert_results']
-
-    failed = [data['info'][i][-1]['out_of_bounds'] for i in range(len(data['info']))]
-
-    return [np.mean(failed)]
-
-
 def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
     '''Plots a series of graphs detailing the experiments in the passed in data.
 
@@ -374,12 +275,12 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
     else:
         system = config.task
 
+    mpsc_results = cert_results['safety_filter_data']
     for exp in range(len(uncert_results['obs'])):
-        specific_results = {key: [cert_results[key][exp]] for key in cert_results.keys()}
+        specific_results = {key: [cert_results[key][exp]] for key in cert_results.keys() if key not in ['controller_data', 'safety_filter_data']}
         met.data = specific_results
         print(f'Total Certified Violations ({exp}):', np.asarray(met.get_episode_constraint_violation_steps()).sum())
-        mpsc_results = cert_results['safety_filter_data'][exp]
-        corrections = mpsc_results['correction'][0] * 10.0 > np.linalg.norm(cert_results['current_clipped_action'][exp] - U_EQs[system], axis=1)
+        corrections = mpsc_results['correction'][exp] * 10.0 > np.linalg.norm(cert_results['current_clipped_action'][exp] - U_EQs[system], axis=1)
         corrections = np.append(corrections, False)
 
         if system == Environment.CARTPOLE:
@@ -449,11 +350,11 @@ def plot_trajectories(config, X_GOAL, uncert_results, cert_results):
         _, ax_act = plt.subplots()
         if config.task == Environment.CARTPOLE:
             ax_act.plot(cert_results['current_clipped_action'][exp][:], 'b-', label='Certified Input')
-            ax_act.plot(mpsc_results['uncertified_action'][0][:], 'r--', label='Attempted Input')
+            ax_act.plot(mpsc_results['uncertified_action'][exp][:], 'r--', label='Attempted Input')
             ax_act.plot(uncert_results['current_clipped_action'][exp][:], 'g--', label='Uncertified Input')
         else:
             ax_act.plot(cert_results['current_clipped_action'][exp][:, 0], 'b-', label='Certified Input 1')
-            ax_act.plot(mpsc_results['uncertified_action'][0][:, 0], 'r-', label='Attempted Input 1')
+            ax_act.plot(mpsc_results['uncertified_action'][exp][:, 0], 'r-', label='Attempted Input 1')
             ax_act.plot(uncert_results['current_clipped_action'][exp][:, 0], 'g-', label='Uncertified Input 1')
         ax_act.legend()
         ax_act.set_title('Input comparison')
@@ -495,7 +396,7 @@ def plot_model_comparisons(system, task, algo, data_extractor):
     ax.set_xticks(x, labels, weight='bold', fontsize=15, rotation=30, ha='right')
 
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
+    bplot = ax.boxplot(data, patch_artist=True, tick_labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
 
     for patch, color in zip(bplot['boxes'], colors.values()):
         patch.set_facecolor(color)
@@ -545,7 +446,7 @@ def plot_step_time(system, task, algo):
     ax.set_xticks(x, labels, weight='bold', fontsize=15, rotation=30, ha='right')
 
     medianprops = dict(linestyle='--', linewidth=2.5, color='black')
-    bplot = ax.boxplot(data, patch_artist=True, labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
+    bplot = ax.boxplot(data, patch_artist=True, tick_labels=labels, medianprops=medianprops, widths=[0.75] * len(labels), showfliers=False)
 
     for patch, color in zip(bplot['boxes'], colors.values()):
         patch.set_facecolor(color)
@@ -657,7 +558,7 @@ if __name__ == '__main__':
     }
 
     def extract_rate_of_change_of_inputs(results_data, certified=True):
-        return extract_rate_of_change(results_data, certified, order=1, mode='input')
+        return extract_rate_of_change(results_data, certified, order=1)
 
     def extract_roc_cert(results_data, certified=True):
         return extract_rate_of_change_of_inputs(results_data, certified)
@@ -683,18 +584,6 @@ if __name__ == '__main__':
     def extract_reward_uncert(results_data, certified=False):
         return extract_reward(results_data, certified)
 
-    def extract_final_dist_cert(results_data, certified=True):
-        return extract_final_dist(results_data, certified)
-
-    def extract_final_dist_uncert(results_data, certified=False):
-        return extract_final_dist(results_data, certified)
-
-    def extract_failed_cert(results_data, certified=True):
-        return extract_failed(results_data, certified)
-
-    def extract_failed_uncert(results_data, certified=False):
-        return extract_failed(results_data, certified)
-
     def extract_length_cert(results_data, certified=True):
         return extract_length(results_data, certified)
 
@@ -712,9 +601,7 @@ if __name__ == '__main__':
     plot_all_logs(system_name, task_name, algo_name)
     plot_step_time(system_name, task_name, algo_name)
     plot_model_comparisons(system_name, task_name, algo_name, extract_magnitude_of_corrections)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_percent_magnitude_of_corrections)
     plot_model_comparisons(system_name, task_name, algo_name, extract_max_correction)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_percent_max_correction)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_roc_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_rmse_cert)
@@ -726,9 +613,4 @@ if __name__ == '__main__':
     plot_model_comparisons(system_name, task_name, algo_name, extract_length_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_cert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_reward_uncert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_failed_cert)
-    plot_model_comparisons(system_name, task_name, algo_name, extract_failed_uncert)
     plot_model_comparisons(system_name, task_name, algo_name, extract_feasible_iterations)
-    if task_name == 'stab':
-        plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_cert)
-        plot_model_comparisons(system_name, task_name, algo_name, extract_final_dist_uncert)

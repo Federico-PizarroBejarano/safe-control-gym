@@ -925,40 +925,11 @@ class NL_MPSC(MPSC):
         model = AcadosModel()
         model.x = self.model.x_sym
         model.u = self.model.u_sym
-        model.f_expl_expr = self.model.x_dot
+        model.name = self.env.NAME
 
-        if self.env.NAME == Environment.CARTPOLE:
-            x1_dot = cs.MX.sym('x1_dot')
-            v_dot = cs.MX.sym('v_dot')
-            theta1_dot = cs.MX.sym('theta1_dot')
-            dtheta_dot = cs.MX.sym('dtheta_dot')
-            xdot = cs.vertcat(x1_dot, v_dot, theta1_dot, dtheta_dot)
-        elif self.env.NAME == Environment.QUADROTOR and self.env.QUAD_TYPE == 2:
-            x1_dot = cs.MX.sym('x1_dot')
-            vx_dot = cs.MX.sym('vx_dot')
-            z1_dot = cs.MX.sym('z1_dot')
-            vz_dot = cs.MX.sym('vz_dot')
-            theta1_dot = cs.MX.sym('theta1_dot')
-            dtheta_dot = cs.MX.sym('dtheta_dot')
-            xdot = cs.vertcat(x1_dot, vx_dot, z1_dot, vz_dot, theta1_dot, dtheta_dot)
-        else:
-            x1_dot = cs.MX.sym('x1_dot')
-            vx_dot = cs.MX.sym('vx_dot')
-            y1_dot = cs.MX.sym('y1_dot')
-            vy_dot = cs.MX.sym('vy_dot')
-            z1_dot = cs.MX.sym('z1_dot')
-            vz_dot = cs.MX.sym('vz_dot')
-            phi1_dot = cs.MX.sym('phi1_dot')  # Roll
-            theta1_dot = cs.MX.sym('theta1_dot')  # Pitch
-            psi1_dot = cs.MX.sym('psi1_dot')  # Yaw
-            p1_body_dot = cs.MX.sym('p1_body_dot')  # Body frame roll rate
-            q1_body_dot = cs.MX.sym('q1_body_dot')  # body frame pith rate
-            r1_body_dot = cs.MX.sym('r1_body_dot')  # body frame yaw rate
-            xdot = cs.vertcat(x1_dot, vx_dot, y1_dot, vy_dot, z1_dot, vz_dot, phi1_dot, theta1_dot, psi1_dot, p1_body_dot, q1_body_dot, r1_body_dot)
+        # Dynamics model
+        model.f_expl_expr = self.model.fc_func(model.x, model.u)
 
-        model.xdot = xdot
-        model.f_impl_expr = model.xdot - model.f_expl_expr
-        model.name = 'mpsf'
         ocp.model = model
 
         nx, nu = self.model.nx, self.model.nu
