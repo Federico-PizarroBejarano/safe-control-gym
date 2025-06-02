@@ -975,12 +975,7 @@ class NL_MPSC(MPSC):
 
         # Setup cost
         ocp.cost.cost_type_0 = 'EXTERNAL'
-        ocp.cost.cost_type = 'EXTERNAL'
-        ocp.cost.cost_type_e = 'EXTERNAL'
-
         ocp.model.cost_expr_ext_cost_0 = (ocp.model.u - ocp.model.p_global).T @ (ocp.model.u - ocp.model.p_global)
-        ocp.model.cost_expr_ext_cost = cs.MX.zeros(1)
-        ocp.model.cost_expr_ext_cost_e = cs.MX.zeros(1)
 
         # Slack
         ocp.constraints.Jsg = np.eye(self.p)
@@ -991,8 +986,6 @@ class NL_MPSC(MPSC):
 
         # Setup constraints
         ocp.constraints.constr_type = 'BGH'
-        ocp.constraints.constr_type_e = 'BGH'
-
         ocp.constraints.x0 = self.model.X_EQ
         ocp.constraints.C = self.L_x
         ocp.constraints.D = self.L_u
@@ -1027,15 +1020,4 @@ class NL_MPSC(MPSC):
             g[i, :] += (self.L_x @ self.X_mid) + (self.L_u @ self.U_mid)
             ocp_solver.constraints_set(i, 'ug', g[i, :])
 
-        self.ocp = ocp
         self.ocp_solver = ocp_solver
-
-        self.set_decay_factor(self.cost_function.decay_factor)
-
-    def set_decay_factor(self, new_decay_factor):
-        # for stage in range(self.mpsc_cost_horizon):
-        #     self.ocp_solver.cost_set(stage, 'W', (new_decay_factor**stage) * self.ocp.cost.W)
-
-        # for stage in range(self.mpsc_cost_horizon, self.horizon):
-        #     self.ocp_solver.cost_set(stage, 'W', 0 * self.ocp.cost.W)
-        pass
