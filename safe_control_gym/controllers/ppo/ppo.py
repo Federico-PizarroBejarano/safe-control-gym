@@ -26,7 +26,7 @@ from safe_control_gym.envs.env_wrappers.vectorized_env import make_vec_envs
 from safe_control_gym.math_and_models.normalization import (BaseNormalizer, MeanStdNormalizer,
                                                             RewardStdNormalizer)
 from safe_control_gym.utils.logging import ExperimentLogger
-from safe_control_gym.utils.utils import get_random_state, is_wrapped, set_random_state
+from safe_control_gym.utils.utils import is_wrapped
 
 
 class PPO(BaseController):
@@ -103,7 +103,6 @@ class PPO(BaseController):
             self.total_steps = 0
             obs, info = self.env_reset(self.env, self.use_safe_reset)
             self.info = info['n'][0]
-            self.true_obs = obs
             self.obs = self.obs_normalizer(obs)
         else:
             # Add episodic stats to be tracked.
@@ -133,7 +132,6 @@ class PPO(BaseController):
             exp_state = {
                 'total_steps': self.total_steps,
                 'obs': self.obs,
-                'random_state': get_random_state(),
                 'env_random_state': self.env.get_env_random_state()
             }
             state_dict.update(exp_state)
@@ -152,7 +150,6 @@ class PPO(BaseController):
         if self.training:
             self.total_steps = state['total_steps']
             self.obs = state['obs']
-            set_random_state(state['random_state'])
             self.env.set_env_random_state(state['env_random_state'])
             self.logger.load(self.total_steps)
 
@@ -227,7 +224,6 @@ class PPO(BaseController):
                 env.add_tracker('mse', 0, mode='queue')
 
         obs, info = self.env_reset(env, True)
-        true_obs = obs
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
@@ -240,7 +236,7 @@ class PPO(BaseController):
             if self.safety_filter is not None:
                 success = False
                 physical_action = env.denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
+                unextended_obs = np.squeeze(obs)[:env.symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success:
                     action = env.normalize_action(certified_action)
@@ -262,7 +258,6 @@ class PPO(BaseController):
                 ep_lengths.append(info['episode']['l'])
                 obs, info = self.env_reset(env, True)
                 total_return = 0
-            true_obs = obs
             obs = self.obs_normalizer(obs)
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
@@ -286,7 +281,6 @@ class PPO(BaseController):
         self.obs_normalizer.unset_read_only()
         rollouts = PPOBuffer(self.env.observation_space, self.env.action_space, self.rollout_steps, self.rollout_batch_size)
         obs = self.obs
-        true_obs = self.true_obs
         info = self.info
         start = time.time()
         for _ in range(self.rollout_steps):
@@ -298,7 +292,7 @@ class PPO(BaseController):
             success = False
             if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
                 physical_action = self.env.envs[0].denormalize_action(action)
-                unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
+                unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
@@ -316,7 +310,6 @@ class PPO(BaseController):
                 rew = np.log(rew)
                 rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
                 rew = np.exp(rew)
-            next_true_obs = next_obs
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             mask = 1 - done.astype(float)
@@ -334,10 +327,8 @@ class PPO(BaseController):
 
             rollouts.push({'obs': obs, 'act': unsafe_action, 'rew': rew, 'mask': mask, 'v': v, 'logp': logp, 'terminal_v': terminal_v})
             obs = next_obs
-            true_obs = next_true_obs
             info = info['n'][0]
         self.obs = obs
-        self.true_obs = true_obs
         self.info = info
         self.total_steps += self.rollout_batch_size * self.rollout_steps
         # Learn from rollout batch.
