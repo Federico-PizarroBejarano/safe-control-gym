@@ -1,51 +1,24 @@
 #!/bin/bash
 
-# SYS='cartpole'
+SYS='cartpole'
 # SYS='quadrotor_2D'
-SYS='quadrotor_3D'
+# SYS='quadrotor_3D'
 
 # TASK='stab'
 TASK='track'
 
-# ALGO='lqr'
-# ALGO='pid'
 ALGO='ppo'
-# ALGO='cpo'
-# ALGO='sac'
-# ALGO='safe_explorer_ppo'
 
-if [ "$2" ]; then
-  SYS=$2
-fi
-if [ "$3" ]; then
-  TASK=$3
-fi
-if [ "$4" ]; then
-  ALGO=$4
-fi
-
-# SAFETY_FILTER='linear_mpsc'
 SAFETY_FILTER='nl_mpsc'
-
-MPSC_COST='one_step_cost'
-# MPSC_COST='constant_cost'
-# MPSC_COST='regularized_cost'
-# MPSC_COST='lqr_cost'
-# MPSC_COST='precomputed_cost'
-# MPSC_COST='learned_cost'
-
-MPSC_COST_HORIZON=1
+# MPSC_COST='one_step_cost'
+MPSC_COST='precomputed_cost'
+MPSC_COST_HORIZON=5
+DECAY_FACTOR=0.0
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
 else
     SYS_NAME='quadrotor'
-fi
-
-if [ -z "$5" ]; then
-    SEED=1337
-else
-    SEED=$5
 fi
 
 # Model predictive safety certification of an unsafe controller.
@@ -60,7 +33,5 @@ python3 ./mpsc_experiment.py \
     --kv_overrides \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
-        task_config.seed=${SEED} \
-        algo_config.seed=${SEED} \
-        sf_config.seed=${SEED} \
+        sf_config.decay_factor=${DECAY_FACTOR} \
     --model=${1}

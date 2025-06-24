@@ -165,14 +165,18 @@ class MLPActor(nn.Module):
             self.dist_fn = lambda x: Normal(x, self.logstd.exp())
         self.safety_filter_layer = None
 
+        # Initialize decay factor as a learnable parameter
+        self.decay_factor = nn.Parameter(torch.tensor(0.0))
+
     def forward(self,
                 obs,
-                act=None
+                act=None,
+                precomputing=False
                 ):
         action = self.pi_net(obs)
-        if self.safety_filter_layer is not None:
+        if self.safety_filter_layer is not None and not precomputing:
             action = self.safety_filter_layer.env.denormalize_action(action.clone())
-            action = self.safety_filter_layer(action, obs)
+            action = self.safety_filter_layer(action, obs, self.decay_factor)
             action = self.safety_filter_layer.env.normalize_action(action.clone())
 
         dist = self.dist_fn(action)
@@ -236,9 +240,10 @@ class MLPActorCritic(nn.Module):
         return action.cpu().numpy(), v.cpu().numpy(), logp_a.cpu().numpy()
 
     def act(self,
-            obs
+            obs,
+            precomputing=False
             ):
-        dist, _ = self.actor(obs)
+        dist, _ = self.actor(obs, precomputing=precomputing)
         action = dist.mode()
         return action.cpu().numpy()
 
@@ -249,23 +254,25 @@ class SafetyFilterLayer(nn.Module):
         self.safety_filter = safety_filter
         self.env = env
 
-    def forward(self, action, obs):
+    def forward(self, action, obs, decay_factor):
         f = _SafetyFilterFunctionWrapper(self.safety_filter, self.env)
-        safe_action = f(action, obs)
+        safe_action = f(action, obs, decay_factor)
         return safe_action
 
 
 def _SafetyFilterFunctionWrapper(safety_filter, env):
     class _SafetyFilterFunction(torch.autograd.Function):
         @staticmethod
-        def forward(ctx, action, obs):
+        def forward(ctx, action, obs, decay_factor):
             jacobians = []
             new_action = action.clone().detach().cpu().numpy()
+            decay_factor_np = decay_factor.item()
+
             for i in range(action.shape[0]):
                 unextended_obs = obs[i, :env.symbolic.nx].detach().cpu().numpy()
                 physical_action = action[i, :].detach().cpu().numpy()
                 safety_filter.ocp_solver.reset()
-                certified_action, success, jacobian = safety_filter.certify_action(unextended_obs, physical_action)
+                certified_action, success, jacobian = safety_filter.certify_action(unextended_obs, physical_action, decay_factor=decay_factor_np)
                 if success:
                     new_action[i, :] = certified_action
                 else:
@@ -281,9 +288,11 @@ def _SafetyFilterFunctionWrapper(safety_filter, env):
         def backward(ctx, grad_output):
             jacobian, = ctx.saved_tensors
             grad_output_reshaped = grad_output.unsqueeze(-1)
-            grad_action = torch.bmm(jacobian, grad_output_reshaped)
-            grad_action = grad_action.squeeze(-1)
-            return grad_action, None
+
+            grad_decay = torch.bmm(jacobian, grad_output_reshaped)
+            grad_decay = grad_decay.sum()
+
+            return grad_output, None, grad_decay
 
     return _SafetyFilterFunction.apply
 

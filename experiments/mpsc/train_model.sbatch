@@ -10,17 +10,18 @@
 #SBATCH --qos=normal
 
 SYS='cartpole'
+# TASK='stab'
 TASK='track'
 ALGO='ppo'
 SAFETY_FILTER='nl_mpsc'
 
-MPSC_COST='one_step_cost'
+# MPSC_COST='one_step_cost'
+MPSC_COST='precomputed_cost'
 
-MPSC_COST_HORIZON=1
-DECAY_FACTOR=1.0
+MPSC_COST_HORIZON=5
 SF_PENALTY=1.0
 
-TAG="grad_${SYS}_${TASK}_${ALGO}_uncert"
+TAG="test_grad"
 echo $TAG $SYS $ALGO $TASK
 
 if [ "$SYS" = 'cartpole' ]; then
@@ -44,9 +45,8 @@ python3 train_rl.py \
         task_config.init_state=None \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
-        sf_config.decay_factor=${DECAY_FACTOR} \
         sf_config.soften_constraints=True \
-        algo_config.filter_train_actions=False \
+        algo_config.filter_train_actions=True \
         algo_config.use_safe_reset=False \
         algo_config.penalize_sf_diff=False \
         algo_config.sf_penalty=$SF_PENALTY

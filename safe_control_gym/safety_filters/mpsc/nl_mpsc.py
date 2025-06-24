@@ -969,20 +969,23 @@ class NL_MPSC(MPSC):
         model.name = 'mpsf'
         ocp.model = model
 
-        u_L = cs.MX.sym('u_L', self.m)  # uncertified action
-        ocp.model.p_global = u_L
-        ocp.p_global_values = np.ones((self.m,))
+        # Set cost module
+        # Global parameters
+        decay_factor = cs.MX.sym('decay_factor', 1)
+        ocp.model.p_global = decay_factor
+        ocp.p_global_values = np.atleast_1d(self.cost_function.decay_factor)
 
-        # Setup cost
-        ocp.cost.cost_type_0 = 'EXTERNAL'
-        ocp.model.cost_expr_ext_cost_0 = (ocp.model.u - ocp.model.p_global).T @ (ocp.model.u - ocp.model.p_global)
+        # Stage-specific parameters
+        uncert_action = cs.MX.sym('uncert_action', self.m)
+        iteration = cs.MX.sym('iteration', 1)
+        mask = cs.MX.sym('mask', 1)
+        ocp.model.p = cs.vertcat(uncert_action, iteration, mask)
+        ocp.parameter_values = np.concatenate((np.array(self.U_EQ), np.atleast_1d(0), np.atleast_1d(0)))
 
-        # Slack
-        ocp.constraints.Jsg = np.eye(self.p)
-        ocp.cost.Zu = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
-        ocp.cost.Zl = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
-        ocp.cost.zu = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
-        ocp.cost.zl = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
+        # Cost function
+        ocp.cost.cost_type = 'EXTERNAL'
+        true_decay_rate = 1 / (1 + np.e**(-3 * decay_factor))
+        ocp.model.cost_expr_ext_cost = mask * (true_decay_rate ** iteration) * ((ocp.model.u - uncert_action).T @ (ocp.model.u - uncert_action))
 
         # Setup constraints
         ocp.constraints.constr_type = 'BGH'
@@ -991,6 +994,13 @@ class NL_MPSC(MPSC):
         ocp.constraints.D = self.L_u
         ocp.constraints.lg = -1000 * np.ones((self.p))
         ocp.constraints.ug = np.zeros((self.p))
+
+        # Slack
+        ocp.constraints.Jsg = np.eye(self.p)
+        ocp.cost.Zu = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
+        ocp.cost.Zl = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
+        ocp.cost.zu = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
+        ocp.cost.zl = np.array([self.slack_cost] * self.n * 2 + [self.slack_cost * 100] * self.m * 2)
 
         # Options
         ocp.solver_options.N_horizon = self.horizon

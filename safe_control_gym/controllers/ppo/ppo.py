@@ -100,8 +100,6 @@ class PPO(BaseController):
 
     def reset(self):
         '''Do initializations for training or evaluation.'''
-        self.curr_training = False
-        self.env_state = {}
         if self.training:
             # set up stats tracking
             self.env.add_tracker('constraint_violation', 0)
@@ -128,12 +126,8 @@ class PPO(BaseController):
 
     def save(self,
              path,
-             save_only_random_seed=False,
              ):
         '''Saves model params and experiment state to checkpoint path.'''
-        if save_only_random_seed is True:
-            self.env_state[path] = self.env.get_env_random_state()
-            return
         path_dir = os.path.dirname(path)
         os.makedirs(path_dir, exist_ok=True)
         state_dict = {
@@ -152,12 +146,8 @@ class PPO(BaseController):
 
     def load(self,
              path,
-             load_only_random_seed=False,
              ):
         '''Restores model and experiment given checkpoint path.'''
-        if load_only_random_seed is True:
-            self.env.set_env_random_state(self.env_state[path])
-            return
         state = torch.load(path)
         # Restore policy.
         self.agent.load_state_dict(state['agent'])
@@ -203,13 +193,17 @@ class PPO(BaseController):
             # Logging.
             if self.log_interval and self.total_steps % self.log_interval == 0:
                 self.log_step(results)
+                df = 1 / (1 + np.e**(-3 * self.agent.ac.actor.decay_factor))
+                print(f'decay_factor: {df}')
 
-    def select_action(self, obs, info=None, training=False):
+    def select_action(self, obs, info=None, training=False, precomputing=False):
         '''Determine the action to take at the current timestep.
 
         Args:
             obs (ndarray): The observation at this timestep.
             info (dict): The info at this timestep.
+            training (bool): Whether the action is being selected for training.
+            precomputing (bool): Whether the action is being selected for precomputing.
 
         Returns:
             action (ndarray): The action chosen by the controller.
@@ -218,7 +212,7 @@ class PPO(BaseController):
         if not training:
             with torch.no_grad():
                 obs = torch.FloatTensor(obs).to(self.device)
-                action = self.agent.ac.act(obs)
+                action = self.agent.ac.act(obs, precomputing=precomputing)
         else:
             with torch.no_grad():
                 obs = torch.FloatTensor(obs).to(self.device)
@@ -233,7 +227,6 @@ class PPO(BaseController):
             verbose=False,
             ):
         '''Runs evaluation with current policy.'''
-        self.curr_training = False
         self.agent.eval()
         self.obs_normalizer.set_read_only()
         if env is None:
@@ -287,7 +280,6 @@ class PPO(BaseController):
 
     def train_step(self):
         '''Performs a training/fine-tuning step.'''
-        self.curr_training = True
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         rollouts = PPOBuffer(self.env.observation_space, self.env.action_space, self.rollout_steps, self.rollout_batch_size)
@@ -426,7 +418,7 @@ class PPO(BaseController):
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
                 self.safety_filter.ocp_solver.reset()
-                _, success, _ = self.safety_filter.certify_action(unextended_obs, action, info)
+                _, success, _ = self.safety_filter.certify_action(unextended_obs, action, info, force_onestep=True)
                 if not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 

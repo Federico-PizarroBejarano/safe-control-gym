@@ -147,6 +147,8 @@ class MPSC(BaseSafetyFilter, ABC):
                            obs,
                            uncertified_action,
                            iteration=None,
+                           decay_factor=1.0,
+                           force_onestep=False,
                            ):
         '''Solve the MPC optimization problem for a given observation and uncertified input.
 
@@ -162,7 +164,7 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
 
         if self.use_acados:
-            action, feasible, jacobian = self.solve_acados_optimization(obs, uncertified_action, iteration)
+            action, feasible, jacobian = self.solve_acados_optimization(obs, uncertified_action, iteration, decay_factor, force_onestep)
         else:
             action, feasible = self.solve_casadi_optimization(obs, uncertified_action, iteration)
             jacobian = None
@@ -235,6 +237,8 @@ class MPSC(BaseSafetyFilter, ABC):
                                   obs,
                                   uncertified_action,
                                   iteration=None,
+                                  decay_factor=1.0,
+                                  force_onestep=False,
                                   ):
         '''Solve the MPC optimization problem for a given observation and uncertified input.
 
@@ -250,7 +254,17 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
 
         ocp_solver = self.ocp_solver
-        ocp_solver.set_p_global_and_precompute_dependencies(np.atleast_1d(np.squeeze(uncertified_action)).astype(np.float64))
+        ocp_solver.set(0, 'p', np.concatenate((np.atleast_1d(np.squeeze(uncertified_action)), np.atleast_1d([0, 1]))))
+        ocp_solver.set_p_global_and_precompute_dependencies(np.atleast_1d(decay_factor))
+
+        if isinstance(self.cost_function, PRECOMPUTED_COST) and not force_onestep:
+            uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
+
+            for stage in range(1, self.mpsc_cost_horizon):
+                ocp_solver.set(stage, 'p', np.concatenate((np.atleast_1d(np.squeeze(uncert_input_traj[:, stage])), np.atleast_1d([stage, 1]))))
+        elif isinstance(self.cost_function, PRECOMPUTED_COST):
+            for stage in range(1, self.mpsc_cost_horizon):
+                ocp_solver.set(stage, 'p', np.zeros((self.model.nu + 2)))
 
         # Solve the optimization problem.
         try:
@@ -282,6 +296,8 @@ class MPSC(BaseSafetyFilter, ABC):
                        current_state,
                        uncertified_action,
                        info=None,
+                       decay_factor=None,
+                       force_onestep=False,
                        ):
         '''Algorithm 1 from Wabsersich 2019.
 
@@ -300,7 +316,9 @@ class MPSC(BaseSafetyFilter, ABC):
 
         self.before_optimization(current_state)
         iteration = self.extract_step(info)
-        certified_action, feasible, jacobian = self.solve_optimization(current_state, uncertified_action, iteration)
+        if decay_factor is None:
+            decay_factor = self.cost_function.decay_factor
+        certified_action, feasible, jacobian = self.solve_optimization(current_state, uncertified_action, iteration, decay_factor, force_onestep)
 
         self.results_dict['feasible'].append(feasible)
         certified_action = np.array(certified_action).reshape((self.model.nu))

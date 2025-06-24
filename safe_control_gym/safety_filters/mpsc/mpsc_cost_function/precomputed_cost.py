@@ -100,9 +100,6 @@ class PRECOMPUTED_COST(MPSC_COST):
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
-        elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.curr_training is True and self.uncertified_controller.preserve_random_state:
-            self.uncertified_controller.save('curr', save_only_random_seed=True)
-            self.uncertified_controller.load('prev', load_only_random_seed=True)
 
         for h in range(self.mpsc_cost_horizon):
             next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
@@ -110,7 +107,7 @@ class PRECOMPUTED_COST(MPSC_COST):
             extended_obs = self.env.extend_obs(obs, next_step + 1)
 
             if isinstance(self.uncertified_controller, PPO):
-                action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step}, training=self.uncertified_controller.curr_training)
+                action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step}, training=False, precomputing=True)
             else:
                 action = self.uncertified_controller.select_action(obs=extended_obs, info={'current_step': next_step})
 
@@ -122,11 +119,8 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
 
-            if h == 0 \
-                    and np.linalg.norm(uncertified_action - action) >= 0.001 \
-                    and np.linalg.norm(uncertified_action - uncert_env.hover_thrust * np.ones(uncertified_action.shape)) >= 0.001\
-                    and self.uncertified_controller.preserve_random_state is True:
-                raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
+            # if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
+            #     raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
             v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
 
@@ -135,8 +129,5 @@ class PRECOMPUTED_COST(MPSC_COST):
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
-        elif isinstance(self.uncertified_controller, PPO) and self.uncertified_controller.curr_training is True and self.uncertified_controller.preserve_random_state is True:
-            self.uncertified_controller.load('curr', load_only_random_seed=True)
-            self.uncertified_controller.save('prev', save_only_random_seed=True)
 
         return v_L
