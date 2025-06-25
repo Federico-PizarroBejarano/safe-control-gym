@@ -42,7 +42,7 @@ class BaseExperiment:
         if isinstance(self.env.EPISODE_LEN_SEC, list):
             self.MAX_STEPS = int(self.env.CTRL_FREQ * max(self.env.EPISODE_LEN_SEC))
         else:
-            self.MAX_STEPS = int(self.env.CTRL_FREQ * self.env.EPISODE_LEN_SEC) 
+            self.MAX_STEPS = int(self.env.CTRL_FREQ * self.env.EPISODE_LEN_SEC)
         if not is_wrapped(self.env, RecordDataWrapper):
             self.env = RecordDataWrapper(self.env)
         self.ctrl = ctrl
@@ -209,11 +209,7 @@ class BaseExperiment:
             obs (ndarray): The initial observation.
             info (dict): The initial info.
         '''
-        if self.env.INFO_IN_RESET:
-            obs, info = self.env.reset(seed=seed)
-        else:
-            obs = self.env.reset(seed=seed)
-            info = None
+        obs, info = self.env.reset(seed=seed)
         if ctrl_data is not None:
             for data_key, data_val in self.ctrl.results_dict.items():
                 ctrl_data[data_key].append(np.array(deepcopy(data_val)))
@@ -256,7 +252,7 @@ class BaseExperiment:
             metrics (dict): The metrics calculated from the raw data.
         '''
 
-        metrics = self.metric_extractor.compute_metrics(data=trajs_data, 
+        metrics = self.metric_extractor.compute_metrics(data=trajs_data,
                                                         max_steps=self.MAX_STEPS,
                                                         verbose=self.verbose)
 
@@ -349,26 +345,17 @@ class RecordDataWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         '''Wrapper for the gym.env reset function.'''
 
-        if self.env.INFO_IN_RESET:
-            obs, info = self.env.reset(**kwargs)
-            if 'symbolic_model' in info:
-                info.pop('symbolic_model')
-            if 'symbolic_constraints' in info:
-                info.pop('symbolic_constraints')
-            step_data = dict(
-                obs=obs, info=info, state=self.env.state
-            )
-            for key, val in step_data.items():
-                self.episode_data[key].append(val)
-            return obs, info
-        else:
-            obs = self.env.reset(**kwargs)
-            step_data = dict(
-                obs=obs, state=self.env.state
-            )
-            for key, val in step_data.items():
-                self.episode_data[key].append(val)
-            return obs
+        obs, info = self.env.reset(**kwargs)
+        if 'symbolic_model' in info:
+            info.pop('symbolic_model')
+        if 'symbolic_constraints' in info:
+            info.pop('symbolic_constraints')
+        step_data = dict(
+            obs=obs, info=info, state=self.env.state
+        )
+        for key, val in step_data.items():
+            self.episode_data[key].append(val)
+        return obs, info
 
     def step(self, action):
         '''Wrapper for the gym.env step function.'''
@@ -488,7 +475,7 @@ class MetricExtractor:
             episode_rewards (list): The total reward of each episode.
         '''
         return self.get_episode_data('reward', postprocess_func=sum)
-    
+
     def get_episode_rms_action_change(self):
         '''Total rms_action_change of episodes.
 
@@ -536,26 +523,26 @@ class MetricExtractor:
         '''
         return self.get_episode_data('constraint_violation',
                                      postprocess_func=sum)
-    
+
     def get_episode_inference_time(self):
         '''Average inference time of episodes.
-        
+
         Returns:
             episode_inference_time (double): The average inference time of all episodes.
         '''
-        # self.data['controller_data'] 
+        # self.data['controller_data']
         if hasattr(self.data['controller_data'][0], 'inference_time'):
-            return self.get_episode_data('controller_data', 
-                                        postprocess_func=lambda x: np.mean(x['inference_time'][0]))
+            return self.get_episode_data('controller_data',
+                                         postprocess_func=lambda x: np.mean(x['inference_time'][0]))
         else:
-            return self.get_episode_data('inference_time_data', 
-                                        postprocess_func=lambda x: np.mean(x))
-    
+            return self.get_episode_data('inference_time_data',
+                                         postprocess_func=lambda x: np.mean(x))
+
     def get_episode_early_stop(self):
         '''Occurence of early stop in episodes.
 
         Returns:
-            episode_early_stop (list): Whether each episode had an early stop. 
+            episode_early_stop (list): Whether each episode had an early stop.
             1 if early stop, 0 otherwise.
         '''
         episode_length = self.get_episode_data('length', postprocess_func=sum)

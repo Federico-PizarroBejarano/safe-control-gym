@@ -1,5 +1,4 @@
 task_config:
-  info_in_reset: True
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
@@ -86,9 +85,9 @@ task_config:
   #     - disturbance_func: white_noise
   #       std: [1.05e-5, 4.38e-4, 1.29e-5, 5.37e-4, 1.13e-3, 4.34e-2]
     # downwash:
-    #   - disturbance_func: uniform 
-    #     low:  [0, 0, 2] 
-    #     high: [0, 0, 3] 
+    #   - disturbance_func: uniform
+    #     low:  [0, 0, 2]
+    #     high: [0, 0, 3]
     #     mode: fix
     #     # mode: track
     #     pos: [0, 0, -1] # z = 0, will cause no downwash

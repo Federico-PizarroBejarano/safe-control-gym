@@ -5,8 +5,9 @@
 '''
 
 import time
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from termcolor import colored
 
 from safe_control_gym.controllers.base_controller import BaseController
@@ -63,7 +64,7 @@ class iLQR(BaseController):
         self.lamb_max = lamb_max
         self.epsilon = epsilon
 
-        self.env = env_func(info_in_reset=True, done_on_out_of_bound=True, seed=self.seed)
+        self.env = env_func(done_on_out_of_bound=True, seed=self.seed)
 
         # Controller params.
         self.model = self.get_prior(self.env)
@@ -86,7 +87,7 @@ class iLQR(BaseController):
         self.warm_start_traj = warm_start_traj
         if self.warm_start_traj is not None:
             self.load_warm_start_traj()
-        self.load_warm_start_to_rollout = False # otherwise load them to the iLQR optimization
+        self.load_warm_start_to_rollout = False  # otherwise load them to the iLQR optimization
         # self.load_warm_start_to_rollout = True # load them to the rollout
         self.reset()
 
@@ -113,7 +114,7 @@ class iLQR(BaseController):
         warm_start_return = np.abs(traj_data['average_return'])
         self.optimization_log['warmstart_return'] = warm_start_return
         print(colored(f'Loaded warm start trajectory with {self.warm_start_action.shape[0]} steps and return {warm_start_return}.', 'green'))
-    
+
     def close(self):
         '''Cleans up resources.'''
         self.env.close()
@@ -145,8 +146,8 @@ class iLQR(BaseController):
         while self.ite_counter < self.max_iterations:
             # load warm-start trajectory to do forward rollout
             if self.warm_start_traj is not None \
-                and self.load_warm_start_to_rollout \
-                and self.ite_counter == 0:
+                    and self.load_warm_start_to_rollout \
+                    and self.ite_counter == 0:
                 print(colored('Warm start trajectory is used for the first rollout.', 'green'))
                 self.input_stack = self.warm_start_action
                 self.state_stack = self.warm_start_state
@@ -158,8 +159,8 @@ class iLQR(BaseController):
             # Save data and update policy if iteration is finished.
             self.state_stack = np.vstack((self.state_stack, self.final_obs))
             if self.warm_start_traj is not None \
-                and not self.load_warm_start_to_rollout \
-                and self.ite_counter == 0:
+                    and not self.load_warm_start_to_rollout \
+                    and self.ite_counter == 0:
                 # load the warm-start trajectory directly to the iterative optimization
                 print(colored('Warm-start trajectory is used for first iteration of iterative optimization.', 'green'))
                 self.input_stack = self.warm_start_action
@@ -235,21 +236,21 @@ class iLQR(BaseController):
                 self.update_policy(env)
 
             self.ite_counter += 1
-            
+
         self.plot_optimization_log()
         self.reset()
 
     def plot_optimization_log(self):
-        '''Plot the optimization log.'''        
+        '''Plot the optimization log.'''
         fig, ax = plt.subplots(figsize=(10, 6))
-        # self.ite_counter 
+        # self.ite_counter
         ax.plot(np.arange(self.ite_counter),
                 [self.optimization_log[repr(k)] for k in np.arange(self.ite_counter)],
                 label='Cost', color='b')
         # check if warm start return is available
         if 'warmstart_return' in self.optimization_log:
-            ax.hlines(y=self.optimization_log['warmstart_return'], 
-                      xmin=1, xmax=self.ite_counter-1, 
+            ax.hlines(y=self.optimization_log['warmstart_return'],
+                      xmin=1, xmax=self.ite_counter - 1,
                       color='g', label='Warm start return (MPC)', linestyle='--')
         ax.set_xlabel('Iteration')
         ax.set_ylabel('Cost')
@@ -385,7 +386,7 @@ class iLQR(BaseController):
             action, _, _ = self.calculate_lqr_action(obs, self.traj_step)
         time_after = time.perf_counter()
         self.results_dict['inference_time'].append(time_after - time_before)
-        
+
         if self.traj_step < self.max_steps - 1:
             self.traj_step += 1
 
@@ -408,16 +409,16 @@ class iLQR(BaseController):
             gains_fb = -self.gain
             input_ff = self.gain @ self.env.X_GOAL + self.model.U_EQ
             if hasattr(self, 'warm_start_action') \
-                and self.load_warm_start_to_rollout \
-                and self.ite_counter == 0:
+                    and self.load_warm_start_to_rollout \
+                    and self.ite_counter == 0:
                 input_ff = self.gain @ self.env.X_GOAL + self.warm_start_action[step]
         elif self.env.TASK == Task.TRAJ_TRACKING:
             gains_fb = -self.gain
             input_ff = self.gain @ self.env.X_GOAL[step] + self.model.U_EQ
             if hasattr(self, 'warm_start_action') \
-                and self.load_warm_start_to_rollout \
-                and self.ite_counter == 0:
-                input_ff = self.gain @ self.env.X_GOAL[step]+ self.warm_start_action[step]
+                    and self.load_warm_start_to_rollout \
+                    and self.ite_counter == 0:
+                input_ff = self.gain @ self.env.X_GOAL[step] + self.warm_start_action[step]
 
         # Compute action
         action = gains_fb.dot(obs) + input_ff
@@ -427,14 +428,14 @@ class iLQR(BaseController):
     def reset_before_run(self, obs=None, info=None, env=None):
         super().reset_before_run(obs, info, env)
         self.optimization_log = {}
-        
+
     def reset(self):
         '''Prepares for evaluation.'''
         self.env.reset()
         # self.env.Q = self.Q
         # self.env.R = self.R
         self.env.rew_state_weight = np.diag(self.Q)
-        self.env.rew_act_weight= np.diag(self.R)
+        self.env.rew_act_weight = np.diag(self.R)
         self.ite_counter = 0
         self.traj_step = 0
 
@@ -484,4 +485,4 @@ class iLQR(BaseController):
         '''Setup the results dictionary to store run information.'''
         self.results_dict = {
             'inference_time': []
-            }
+        }

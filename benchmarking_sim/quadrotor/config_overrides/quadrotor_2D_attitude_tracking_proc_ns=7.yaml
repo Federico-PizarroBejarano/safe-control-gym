@@ -1,5 +1,4 @@
 task_config:
-  info_in_reset: True
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
@@ -44,7 +43,7 @@ task_config:
     trajectory_scale: 1.0
     ilqr_ref: True
     # ilqr_traj_data: '../lqr/ilqr_ref_traj.npy'
-    
+
   episode_len_sec: 11
   cost: quadratic
   rew_state_weight: [20, 0.1, 20, 0.1, 0.5, 0.01]

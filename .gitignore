@@ -105,6 +105,9 @@ target/
 # VS Code
 .vscode/*
 
+# Cursor
+.cursor/*
+
 # IPython
 profile_default/
 ipython_config.py

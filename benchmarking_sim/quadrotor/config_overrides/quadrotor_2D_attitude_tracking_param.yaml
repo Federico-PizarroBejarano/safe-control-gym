@@ -1,5 +1,4 @@
 task_config:
-  info_in_reset: True
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si
@@ -17,7 +16,7 @@ task_config:
   randomized_init: False
   randomized_inertial_prop: True
   # randomized_inertial_prop: False
-  
+
   inertial_prop_randomization_info:
     beta_1: # Nominal: 17.7906
       distrib: 'normal'

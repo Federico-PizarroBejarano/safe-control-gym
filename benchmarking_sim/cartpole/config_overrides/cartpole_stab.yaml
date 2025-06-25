@@ -1,10 +1,9 @@
 task_config:
   seed: 42
-  info_in_reset: true
   ctrl_freq: 15
   pyb_freq: 750
   physics: pyb
-  
+
   init_state_randomization_info:
     init_x:
       distrib: uniform

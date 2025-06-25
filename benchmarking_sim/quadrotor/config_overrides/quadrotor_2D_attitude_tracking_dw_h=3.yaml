@@ -1,5 +1,4 @@
 benchmarking_sim/quadrotor/config_overrides/quadrotor_2D_attitude_tracking_dw_h=2dot5.yamltask_config:
-  info_in_reset: True
   ctrl_freq: 60
   pyb_freq: 60
   physics: dyn_si

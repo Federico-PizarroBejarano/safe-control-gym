@@ -21,6 +21,7 @@ from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import (Trajecto
                                                                         compute_trajectory_derivatives,
                                                                         generate_trajectory)
 
+
 class Cost(str, Enum):
     """Reward/cost functions enumeration class."""
 
@@ -57,7 +58,6 @@ class BenchmarkEnv(gym.Env, ABC):
     def __init__(self,
                  output_dir=None,
                  seed=None,
-                 info_in_reset: bool = False,
                  gui: bool = False,
                  verbose: bool = False,
                  normalized_rl_action_space: bool = False,
@@ -96,8 +96,6 @@ class BenchmarkEnv(gym.Env, ABC):
         Args:
             output_dir (str, optional): Path to directory to save any env outputs.
             seed (int, optional): Seed for the random number generator.
-            info_in_reset (bool, optional): Whether .reset() returns a dictionary with the
-                                            environment's symbolic model.
             gui (bool, optional): Whether to show PyBullet's GUI.
             verbose (bool, optional): If to suppress environment print statements.
             normalized_rl_action_space (bool, optional): Whether to normalize the action space.
@@ -206,7 +204,6 @@ class BenchmarkEnv(gym.Env, ABC):
         self.seed(seed)
         self.initial_reset = False
         self.at_reset = False
-        self.INFO_IN_RESET = info_in_reset
 
     def seed(self,
              seed=None
@@ -308,7 +305,7 @@ class BenchmarkEnv(gym.Env, ABC):
                 if dist_type is not None and scale is not None:
                     if dist_type == 'normal':
                         # noise = np.clip(noise, -2 * scale, 2 * scale)
-                        noise = sample_truncated(mu=0.0, sigma=scale, low=-2.0*scale, high=2.0*scale)
+                        noise = sample_truncated(mu=0.0, sigma=scale, low=-2.0 * scale, high=2.0 * scale)
                 randomized_values[key] += noise
         return randomized_values
 
@@ -554,8 +551,7 @@ class BenchmarkEnv(gym.Env, ABC):
 
         # Apply penalized reward when close to constraint violation
         if self.COST == Cost.RL_REWARD:
-            if (self.constraints is not None and
-                    self.use_constraint_penalty and self.constraints.is_violated(self, c_value=c_value)):
+            if (self.constraints is not None and self.use_constraint_penalty and self.constraints.is_violated(self, c_value=c_value)):
                 if self.rew_exponential:
                     rew = np.log(rew)
                     rew += self.constraint_penalty
@@ -641,9 +637,9 @@ class BenchmarkEnv(gym.Env, ABC):
             acc_ref_traj = pva[2, :, :]
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
             acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
-            print(f"Max acceleration: {np.max(acc_mag)}")
-            print(f"Acc bound is: {0.3 * 9.81} to {1.8 * 9.81}")
-            print(f"Max velocity: {np.max(speed_traj)}")
+            print(f'Max acceleration: {np.max(acc_mag)}')
+            print(f'Acc bound is: {0.3 * 9.81} to {1.8 * 9.81}')
+            print(f'Max velocity: {np.max(speed_traj)}')
             print()
 
         elif traj_type == 'snap_custom':
@@ -670,9 +666,8 @@ class BenchmarkEnv(gym.Env, ABC):
             speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
             # acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
             # print(f"Max acceleration: {np.max(acc_mag)}")
-            print(f"Max speed: {np.max(speed_traj)}")
+            print(f'Max speed: {np.max(speed_traj)}')
             print()
-
 
         else:
             # Compute trajectory points.
@@ -688,7 +683,7 @@ class BenchmarkEnv(gym.Env, ABC):
                 speed_traj[t[0]] = np.linalg.norm(vel_ref_traj[t[0]])
         #
         # NOTE: update 25.11.24: manually shift the z axis to 1.0 if not in the traj plane
-        #       ptherwise flying on the floor with z=0.0 
+        #       ptherwise flying on the floor with z=0.0
         if 'z' not in traj_plane and traj_type not in ['snap_custom', 'snap_figure8']:
             pos_ref_traj[:, 2] = position_offset[2]
             vel_ref_traj[:, 2] = 0.0
@@ -970,7 +965,7 @@ class BenchmarkEnv(gym.Env, ABC):
         plt.show()
 
 
-## Miscellaneous functions for randomization and sampling
+# Miscellaneous functions for randomization and sampling
 def sample_truncated(mu, sigma, low, high, size=None):
     if np.isclose(sigma, 0.0):
         # If sigma is zero, return a constant value
