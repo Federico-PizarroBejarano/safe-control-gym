@@ -10,8 +10,8 @@ SYS='quadrotor_2D_attitude'
 #TASK='stab'
 TASK='track'
 
-#ALGO='lqr'
-ALGO='ilqr'
+ALGO='lqr'
+# ALGO='ilqr'
 #ALGO='ilqr_c'
 
 if [ "$SYS" == 'cartpole' ]; then

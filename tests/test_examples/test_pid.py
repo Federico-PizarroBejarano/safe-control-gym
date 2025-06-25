@@ -13,7 +13,7 @@ def test_pid(SYS, TASK):
                     '--overrides',
                         f'./examples/pid/config_overrides/{SYS}/{SYS}_{TASK}.yaml',
                     ]
-    run(gui=False, n_episodes=None, n_steps=10, save_data=False)
+    run(plot=False, gui=False, n_episodes=None, n_steps=10, save_data=False)
 
 
 def test_3D_pid_custom_trajectory_tracking():
@@ -24,4 +24,4 @@ def test_3D_pid_custom_trajectory_tracking():
                     '--kv_overrides',
                         'task_config.task_info.trajectory_type=custom'
                     ]
-    run(gui=False, n_episodes=None, n_steps=10, save_data=False)
+    run(plot=False, gui=False, n_episodes=None, n_steps=10, save_data=False)
