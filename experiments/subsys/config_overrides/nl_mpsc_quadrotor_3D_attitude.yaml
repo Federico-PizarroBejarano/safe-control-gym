@@ -8,16 +8,8 @@ sf_config:
   use_acados: True
   horizon: 20
   warmstart: True
-  integration_algo: rk4
-  use_terminal_set: False
 
   mpc_mode: False
-
-  # Prior info
-  prior_info:
-    prior_prop: null
-    randomize_prior_prop: False
-    prior_prop_rand_info: null
 
   # Cost function
   cost_function: one_step_cost

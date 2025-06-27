@@ -6,18 +6,17 @@ using an MPC controller based on Robust NL MPC.
 Based on
     * K.P. Wabsersich and M.N. Zeilinger 'Linear model predictive safety certification for learning-based control' 2019
       https://arxiv.org/pdf/1803.08552.pdf
-    * J. Köhler, R. Soloperto, M. A. Müller, and F. Allgöwer, “A computationally efficient robust model predictive
-      control framework for uncertain nonlinear systems -- extended version,” IEEE Trans. Automat. Contr., vol. 66,
+    * J. Köhler, R. Soloperto, M. A. Müller, and F. Allgöwer, "A computationally efficient robust model predictive
+      control framework for uncertain nonlinear systems -- extended version," IEEE Trans. Automat. Contr., vol. 66,
       no. 2, pp. 794 801, Feb. 2021, doi: 10.1109/TAC.2020.2982585. http://arxiv.org/abs/1910.12081
 '''
 
-import casadi as cs
 import numpy as np
 from acados_template import AcadosOcp, AcadosOcpSolver
 from acados_template.acados_model import AcadosModel
 from scipy.linalg import block_diag
 
-from safe_control_gym.controllers.mpc.mpc_utils import discretize_linear_system, rk_discrete
+from safe_control_gym.controllers.mpc.mpc_utils import rk_discrete
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 
@@ -28,13 +27,10 @@ class NL_MPSC(MPSC):
     def __init__(self,
                  env_func,
                  horizon: int = 10,
+                 num_drones: int = 1,
                  q_mpc: list = None,
                  r_mpc: list = None,
-                 integration_algo: str = 'rk4',
                  warmstart: bool = True,
-                 additional_constraints: list = None,
-                 use_terminal_set: bool = True,
-                 n_samples: int = 600,
                  cost_function: Cost_Function = Cost_Function.ONE_STEP_COST,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
@@ -48,21 +44,22 @@ class NL_MPSC(MPSC):
         Args:
             env_func (partial BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
-            integration_algo (str): The algorithm used for integrating the dynamics,
-                either 'rk4', 'rk', or 'cvodes'.
+            num_drones (int): The number of drones.
+            q_mpc (list): The MPC cost function.
+            r_mpc (list): The MPC cost function.
             warmstart (bool): If the previous MPC soln should be used to warmstart the next mpc step.
-            additional_constraints (list): List of additional constraints to consider.
-            use_terminal_set (bool): Whether to use a terminal set constraint or not.
-            n_samples (int): The number of state/action pairs to test when determining w_func.
             cost_function (Cost_Function): A string (from Cost_Function) representing the cost function to be used.
             mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
             decay_factor (float): How much to discount future costs.
+            soften_constraints (bool): Whether to soften the constraints or not.
+            slack_cost (float): The slack cost.
+            max_w (float): The maximum model mismatch.
         '''
 
         self.model_bias = None
-        super().__init__(env_func, horizon, q_mpc, r_mpc, integration_algo, warmstart, additional_constraints, use_terminal_set, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
+        self.num_drones = num_drones
+        super().__init__(env_func, horizon, q_mpc, r_mpc, 'rk4', warmstart, None, False, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
-        self.n_samples = n_samples
         self.soften_constraints = soften_constraints
         self.slack_cost = slack_cost
         self.max_w = max_w
@@ -77,7 +74,7 @@ class NL_MPSC(MPSC):
         [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
         [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
 
-        # number of constraints
+        # Number of constraints
         p_x = l_x.shape[0]
         p_u = l_u.shape[0]
         self.p = p_x + p_u
@@ -90,47 +87,10 @@ class NL_MPSC(MPSC):
 
     def set_dynamics(self):
         '''Compute the discrete dynamics.'''
-
-        if self.integration_algo == 'LTI':
-            dfdxdfdu = self.model.df_func(x=self.X_EQ, u=self.U_EQ)
-            self.Ac = dfdxdfdu['dfdx'].toarray()
-            self.Bc = dfdxdfdu['dfdu'].toarray()
-
-            delta_x = self.model.x_sym
-            delta_u = self.model.u_sym
-            delta_w = cs.MX.sym('delta_w', self.model.nx, 1)
-
-            self.Ad, self.Bd = discretize_linear_system(self.Ac, self.Bc, self.dt, exact=True)
-
-            x_dot_lin_vec = self.Ad @ delta_x + self.Bd @ delta_u
-
-            if self.model_bias is not None:
-                x_dot_lin_vec = x_dot_lin_vec + self.model_bias
-
-            dynamics_func = cs.Function('fd',
-                                        [delta_x, delta_u],
-                                        [x_dot_lin_vec],
-                                        ['x0', 'p'],
-                                        ['xf'])
-
-            self.Ac = cs.Function('Ac', [delta_x, delta_u, delta_w], [self.Ac], ['x', 'u', 'w'], ['Ac'])
-            self.Bc = cs.Function('Bc', [delta_x, delta_u, delta_w], [self.Bc], ['x', 'u', 'w'], ['Bc'])
-
-            self.Ad = cs.Function('Ad', [delta_x, delta_u, delta_w], [self.Ad], ['x', 'u', 'w'], ['Ad'])
-            self.Bd = cs.Function('Bd', [delta_x, delta_u, delta_w], [self.Bd], ['x', 'u', 'w'], ['Bd'])
-        elif self.integration_algo == 'rk4':
-            dynamics_func = rk_discrete(self.model.fc_func,
-                                        self.model.nx,
-                                        self.model.nu,
-                                        self.dt)
-        else:
-            dynamics_func = cs.integrator('fd', self.integration_algo,
-                                          {'x': self.model.x_sym,
-                                           'p': self.model.u_sym,
-                                           'ode': self.model.x_dot}, {'tf': self.dt}
-                                          )
-
-        self.dynamics_func = dynamics_func
+        self.dynamics_func = rk_discrete(self.model.fc_func,
+                                         self.model.nx,
+                                         self.model.nu,
+                                         self.dt)
 
     def box2polytopic(self, constraint):
         '''Convert constraints into an explicit polytopic form. This assumes that constraints contain the origin.
