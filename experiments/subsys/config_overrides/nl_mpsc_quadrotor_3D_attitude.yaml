@@ -1,0 +1,29 @@
+safety_filter: nl_mpsc
+sf_config:
+  # LQR controller parameters
+  q_mpc: [18, 18, 18, 0.1, 0.1, 0.5, 0.5, 0.5, 0.5, 0.0001, 0.0001, 0.0001]
+  r_mpc: [3, 3, 3, 3]
+
+  # MPC Parameters
+  use_acados: True
+  horizon: 20
+  warmstart: True
+  integration_algo: rk4
+  use_terminal_set: False
+
+  mpc_mode: False
+
+  # Prior info
+  prior_info:
+    prior_prop: null
+    randomize_prior_prop: False
+    prior_prop_rand_info: null
+
+  # Cost function
+  cost_function: one_step_cost
+  mpsc_cost_horizon: 5
+  decay_factor: 0.85
+
+  # Softening
+  soften_constraints: True
+  slack_cost: 250

@@ -65,7 +65,7 @@ class MPSC(BaseSafetyFilter, ABC):
         np.random.seed(self.seed)
 
         # Setup the Environments.
-        self.env = env_func(normalized_rl_action_space=False, 
+        self.env = env_func(normalized_rl_action_space=False,
                             cost='quadratic')
         self.training_env = env_func(randomized_init=True,
                                      init_state=None,
@@ -269,7 +269,7 @@ class MPSC(BaseSafetyFilter, ABC):
             print('Error Return Status:', self.ocp_solver.status)
             print(e)
             feasible = False
-            action = None
+            action = uncertified_action
         return action, feasible
 
     def certify_action(self,
@@ -289,45 +289,18 @@ class MPSC(BaseSafetyFilter, ABC):
             success (bool): Whether the safety filtering was successful or not.
         '''
         uncertified_action = np.clip(uncertified_action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
-        self.results_dict['uncertified_action'].append(uncertified_action)
-        success = True
-
         self.before_optimization(current_state)
+
         iteration = self.extract_step(info)
-        action, feasible = self.solve_optimization(current_state, uncertified_action, iteration)
-        self.results_dict['feasible'].append(feasible)
-
-        if feasible:
-            self.kinf = 0
-            certified_action = action
-        else:
-            self.kinf += 1
-            if (self.kinf <= self.horizon - 1 and self.z_prev is not None and self.v_prev is not None):
-                action = np.squeeze(self.v_prev[:, self.kinf]) + \
-                    np.squeeze(self.lqr_gain @ (current_state.reshape((self.model.nx, 1)) - self.z_prev[:, self.kinf].reshape((self.model.nx, 1))))
-                if self.integration_algo == 'LTI':
-                    action = np.squeeze(action) + np.squeeze(self.U_EQ)
-                action = np.squeeze(action)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
-
-                if np.linalg.norm(clipped_action - action) >= 0.01:
-                    success = False
-                certified_action = clipped_action
-            else:
-                action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
-                if self.integration_algo == 'LTI':
-                    action += np.squeeze(self.U_EQ)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
-
-                success = False
-                certified_action = clipped_action
-
+        certified_action, feasible = self.solve_optimization(current_state, uncertified_action, iteration)
         certified_action = np.squeeze(np.array(certified_action))
-        self.results_dict['kinf'].append(self.kinf)
+
+        self.results_dict['uncertified_action'].append(uncertified_action)
+        self.results_dict['feasible'].append(feasible)
         self.results_dict['certified_action'].append(certified_action)
         self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
 
-        return certified_action, success
+        return certified_action, feasible
 
     def setup_results_dict(self):
         '''Setup the results dictionary to store run information.'''
