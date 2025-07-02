@@ -1,18 +1,18 @@
 #!/bin/bash
 
-SYS='quadrotor_3D_attitude'
-SAFETY_FILTER='nl_mpsc'
+NUM_DRONES=4
 MPSC_COST='one_step_cost'
 MPSC_COST_HORIZON=1
 DECAY_FACTOR=1
 
 python3 ./subsys_experiment.py \
     --task quadrotor \
-    --safety_filter ${SAFETY_FILTER} \
+    --safety_filter nl_mpsc \
     --overrides \
-        ./config_overrides/${SYS}.yaml \
-        ./config_overrides/${SAFETY_FILTER}_${SYS}.yaml \
+        ./config_overrides/quadrotor_3D_attitude.yaml \
+        ./config_overrides/nl_mpsc_quadrotor_3D_attitude.yaml \
     --kv_overrides \
+        num_drones=${NUM_DRONES} \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \

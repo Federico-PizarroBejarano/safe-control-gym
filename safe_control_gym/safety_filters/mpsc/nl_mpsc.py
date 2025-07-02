@@ -11,12 +11,12 @@ Based on
       no. 2, pp. 794 801, Feb. 2021, doi: 10.1109/TAC.2020.2982585. http://arxiv.org/abs/1910.12081
 '''
 
+import casadi as cs
 import numpy as np
 from acados_template import AcadosOcp, AcadosOcpSolver
 from acados_template.acados_model import AcadosModel
 from scipy.linalg import block_diag
 
-from safe_control_gym.controllers.mpc.mpc_utils import rk_discrete
 from safe_control_gym.safety_filters.mpsc.mpsc import MPSC
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 
@@ -87,10 +87,34 @@ class NL_MPSC(MPSC):
 
     def set_dynamics(self):
         '''Compute the discrete dynamics.'''
-        self.dynamics_func = rk_discrete(self.model.fc_func,
-                                         self.model.nx,
-                                         self.model.nu,
-                                         self.dt)
+        def multi_drone_dynamics(x_all, u_all):
+            '''
+            Apply dynamics to multiple drones.
+
+            Args:
+                x_all: Stacked state vector [x1; x2; ...; xN] where xi is state of drone i
+                u_all: Stacked input vector [u1; u2; ...; uN] where ui is input of drone i
+
+            Returns:
+                x_dot_all: Stacked derivative vector [x_dot1; x_dot2; ...; x_dotN]
+            '''
+            nx_single = self.model.nx
+            nu_single = self.model.nu
+
+            x_dots = []
+            for i in range(self.num_drones):
+                # Extract state and input for drone i
+                x_i = x_all[i * nx_single:(i + 1) * nx_single]
+                u_i = u_all[i * nu_single:(i + 1) * nu_single]
+
+                # Apply single drone dynamics
+                x_dot_i = self.model.fc_func(x_i, u_i)
+                x_dots.append(x_dot_i)
+
+            # Stack all derivatives
+            return cs.vertcat(*x_dots)
+
+        self.dynamics_func = multi_drone_dynamics
 
     def box2polytopic(self, constraint):
         '''Convert constraints into an explicit polytopic form. This assumes that constraints contain the origin.
@@ -141,58 +165,83 @@ class NL_MPSC(MPSC):
         # Create ocp object to formulate the OCP
         ocp = AcadosOcp()
 
-        # Setup model
+        # Setup model for multiple drones
         model = AcadosModel()
-        model.x = self.model.x_sym
-        model.u = self.model.u_sym
-        model.name = self.env.NAME
 
-        model.f_expl_expr = self.model.fc_func(model.x, model.u)
-        model.x_labels = self.env.STATE_LABELS
-        model.u_labels = self.env.ACTION_LABELS
-        model.t_label = 'time'
+        # Create stacked state and input variables
+        x_stack = []
+        u_stack = []
+        for i in range(self.num_drones):
+            x_i = cs.MX.sym(f'x_{i}', self.model.nx)
+            u_i = cs.MX.sym(f'u_{i}', self.model.nu)
+            x_stack.append(x_i)
+            u_stack.append(u_i)
+
+        model.x = cs.vertcat(*x_stack)
+        model.u = cs.vertcat(*u_stack)
+        model.name = f'{self.env.NAME}_multi_drone'
+
+        # Use the multi-drone dynamics
+        model.f_expl_expr = self.dynamics_func(model.x, model.u)
         ocp.model = model
 
-        nx, nu = self.model.nx, self.model.nu
+        nx, nu = self.model.nx * self.num_drones, self.model.nu * self.num_drones
         ny = nx + nu
 
         # Set cost module
         ocp.cost.cost_type = 'LINEAR_LS'
         ocp.cost.cost_type_e = 'LINEAR_LS'
 
+        # Create block diagonal cost matrices for multiple drones
         if self.mpc_mode:
-            ocp.cost.W = block_diag(self.Q, self.R)
+            Q_multi = block_diag(*[self.Q for _ in range(self.num_drones)])
+            R_multi = block_diag(*[self.R for _ in range(self.num_drones)])
+            ocp.cost.W = block_diag(Q_multi, R_multi)
         else:
-            Q = np.zeros((nx, nx))
-            R = np.eye(nu)
-            ocp.cost.W = block_diag(Q, R)
-        ocp.cost.W_e = self.Q if self.mpc_mode else np.zeros((nx, nx))
+            Q_multi = np.zeros((nx, nx))
+            R_multi = np.eye(nu)
+            ocp.cost.W = block_diag(Q_multi, R_multi)
+
+        ocp.cost.W_e = Q_multi
         ocp.cost.Vx = np.zeros((ny, nx))
         ocp.cost.Vx[:nx, :] = np.eye(nx)
         ocp.cost.Vu = np.zeros((ny, nu))
         ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
         ocp.cost.Vx_e = np.eye(nx)
 
-        # Updated on each iteration
-        ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
-        ocp.cost.yref_e = self.model.X_EQ
+        # Stack equilibrium points for all drones
+        X_EQ_multi = np.tile(self.model.X_EQ, self.num_drones)
+        U_EQ_multi = np.tile(self.model.U_EQ, self.num_drones)
 
-        # Setup constraints
+        # Updated on each iteration
+        ocp.cost.yref = np.concatenate((X_EQ_multi, U_EQ_multi))
+        ocp.cost.yref_e = X_EQ_multi
+
+        # Setup constraints - apply to each drone
         ocp.constraints.constr_type = 'BGH'
 
-        ocp.constraints.x0 = self.model.X_EQ
-        ocp.constraints.C = self.L_x
-        ocp.constraints.D = self.L_u
-        ocp.constraints.lg = -1000 * np.ones((self.p))
-        ocp.constraints.ug = np.zeros((self.p))
+        ocp.constraints.x0 = X_EQ_multi
+
+        # Create block diagonal constraint matrices for multiple drones
+        L_x_multi = block_diag(*[self.L_x for _ in range(self.num_drones)])
+        L_u_multi = block_diag(*[self.L_u for _ in range(self.num_drones)])
+
+        ocp.constraints.C = L_x_multi
+        ocp.constraints.D = L_u_multi
+
+        # Stack constraint bounds for all drones
+        p_multi = self.p * self.num_drones
+        ocp.constraints.lg = -1000 * np.ones(p_multi)
+        ocp.constraints.ug = np.zeros(p_multi)
 
         # Slack
         if self.soften_constraints:
-            ocp.constraints.Jsg = np.eye(self.p)
-            ocp.cost.Zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-            ocp.cost.Zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-            ocp.cost.zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-            ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+            ocp.constraints.Jsg = np.eye(p_multi)
+            slack_weights = np.tile([self.slack_cost] * self.model.nx * 2 + [self.slack_cost * 100] * self.model.nu * 2, self.num_drones)
+            ocp.cost.Zu = slack_weights
+            ocp.cost.Zl = slack_weights
+            ocp.cost.zu = slack_weights
+            ocp.cost.zl = slack_weights
 
         # Options
         ocp.solver_options.N_horizon = self.horizon
@@ -214,13 +263,20 @@ class NL_MPSC(MPSC):
             for stage in range(self.mpsc_cost_horizon, self.horizon):
                 ocp_solver.cost_set(stage, 'W', 0 * ocp.cost.W)
 
-        g = np.zeros((self.horizon, self.p))
+        g = np.zeros((self.horizon, p_multi))
+
+        # Stack constraint vectors for all drones
+        X_mid_multi = np.tile(self.X_mid, self.num_drones)
+        U_mid_multi = np.tile(self.U_mid, self.num_drones)
+        l_xu_multi = np.tile(self.l_xu, self.num_drones)
 
         for i in range(self.horizon):
-            for j in range(self.p):
-                tighten_by = (self.max_w * i) if j < self.n * 2 else 0
-                g[i, j] = (self.l_xu[j] - tighten_by)
-            g[i, :] += (self.L_x @ self.X_mid) + (self.L_u @ self.U_mid)
+            for j in range(p_multi):
+                # Apply tightening only to state constraints (first n*2 constraints per drone)
+                local_constraint_idx = j % self.p
+                tighten_by = (self.max_w * i) if local_constraint_idx < self.n * 2 else 0
+                g[i, j] = (l_xu_multi[j] - tighten_by)
+            g[i, :] += (L_x_multi @ X_mid_multi) + (L_u_multi @ U_mid_multi)
             ocp_solver.constraints_set(i, 'ug', g[i, :])
 
         self.ocp_solver = ocp_solver

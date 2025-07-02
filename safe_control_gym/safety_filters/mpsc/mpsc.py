@@ -241,7 +241,7 @@ class MPSC(BaseSafetyFilter, ABC):
             self.ocp_solver.set(self.horizon, 'yref', y_ref_e)
         else:
             ocp_solver = self.ocp_solver
-            ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.array(uncertified_action).reshape((self.model.nu,)))))
+            ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx * self.num_drones)), np.array(uncertified_action).reshape((self.model.nu * self.num_drones)))))
 
             if isinstance(self.cost_function, PRECOMPUTED_COST):
                 uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
@@ -252,9 +252,9 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             action = self.ocp_solver.solve_for_x0(x0_bar=obs)
             self.cost_prev = self.ocp_solver.get_cost()
-            self.slack_prev = np.zeros((self.horizon, self.p))
-            x_val = np.zeros((self.horizon + 1, self.model.nx))
-            u_val = np.zeros((self.horizon, self.model.nu))
+            self.slack_prev = np.zeros((self.horizon, self.p * self.num_drones))
+            x_val = np.zeros((self.horizon + 1, self.model.nx * self.num_drones))
+            u_val = np.zeros((self.horizon, self.model.nu * self.num_drones))
             for i in range(self.horizon):
                 self.slack_prev[i, :] = self.ocp_solver.get(i, 'su')
                 x_val[i, :] = self.ocp_solver.get(i, 'x')
@@ -288,7 +288,7 @@ class MPSC(BaseSafetyFilter, ABC):
             certified_action (ndarray): The certified action
             success (bool): Whether the safety filtering was successful or not.
         '''
-        uncertified_action = np.clip(uncertified_action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
+        uncertified_action = np.clip(uncertified_action, np.tile(self.env.physical_action_bounds[0], self.num_drones), np.tile(self.env.physical_action_bounds[1], self.num_drones))
         self.before_optimization(current_state)
 
         iteration = self.extract_step(info)
