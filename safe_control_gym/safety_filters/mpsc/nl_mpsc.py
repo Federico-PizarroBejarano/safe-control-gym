@@ -71,8 +71,8 @@ class NL_MPSC(MPSC):
         self.state_constraint = self.constraints.state_constraints[0]
         self.input_constraint = self.constraints.input_constraints[0]
 
-        [self.X_mid, L_x, l_x] = self.box2polytopic(self.state_constraint)
-        [self.U_mid, L_u, l_u] = self.box2polytopic(self.input_constraint)
+        self.X_mid, L_x, l_x = self.box2polytopic(self.state_constraint)
+        self.U_mid, L_u, l_u = self.box2polytopic(self.input_constraint)
 
         # Number of constraints
         p_x = l_x.shape[0]
@@ -98,14 +98,11 @@ class NL_MPSC(MPSC):
             Returns:
                 x_dot_all: Stacked derivative vector [x_dot1; x_dot2; ...; x_dotN]
             '''
-            nx_single = self.model.nx
-            nu_single = self.model.nu
-
             x_dots = []
             for i in range(self.num_drones):
                 # Extract state and input for drone i
-                x_i = x_all[i * nx_single:(i + 1) * nx_single]
-                u_i = u_all[i * nu_single:(i + 1) * nu_single]
+                x_i = x_all[i * self.model.nx:(i + 1) * self.model.nx]
+                u_i = u_all[i * self.model.nu:(i + 1) * self.model.nu]
 
                 # Apply single drone dynamics
                 x_dot_i = self.model.fc_func(x_i, u_i)
@@ -217,8 +214,8 @@ class NL_MPSC(MPSC):
         ocp.cost.yref = np.concatenate((X_EQ_multi, U_EQ_multi))
         ocp.cost.yref_e = X_EQ_multi
 
-        # Setup constraints - apply to each drone
-        ocp.constraints.constr_type = 'BGH'
+        # Setup linear constraints - apply to each drone
+        ocp.constraints.constr_type = 'BGH'  # Box + General Linear + Hamiltonian
 
         ocp.constraints.x0 = X_EQ_multi
 
