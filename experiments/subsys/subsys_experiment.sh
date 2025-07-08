@@ -16,5 +16,4 @@ python3 ./subsys_experiment.py \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \
-        sf_config.max_w=0.002 \
         sf_config.slack_cost=1000.0

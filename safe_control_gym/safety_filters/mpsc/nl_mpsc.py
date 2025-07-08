@@ -37,6 +37,7 @@ class NL_MPSC(MPSC):
                  soften_constraints: bool = False,
                  slack_cost: float = 250,
                  max_w: float = 0.002,
+                 min_collision_distance: float = 0.2,
                  **kwargs
                  ):
         '''Initialize the MPSC.
@@ -54,6 +55,7 @@ class NL_MPSC(MPSC):
             soften_constraints (bool): Whether to soften the constraints or not.
             slack_cost (float): The slack cost.
             max_w (float): The maximum model mismatch.
+            min_collision_distance (float): The minimum distance between drones.
         '''
 
         self.model_bias = None
@@ -63,6 +65,7 @@ class NL_MPSC(MPSC):
         self.soften_constraints = soften_constraints
         self.slack_cost = slack_cost
         self.max_w = max_w
+        self.min_collision_distance = min_collision_distance
 
         self.n = self.model.nx
         self.m = self.model.nu
@@ -208,33 +211,61 @@ class NL_MPSC(MPSC):
 
         # Stack equilibrium points for all drones
         X_EQ_multi = np.tile(self.model.X_EQ, self.num_drones)
+        if self.num_drones == 1:
+            positions = np.array([[0, 0]])
+        elif self.num_drones == 2:
+            positions = np.array([[-0.5, -0.5],
+                                  [0.5, -0.5]])
+        elif self.num_drones == 4:
+            positions = np.array([[-0.5, -0.5],
+                                  [0.5, -0.5],
+                                  [-0.5, 0.5],
+                                  [0.5, 0.5]])
+        else:
+            raise ValueError(f'Number of drones {self.num_drones} not supported')
+
+        for i in range(self.num_drones):
+            X_EQ_multi[[i * self.model.nx, i * self.model.nx + 2]] = positions[i]
+
         U_EQ_multi = np.tile(self.model.U_EQ, self.num_drones)
 
         # Updated on each iteration
         ocp.cost.yref = np.concatenate((X_EQ_multi, U_EQ_multi))
         ocp.cost.yref_e = X_EQ_multi
 
-        # Setup linear constraints - apply to each drone
-        ocp.constraints.constr_type = 'BGH'  # Box + General Linear + Hamiltonian
-
         ocp.constraints.x0 = X_EQ_multi
 
-        # Create block diagonal constraint matrices for multiple drones
-        L_x_multi = block_diag(*[self.L_x for _ in range(self.num_drones)])
-        L_u_multi = block_diag(*[self.L_u for _ in range(self.num_drones)])
+        # Create all constraints as nonlinear constraints
+        constraints = []
 
-        ocp.constraints.C = L_x_multi
-        ocp.constraints.D = L_u_multi
+        # Create box constraints (converted from linear form)
+        for i in range(self.num_drones):
+            # Extract state and input for drone i
+            x_i = model.x[i * self.model.nx:(i + 1) * self.model.nx]
+            u_i = model.u[i * self.model.nu:(i + 1) * self.model.nu]
+
+            # Convert linear constraints Lx*x + Lu*u <= l to nonlinear form
+            constraint_expr = (self.L_x @ (x_i - self.X_mid)) + (self.L_u @ (u_i - self.U_mid)) - self.l_xu
+            constraints.append(constraint_expr)
+
+        collision_constraints = self.create_collision_constraints(model.x)
+        constraints.append(collision_constraints)
+        model.con_h_expr = cs.vertcat(*constraints)
 
         # Stack constraint bounds for all drones
-        p_multi = self.p * self.num_drones
-        ocp.constraints.lg = -1000 * np.ones(p_multi)
-        ocp.constraints.ug = np.zeros(p_multi)
+        num_box_constraints = self.p * self.num_drones
+        num_collision_constraints = collision_constraints.shape[0]
+        box_lh = -1000 * np.ones(num_box_constraints)
+        box_uh = np.zeros(num_box_constraints)
+        collision_lh = self.min_collision_distance**2 * np.ones(num_collision_constraints)
+        collision_uh = 1000 * np.ones(num_collision_constraints)
+        ocp.constraints.lh = np.concatenate((box_lh, collision_lh))
+        ocp.constraints.uh = np.concatenate((box_uh, collision_uh))
 
         # Slack
         if self.soften_constraints:
-            ocp.constraints.Jsg = np.eye(p_multi)
-            slack_weights = np.tile([self.slack_cost] * self.model.nx * 2 + [self.slack_cost * 100] * self.model.nu * 2, self.num_drones)
+            ocp.constraints.Jsh = np.eye(num_box_constraints + num_collision_constraints)
+            slack_weights = self.slack_cost * np.ones(num_box_constraints + num_collision_constraints)
             ocp.cost.Zu = slack_weights
             ocp.cost.Zl = slack_weights
             ocp.cost.zu = slack_weights
@@ -260,20 +291,36 @@ class NL_MPSC(MPSC):
             for stage in range(self.mpsc_cost_horizon, self.horizon):
                 ocp_solver.cost_set(stage, 'W', 0 * ocp.cost.W)
 
-        g = np.zeros((self.horizon, p_multi))
-
-        # Stack constraint vectors for all drones
-        X_mid_multi = np.tile(self.X_mid, self.num_drones)
-        U_mid_multi = np.tile(self.U_mid, self.num_drones)
-        l_xu_multi = np.tile(self.l_xu, self.num_drones)
-
-        for i in range(self.horizon):
-            for j in range(p_multi):
-                # Apply tightening only to state constraints (first n*2 constraints per drone)
+        for i in range(1, self.horizon):
+            uh = np.array(ocp.constraints.uh).copy()
+            for j in range(num_box_constraints):
                 local_constraint_idx = j % self.p
                 tighten_by = (self.max_w * i) if local_constraint_idx < self.n * 2 else 0
-                g[i, j] = (l_xu_multi[j] - tighten_by)
-            g[i, :] += (L_x_multi @ X_mid_multi) + (L_u_multi @ U_mid_multi)
-            ocp_solver.constraints_set(i, 'ug', g[i, :])
+                uh[j] -= tighten_by
+            ocp_solver.constraints_set(i, 'uh', uh)
 
         self.ocp_solver = ocp_solver
+
+    def create_collision_constraints(self, x_stack):
+        '''Create collision avoidance constraints between drones.
+
+        Args:
+            x_stack (cs.MX): Stacked state vector for all drones
+
+        Returns:
+            collision_constraints (cs.MX): CasADi expression for collision constraints
+        '''
+        constraints = []
+        pos_indices = np.array([0, 2, 4])  # x, y, z positions
+
+        # Create collision avoidance constraints between all pairs of drones
+        for i in range(self.num_drones):
+            for j in range(i + 1, self.num_drones):
+                # Extract positions for drones i and j
+                pos_i = x_stack[i * self.model.nx + pos_indices]
+                pos_j = x_stack[j * self.model.nx + pos_indices]
+
+                distance = cs.sumsqr(pos_i - pos_j)
+                constraints.append(distance)
+
+        return cs.vertcat(*constraints)

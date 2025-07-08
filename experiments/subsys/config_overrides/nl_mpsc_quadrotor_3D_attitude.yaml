@@ -19,3 +19,7 @@ sf_config:
   # Softening
   soften_constraints: True
   slack_cost: 250
+
+  # Constraints
+  max_w: 0.001
+  min_collision_distance: 0.2

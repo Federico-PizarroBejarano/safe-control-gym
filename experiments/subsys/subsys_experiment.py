@@ -1,3 +1,4 @@
+import time
 from functools import partial
 
 import jax
@@ -14,9 +15,9 @@ from safe_control_gym.utils.registration import make
 jit_state2attitude = jax.jit(state2attitude)
 
 
-def plot_results(results):
+def plot_results(num_drones, results):
     # Extract position data
-    positions = np.array([obs.pos.squeeze() for obs in results])
+    positions = np.array([obs.pos.squeeze() for obs in results]).reshape((-1, num_drones, 3))
     x = positions[:, :, 0]
     y = positions[:, :, 1]
 
@@ -50,7 +51,7 @@ def control(obs, t, i_error, dt, start_pos):
     return cmd, i_error
 
 
-def run(num_drones=1, duration=5.0, fps=60, safety_filter=None):
+def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
     # Create the simulation environment.
     sim = Sim(
         n_drones=num_drones,
@@ -66,6 +67,7 @@ def run(num_drones=1, duration=5.0, fps=60, safety_filter=None):
     i_error = np.zeros((1, 1, 3))
     all_obs = []
     start_pos = sim.data.states.pos
+    start_time = time.time()
     for i in range(int(duration * sim.control_freq)):
         # Get the current state.
         obs = sim.data.states
@@ -75,22 +77,29 @@ def run(num_drones=1, duration=5.0, fps=60, safety_filter=None):
             rpy = RotLib.from_quat(obs.quat[0, drone_idx, :].flatten()).as_euler('xyz')
             rpys.append(rpy)
         rpys = np.array(rpys).reshape((1, num_drones, 3))
-        stacked_obs = np.concatenate([obs.pos, obs.vel, rpys, obs.ang_vel], axis=-1).squeeze()
+        stacked_obs = np.concatenate([obs.pos, obs.vel, rpys, obs.ang_vel], axis=-1)[0, :, :]
         stacked_obs = stacked_obs[:, np.array([0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11])]
         stacked_obs = stacked_obs.flatten()
 
         # Compute the control command.
         cmd, i_error = control(obs, i * dt, i_error, dt, start_pos)
-        cmd, _ = safety_filter.certify_action(stacked_obs, cmd.flatten())
+        try:
+            cmd, _ = safety_filter.certify_action(stacked_obs, cmd.flatten())
+        except Exception as e:
+            print(e)
+            break
 
         # Apply the control command.
         sim.attitude_control(cmd.reshape(1, num_drones, -1))
         sim.step(sim.freq // sim.control_freq)
-        if ((i * fps) % sim.control_freq) < fps:
+        if i == 0:
+            start_time = time.time()
+        if plot and ((i * fps) % sim.control_freq) < fps:
             sim.render()
+    print(f'Time taken: {time.time() - start_time} seconds')
     sim.close()
 
-    plot_results(all_obs)
+    plot_results(num_drones, all_obs)
 
 
 def main():
@@ -110,7 +119,7 @@ def main():
                          **config.sf_config)
     safety_filter.reset()
 
-    run(num_drones=config.num_drones, duration=5.0, fps=60, safety_filter=safety_filter)
+    run(plot=False, num_drones=config.num_drones, duration=5.0, fps=60, safety_filter=safety_filter)
 
 
 if __name__ == '__main__':

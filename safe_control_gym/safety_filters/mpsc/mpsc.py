@@ -200,7 +200,6 @@ class MPSC(BaseSafetyFilter, ABC):
         try:
             sol = opti.solve()
             self.cost_prev = sol.value(opti_dict['cost'])
-            self.slack_prev = sol.value(opti_dict['slack'])
             x_val, u_val, next_u_val = sol.value(z_var), sol.value(v_var), sol.value(next_u)
             self.z_prev = x_val
             self.v_prev = u_val.reshape((self.model.nu), self.horizon)
@@ -249,27 +248,19 @@ class MPSC(BaseSafetyFilter, ABC):
                 for stage in range(1, self.mpsc_cost_horizon):
                     ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx)), uncert_input_traj[:, stage])))
         # Solve the optimization problem.
-        try:
-            action = self.ocp_solver.solve_for_x0(x0_bar=obs)
-            self.cost_prev = self.ocp_solver.get_cost()
-            self.slack_prev = np.zeros((self.horizon, self.p * self.num_drones))
-            x_val = np.zeros((self.horizon + 1, self.model.nx * self.num_drones))
-            u_val = np.zeros((self.horizon, self.model.nu * self.num_drones))
-            for i in range(self.horizon):
-                self.slack_prev[i, :] = self.ocp_solver.get(i, 'su')
-                x_val[i, :] = self.ocp_solver.get(i, 'x')
-                u_val[i, :] = self.ocp_solver.get(i, 'u')
-            x_val[self.horizon, :] = self.ocp_solver.get(self.horizon, 'x')
-            self.z_prev = x_val.T
-            self.v_prev = u_val.T
-            # Take the first one from solved action sequence.
-            self.prev_action = action
-            feasible = True
-        except Exception as e:
-            print('Error Return Status:', self.ocp_solver.status)
-            print(e)
-            feasible = False
-            action = uncertified_action
+        action = self.ocp_solver.solve_for_x0(x0_bar=obs)
+        self.cost_prev = self.ocp_solver.get_cost()
+        x_val = np.zeros((self.horizon + 1, self.model.nx * self.num_drones))
+        u_val = np.zeros((self.horizon, self.model.nu * self.num_drones))
+        for i in range(self.horizon):
+            x_val[i, :] = self.ocp_solver.get(i, 'x')
+            u_val[i, :] = self.ocp_solver.get(i, 'u')
+        x_val[self.horizon, :] = self.ocp_solver.get(self.horizon, 'x')
+        self.z_prev = x_val.T
+        self.v_prev = u_val.T
+        # Take the first one from solved action sequence.
+        self.prev_action = action
+        feasible = True
         return action, feasible
 
     def certify_action(self,
@@ -331,6 +322,5 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
         self.z_prev = None
         self.v_prev = None
-        self.slack_prev = 0
         self.kinf = self.horizon - 1
         self.setup_results_dict()
