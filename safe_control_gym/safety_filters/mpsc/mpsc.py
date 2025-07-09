@@ -29,14 +29,10 @@ class MPSC(BaseSafetyFilter, ABC):
                  horizon: int = 10,
                  q_mpc: list = None,
                  r_mpc: list = None,
-                 integration_algo: str = 'rk4',
                  warmstart: bool = True,
-                 additional_constraints: list = None,
-                 use_terminal_set: bool = True,
                  cost_function: Cost_Function = Cost_Function.ONE_STEP_COST,
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
-                 use_acados: bool = False,
                  **kwargs
                  ):
         '''Initialize the MPSC.
@@ -45,16 +41,12 @@ class MPSC(BaseSafetyFilter, ABC):
             env_func (partial BenchmarkEnv): Environment for the task.
             horizon (int): The MPC horizon.
             q_mpc, r_mpc (list): Q and R gain matrices for linear controller.
-            integration_algo (str): The algorithm used for integrating the dynamics,
-                either 'LTI', 'rk4', 'rk', or 'cvodes'.
             warmstart (bool): If the previous MPC soln should be used to warmstart the next mpc step.
-            additional_constraints (list): List of additional constraints to consider.
-            use_terminal_set (bool): Whether to use a terminal set constraint or not.
             cost_function (Cost_Function): A string (from Cost_Function) representing the cost function to be used.
             mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
             decay_factor (float): How much to discount future costs.
         '''
-
+        self.use_acados = True
         # Store all params/args.
         for k, v in locals().items():
             if k != 'self' and k != 'kwargs' and '__' not in k:
@@ -88,10 +80,7 @@ class MPSC(BaseSafetyFilter, ABC):
         self.terminal_set = None
         self.prev_action = self.U_EQ
 
-        if self.additional_constraints is None:
-            additional_constraints = []
-        self.constraints, self.state_constraints_sym, self.input_constraints_sym = reset_constraints(
-            self.env.constraints.constraints + additional_constraints)
+        self.constraints, self.state_constraints_sym, self.input_constraints_sym = reset_constraints(self.env.constraints.constraints)
 
         if cost_function == Cost_Function.ONE_STEP_COST:
             self.cost_function = ONE_STEP_COST()

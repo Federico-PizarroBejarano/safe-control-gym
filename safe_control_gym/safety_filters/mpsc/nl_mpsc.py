@@ -60,7 +60,7 @@ class NL_MPSC(MPSC):
 
         self.model_bias = None
         self.num_drones = num_drones
-        super().__init__(env_func, horizon, q_mpc, r_mpc, 'rk4', warmstart, None, False, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
+        super().__init__(env_func, horizon, q_mpc, r_mpc, warmstart, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
         self.soften_constraints = soften_constraints
         self.slack_cost = slack_cost

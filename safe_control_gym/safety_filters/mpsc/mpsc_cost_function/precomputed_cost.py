@@ -86,7 +86,7 @@ class PRECOMPUTED_COST(MPSC_COST):
         '''
 
         if self.uncertified_controller is None:
-            raise Exception('[ERROR] No underlying controller passed to P_MPSC')
+            raise Exception('[ERROR] No underlying controller passed to the MPSF for precomputed cost.')
 
         if isinstance(self.uncertified_controller.env, VecEnv):
             uncert_env = self.uncertified_controller.env.envs[0]

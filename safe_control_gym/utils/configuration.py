@@ -3,7 +3,6 @@
 import argparse
 import os
 import warnings
-from email.policy import default
 
 import munch
 from dict_deep import deep_set
@@ -64,14 +63,17 @@ class ConfigFactory:
             # Restore for continual training or evaluation.
             restore_path = os.path.join(args.restore, 'config.yaml')
             config_dict.update(read_file(restore_path))
-        elif args.algo and args.task:
-            # Start fresh training.
-            config_dict['algo_config'] = get_config(args.algo)
-            config_dict['task_config'] = get_config(args.task)
+        else:
+            if args.task:
+                config_dict['task_config'] = get_config(args.task)
+            else:
+                warnings.warn('No task config given.')
+
+            if args.algo:
+                config_dict['algo_config'] = get_config(args.algo)
             if args.safety_filter:
                 config_dict['sf_config'] = get_config(args.safety_filter)
-        else:
-            warnings.warn('No agent/task config given.')
+
         if args.use_gpu:
             config_dict['use_gpu'] = args.use_gpu
         # Experiment-specific overrides, e.g. training hyperparameters.
