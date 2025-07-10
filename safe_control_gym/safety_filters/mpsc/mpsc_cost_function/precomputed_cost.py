@@ -88,12 +88,14 @@ class PRECOMPUTED_COST(MPSC_COST):
         if self.uncertified_controller is None:
             raise Exception('[ERROR] No underlying controller passed to the MPSF for precomputed cost.')
 
+        num_drones = len(obs) // self.model.nx
+
         if isinstance(self.uncertified_controller.env, VecEnv):
             uncert_env = self.uncertified_controller.env.envs[0]
         else:
             uncert_env = self.uncertified_controller.env
 
-        v_L = np.zeros((self.model.nu, self.mpsc_cost_horizon))
+        v_L = np.zeros((self.mpsc_cost_horizon, num_drones, self.model.nu))
 
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
@@ -111,17 +113,23 @@ class PRECOMPUTED_COST(MPSC_COST):
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 action = uncert_env.denormalize_action(action)
 
-            action = np.clip(action, self.env.physical_action_bounds[0], self.env.physical_action_bounds[1])
+            action = np.clip(action, np.tile(self.env.physical_action_bounds[0], (num_drones)), np.tile(self.env.physical_action_bounds[1], (num_drones)))
 
             if h == 0 and np.linalg.norm(uncertified_action - action) >= 0.001:
                 raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
-            v_L[:, h:h + 1] = action.reshape((self.model.nu, 1))
+            action = action.reshape((1, num_drones, self.model.nu))
+            obs = obs.reshape((num_drones, self.model.nx))
+            v_L[h:h + 1, :, :] = action
 
-            obs = np.squeeze(self.model.fd_func(x0=obs, p=action)['xf'].toarray())
+            for drone_idx in range(num_drones):
+                obs[drone_idx, :] = np.squeeze(self.model.fd_func(x0=obs[drone_idx, :], p=action[0, drone_idx, :])['xf'].toarray())
+
+            obs = obs.flatten()
 
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
+        v_L = v_L.reshape((self.mpsc_cost_horizon, num_drones * self.model.nu))
         return v_L

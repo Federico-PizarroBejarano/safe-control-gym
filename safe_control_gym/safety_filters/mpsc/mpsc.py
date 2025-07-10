@@ -222,9 +222,9 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
 
         if self.mpc_mode:
-            clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon)
+            clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon + 1)
             for stage in range(self.horizon):
-                self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], self.model.U_EQ)))
+                self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], np.tile(self.model.U_EQ, self.num_drones))))
             y_ref_e = clipped_X_GOAL[-1, :]
             self.ocp_solver.set(self.horizon, 'yref', y_ref_e)
         else:
@@ -235,7 +235,8 @@ class MPSC(BaseSafetyFilter, ABC):
                 uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
 
                 for stage in range(1, self.mpsc_cost_horizon):
-                    ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx)), uncert_input_traj[:, stage])))
+                    ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx * self.num_drones)), uncert_input_traj[stage, :])))
+
         # Solve the optimization problem.
         action = self.ocp_solver.solve_for_x0(x0_bar=obs)
         self.cost_prev = self.ocp_solver.get_cost()

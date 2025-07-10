@@ -8,10 +8,7 @@ task_config:
 
   cost: quadratic
 
-  task: stabilization
-  task_info:
-    stabilization_goal: [0, 0, 1]
-    stabilization_goal_tolerance: 0.0
+  task: traj_tracking
 
   constraints:
     - constraint_form: default_constraint

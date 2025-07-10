@@ -67,8 +67,10 @@ class BaseController(ABC):
             step (int): The current step/iteration of the environment.
         '''
 
-        if info is not None:
+        if isinstance(info, list):
             step = info[0]['current_step']
+        elif isinstance(info, dict):
+            step = info['current_step']
         else:
             step = 0
 
