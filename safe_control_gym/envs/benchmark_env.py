@@ -12,14 +12,10 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from gymnasium.utils import seeding
-from matplotlib import pyplot as plt
 from scipy.stats import truncnorm
 
 from safe_control_gym.envs.constraints import create_constraint_list
 from safe_control_gym.envs.disturbances import create_disturbance_list
-from safe_control_gym.envs.gym_pybullet_drones.trajectory_utils import (TrajectoryPlanner, Waypoint,
-                                                                        compute_trajectory_derivatives,
-                                                                        generate_trajectory)
 
 
 class Cost(str, Enum):
@@ -567,136 +563,6 @@ class BenchmarkEnv(gym.Env, ABC):
             done = True
         return obs, rew, done, info
 
-    def _generate_trajectory(self,
-                             traj_type='figure8',
-                             traj_length=10.0,
-                             num_cycles=1,
-                             traj_plane='xy',
-                             position_offset=np.array([0, 0]),
-                             scaling=1.0,
-                             sample_time=0.01,
-                             string_list=None,
-                             waypoint_list=None
-                             ):
-        """Generates a 2D trajectory.
-
-        Args:
-            traj_type (str, optional): The type of trajectory (circle, square, figure8).
-            traj_length (float, optional): The length of the trajectory in seconds.
-            num_cycles (int, optional): The number of cycles within the length.
-            traj_plane (str, optional): The plane of the trajectory (e.g. 'xz').
-            position_offset (ndarray, optional): An initial position offset in the plane.
-            scaling (float, optional): Scaling factor for the trajectory.
-            sample_time (float, optional): The sampling timestep of the trajectory.
-            string_list (list, optional): List of string entries: start and end position
-            waypoint_list (list, optional): List of waypoints trajectory should go through
-
-        Returns:
-            ndarray: The positions in x, y, z of the trajectory sampled for its entire duration.
-            ndarray: The velocities in x, y, z of the trajectory sampled for its entire duration.
-            ndarray: The scalar speed of the trajectory sampled for its entire duration.
-        """
-
-        # Get trajectory type.
-        valid_traj_type = ['circle', 'square', 'figure8', 'snap_figure8', 'snap_custom']
-        if traj_type not in valid_traj_type:
-            raise ValueError(
-                'Trajectory type should be one of [circle, square, figure8, snap_figure8, snap_custom].'
-            )
-        traj_period = traj_length / num_cycles
-        direction_list = ['x', 'y', 'z']
-        # Get coordinates indexes.
-        if traj_plane[0] in direction_list and traj_plane[1] in direction_list and traj_plane[0] != traj_plane[1]:
-            coord_index_a = direction_list.index(traj_plane[0])
-            coord_index_b = direction_list.index(traj_plane[1])
-        else:
-            raise ValueError('Trajectory plane should be in form of ab, where a and b can be {x, y, z}.')
-        # Generate time stamps. sample time added to make reference one step longer than traj_length
-        times = np.arange(0, traj_length + sample_time, sample_time)
-        pos_ref_traj = np.zeros((len(times), 3))
-        vel_ref_traj = np.zeros((len(times), 3))
-        speed_traj = np.zeros((len(times), 1))
-        # Initial trajectory for snap trajectory
-        if traj_type == 'snap_figure8':
-            num_waypoints = 20
-            waypoint_times = np.arange(0, traj_length + traj_length / num_waypoints, traj_length / num_waypoints)
-            waypoints = self._init_figure8(waypoint_times, traj_type, traj_period, coord_index_a,
-                                           coord_index_b, position_offset[0], position_offset[1], scaling)
-            polys = generate_trajectory(
-                waypoints,
-                degree=5,  # Polynomial degree
-                idx_minimized_orders=4,  # Minimize derivatives in these orders (>= 2)
-                num_continuous_orders=3,  # Constrain continuity of derivatives up to order (>= 3)
-                algorithm='closed-form'  # "closed-form" Or "constrained"
-                # algorithm='constrained'
-            )
-            # return information up to velocity (2nd derivative)
-            pva = compute_trajectory_derivatives(polys, times, 3)
-            pos_ref_traj = pva[0, :, :]
-            vel_ref_traj = pva[1, :, :]
-            acc_ref_traj = pva[2, :, :]
-            speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
-            acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
-            print(f'Max acceleration: {np.max(acc_mag)}')
-            print(f'Acc bound is: {0.3 * 9.81} to {1.8 * 9.81}')
-            print(f'Max velocity: {np.max(speed_traj)}')
-            print()
-
-        elif traj_type == 'snap_custom':
-            if waypoint_list is None:
-                raise ValueError('No waypoints defined for trajectory type snap_custom')
-            if waypoint_list is None and string_list is None:
-                raise ValueError('No waypoints defined for trajectory type snap_custom')
-            if string_list is not None:
-                traj = TrajectoryPlanner(waypoint_list, string_list)
-                waypoints = traj.waypoints.copy()
-            else:
-                waypoints = self._init_custom(waypoint_list)
-            polys = generate_trajectory(
-                waypoints,
-                degree=6,  # Polynomial degree
-                idx_minimized_orders=5,  # Minimize derivatives in these orders (>= 2)
-                num_continuous_orders=3,  # Constrain continuity of derivatives up to order (>= 3)
-                algorithm='closed-form'  # "closed-form" Or "constrained"
-            )
-            pva = compute_trajectory_derivatives(polys, times, 2)
-            pos_ref_traj = pva[0, :, :]
-            vel_ref_traj = pva[1, :, :]
-            # acc_ref_traj = pva[2, :, :]
-            speed_traj = np.linalg.norm(vel_ref_traj, axis=1)
-            # acc_mag = np.linalg.norm(acc_ref_traj, axis=1)
-            # print(f"Max acceleration: {np.max(acc_mag)}")
-            print(f'Max speed: {np.max(speed_traj)}')
-            print()
-
-        else:
-            # Compute trajectory points.
-            for t in enumerate(times):
-                pos_ref_traj[t[0]], vel_ref_traj[t[0]] = self._get_coordinates(t[1],
-                                                                               traj_type,
-                                                                               traj_period,
-                                                                               coord_index_a,
-                                                                               coord_index_b,
-                                                                               position_offset[0],
-                                                                               position_offset[1],
-                                                                               scaling)
-                speed_traj[t[0]] = np.linalg.norm(vel_ref_traj[t[0]])
-        #
-        # NOTE: update 25.11.24: manually shift the z axis to 1.0 if not in the traj plane
-        #       ptherwise flying on the floor with z=0.0
-        if 'z' not in traj_plane and traj_type not in ['snap_custom', 'snap_figure8']:
-            pos_ref_traj[:, 2] = position_offset[2]
-            vel_ref_traj[:, 2] = 0.0
-
-        # # calculate the maximul acceleration and velocity
-        # max_vel = np.max(speed_traj)
-        # max_acc = np.max(np.diff(speed_traj) / sample_time)
-        # print(colored(f"Max velocity: {max_vel}, Max acceleration: {max_acc}", 'green'))
-        # if max_acc > 1.8 * 9.81 or max_acc < 0.3 * 9.81:
-        #     raise ValueError(f"Max acceleration is not in the range of 0.3g to 1.8g")
-
-        return pos_ref_traj, vel_ref_traj, speed_traj
-
     def _get_coordinates(self,
                          t,
                          traj_type,
@@ -855,117 +721,9 @@ class BenchmarkEnv(gym.Env, ABC):
             coords_b_dot = 0.0
         return coords_a, coords_b, coords_a_dot, coords_b_dot
 
-    def _init_figure8(self,
-                      times,
-                      traj_type,
-                      traj_period,
-                      coord_index_a,
-                      coord_index_b,
-                      position_offset_a,
-                      position_offset_b,
-                      scaling
-                      ):
-        waypoint = []
-        for t in enumerate(times):
-            pos_waypoint, vel_waypoint = self._get_coordinates(t[1],
-                                                               traj_type,
-                                                               traj_period,
-                                                               coord_index_a,
-                                                               coord_index_b,
-                                                               position_offset_a,
-                                                               position_offset_b,
-                                                               scaling)
-            waypoint.append(
-                Waypoint(
-                    time=t[1],
-                    position=pos_waypoint,
-                    # velocity=vel_waypoint,
-                )
-            )
-        return waypoint
-
-    def _init_custom(self, waypoint_):
-        waypoint = []
-        for data in waypoint_:
-            t = data['time']
-            pos_waypoint = data['position']
-            waypoint.append(
-                Waypoint(
-                    time=t,
-                    position=pos_waypoint,
-                )
-            )
-        return waypoint
-
-    def _plot_trajectory(self,
-                         traj_type,
-                         traj_plane,
-                         traj_length,
-                         num_cycles,
-                         pos_ref_traj,
-                         vel_ref_traj,
-                         speed_traj
-                         ):
-        """Plots a trajectory along x, y, z, and in a 3D projection.
-
-        Args:
-            traj_type (str, optional): The type of trajectory (circle, square, figure8).
-            traj_plane (str, optional): The plane of the trajectory (e.g. 'xz').
-            traj_length (float, optional): The length of the trajectory in seconds.
-            num_cycles (int, optional): The number of cycles within the length.
-            pos_ref_traj (ndarray): The positions in x, y, z of the trajectory sampled for its entire duration.
-            vel_ref_traj (ndarray): The velocities in x, y, z of the trajectory sampled for its entire duration.
-            speed_traj (ndarray): The scalar speed of the trajectory sampled for its entire duration.
-        """
-
-        # Print basic properties.
-        print(f'Trajectory type: {traj_type}')
-        print(f'Trajectory plane: {traj_plane}')
-        print(f'Trajectory length: {traj_length} sec')
-        print(f'Number of cycles: {num_cycles}')
-        print(f'Trajectory period: {traj_length / num_cycles:.2f} sec')
-        print(f'Angular speed: {2.0 * np.pi / (traj_length / num_cycles):.2f} rad/sec')
-        print(
-            'Position bounds: x [%.2f, %.2f] m, y [%.2f, %.2f] m, z [%.2f, %.2f] m'
-            % (min(pos_ref_traj[:, 0]), max(pos_ref_traj[:, 0]),
-               min(pos_ref_traj[:, 1]), max(pos_ref_traj[:, 1]),
-               min(pos_ref_traj[:, 2]), max(pos_ref_traj[:, 2])))
-        print(
-            'Velocity bounds: vx [%.2f, %.2f] m/s, vy [%.2f, %.2f] m/s, vz [%.2f, %.2f] m/s'
-            % (min(vel_ref_traj[:, 0]), max(vel_ref_traj[:, 0]),
-               min(vel_ref_traj[:, 1]), max(vel_ref_traj[:, 1]),
-               min(vel_ref_traj[:, 2]), max(vel_ref_traj[:, 2])))
-        print('Speed: min %.2f m/s max %.2f m/s mean %.2f' %
-              (min(speed_traj), max(speed_traj), np.mean(speed_traj)))
-        # Plot in x, y, z.
-        fig, axs = plt.subplots(3, 2)
-        t = np.arange(0, traj_length, traj_length / pos_ref_traj.shape[0])
-        axs[0, 0].plot(t, pos_ref_traj[:, 0])
-        axs[0, 0].set_ylabel('pos x (m)')
-        axs[1, 0].plot(t, pos_ref_traj[:, 1])
-        axs[1, 0].set_ylabel('pos y (m)')
-        axs[2, 0].plot(t, pos_ref_traj[:, 2])
-        axs[2, 0].set_ylabel('pos z (m)')
-        axs[2, 0].set_xlabel('time (s)')
-        axs[0, 1].plot(t, vel_ref_traj[:, 0])
-        axs[0, 1].set_ylabel('vel x (m)')
-        axs[1, 1].plot(t, vel_ref_traj[:, 1])
-        axs[1, 1].set_ylabel('vel y (m)')
-        axs[2, 1].plot(t, vel_ref_traj[:, 2])
-        axs[2, 1].set_ylabel('vel z (m)')
-        axs[2, 1].set_xlabel('time (s)')
-        plt.show()
-        # Plot in 3D.
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
-        ax.plot(pos_ref_traj[:, 0], pos_ref_traj[:, 1], pos_ref_traj[:, 2])
-        ax.set_xlabel('x [m]')
-        ax.set_ylabel('y [m]')
-        ax.set_zlabel('z [m]')
-        plt.show()
-
-
 # Miscellaneous functions for randomization and sampling
+
+
 def sample_truncated(mu, sigma, low, high, size=None):
     if np.isclose(sigma, 0.0):
         # If sigma is zero, return a constant value
