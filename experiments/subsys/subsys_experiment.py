@@ -116,8 +116,8 @@ def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
     print(f'Time taken: {time.time() - start_time} seconds')
     sim.close()
 
-    print('Mean Correction:', np.mean(all_corrections))
-    print('Max Correction:', np.max(all_corrections))
+    print('Mean Correction:', np.round(np.mean(all_corrections), 3))
+    print('Max Correction:', np.round(np.max(all_corrections), 3))
 
     plot_results(num_drones, all_obs)
 
@@ -139,12 +139,13 @@ def main():
                          **config.sf_config)
     safety_filter.reset()
 
-    run(plot=False,
+    run(
+        plot=False,
         num_drones=config.num_drones,
         duration=15.0,
         fps=60,
         safety_filter=safety_filter,
-        )
+    )
 
 
 if __name__ == '__main__':

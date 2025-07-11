@@ -12,7 +12,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
-def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None, controller=None):
+def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None, controller=None, sf_vec=None):
     # Create the simulation environment.
     sim = Sim(
         n_drones=num_drones,
@@ -56,7 +56,7 @@ def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None, cont
         # Compute the control command.
         uncert_cmd = controller.select_action(stacked_obs, info={'current_step': i})
         cert_cmd, _ = safety_filter.certify_action(stacked_obs, uncert_cmd.flatten(), info={'current_step': i})
-        all_corrections.append(np.linalg.norm(uncert_cmd - cert_cmd))
+        all_corrections.append(np.linalg.norm(uncert_cmd.reshape(num_drones, -1)[sf_vec, :] - cert_cmd.reshape(num_drones, -1)[sf_vec, :]))
 
         # Apply the control command.
         sim.attitude_control(cert_cmd.reshape(1, num_drones, -1))
@@ -68,8 +68,8 @@ def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None, cont
     print(f'Time taken: {time.time() - start_time} seconds')
     sim.close()
 
-    print('Mean Correction:', np.mean(all_corrections))
-    print('Max Correction:', np.max(all_corrections))
+    print('Mean Correction:', np.round(np.mean(all_corrections), 3))
+    print('Max Correction:', np.round(np.max(all_corrections), 3))
 
     plot_results(num_drones, all_obs)
 
@@ -93,15 +93,19 @@ def main():
     lqr_controller.model.U_EQ = np.tile(lqr_controller.model.U_EQ, (config.num_drones))
 
     # Setup MPSC.
+    sf_vec = [False, True, False, True]
+    assert len(sf_vec) == config.num_drones
     safety_filter = make(config.safety_filter,
                          env_func,
                          num_drones=config.num_drones,
+                         sf_vec=sf_vec,
                          **config.sf_config)
     safety_filter.reset()
 
     run(
         plot=False,
         num_drones=config.num_drones,
+        sf_vec=sf_vec,
         duration=15.0,
         fps=60,
         safety_filter=safety_filter,

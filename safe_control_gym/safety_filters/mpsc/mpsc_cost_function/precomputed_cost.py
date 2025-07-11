@@ -15,6 +15,7 @@ class PRECOMPUTED_COST(MPSC_COST):
                  mpsc_cost_horizon: int = 5,
                  decay_factor: float = 0.85,
                  output_dir: str = '.',
+                 horizon: int = 10,
                  ):
         '''Initialize the MPSC Cost.
 
@@ -23,12 +24,14 @@ class PRECOMPUTED_COST(MPSC_COST):
             mpsc_cost_horizon (int): How many steps forward to check for constraint violations.
             decay_factor (float): How much to discount future costs.
             output_dir (str): Folder to write outputs.
+            horizon (int): The MPC horizon.
         '''
 
         super().__init__(env, mpsc_cost_horizon, decay_factor)
 
         self.output_dir = output_dir
         self.uncertified_controller = None
+        self.horizon = horizon
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
@@ -95,16 +98,17 @@ class PRECOMPUTED_COST(MPSC_COST):
         else:
             uncert_env = self.uncertified_controller.env
 
-        v_L = np.zeros((self.mpsc_cost_horizon, num_drones, self.model.nu))
+        v_L = np.zeros((self.horizon, num_drones, self.model.nu))
 
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
+        next_obs = obs.copy()
         for h in range(self.mpsc_cost_horizon):
             next_step = min(iteration + h, self.env.X_GOAL.shape[0] - 1)
             # Concatenate goal info (goal state(s)) for RL
-            extended_obs = self.uncertified_controller.env.extend_obs(obs, next_step + 1)
+            extended_obs = self.uncertified_controller.env.extend_obs(next_obs, next_step + 1)
 
             info = {'current_step': next_step}
 
@@ -119,17 +123,16 @@ class PRECOMPUTED_COST(MPSC_COST):
                 raise ValueError(f'[ERROR] Mismatch between unsafe controller and MPSC guess. Uncert: {uncertified_action}, Guess: {action}, Diff: {np.linalg.norm(uncertified_action - action)}.')
 
             action = action.reshape((1, num_drones, self.model.nu))
-            obs = obs.reshape((num_drones, self.model.nx))
+            next_obs = next_obs.reshape((num_drones, self.model.nx))
             v_L[h:h + 1, :, :] = action
 
             for drone_idx in range(num_drones):
-                obs[drone_idx, :] = np.squeeze(self.model.fd_func(x0=obs[drone_idx, :], p=action[0, drone_idx, :])['xf'].toarray())
+                next_obs[drone_idx, :] = np.squeeze(self.model.fd_func(x0=next_obs[drone_idx, :], p=action[0, drone_idx, :])['xf'].toarray())
 
-            obs = obs.flatten()
+            next_obs = next_obs.flatten()
 
         if isinstance(self.uncertified_controller, PID):
             self.uncertified_controller.load(f'{self.output_dir}/temp-data/saved_controller_curr.npy')
             self.uncertified_controller.save(f'{self.output_dir}/temp-data/saved_controller_prev.npy')
 
-        v_L = v_L.reshape((self.mpsc_cost_horizon, num_drones * self.model.nu))
         return v_L

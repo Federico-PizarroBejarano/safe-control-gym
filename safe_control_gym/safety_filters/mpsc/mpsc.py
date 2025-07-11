@@ -87,7 +87,7 @@ class MPSC(BaseSafetyFilter, ABC):
             self.mpsc_cost_horizon = 1
             self.cost_function.mpsc_cost_horizon = 1
         elif cost_function == Cost_Function.PRECOMPUTED_COST:
-            self.cost_function = PRECOMPUTED_COST(self.env, mpsc_cost_horizon, decay_factor, self.output_dir)
+            self.cost_function = PRECOMPUTED_COST(self.env, mpsc_cost_horizon, decay_factor, self.output_dir, self.horizon)
         else:
             raise NotImplementedError(f'The MPSC cost function {cost_function} has not been implemented')
 
@@ -221,21 +221,22 @@ class MPSC(BaseSafetyFilter, ABC):
             feasible (bool): Whether the safety filtering was feasible or not.
         '''
 
-        if self.mpc_mode:
-            clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon + 1)
-            for stage in range(self.horizon):
-                self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], np.tile(self.model.U_EQ, self.num_drones))))
-            y_ref_e = clipped_X_GOAL[-1, :]
-            self.ocp_solver.set(self.horizon, 'yref', y_ref_e)
+        clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon + 1)
+        if isinstance(self.cost_function, PRECOMPUTED_COST):
+            uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
         else:
-            ocp_solver = self.ocp_solver
-            ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx * self.num_drones)), np.array(uncertified_action).reshape((self.model.nu * self.num_drones)))))
+            uncert_input_traj = np.zeros((self.horizon, self.num_drones, self.model.nu))
+            uncert_input_traj[0, :, :] = uncertified_action.reshape((self.num_drones, self.model.nu))
 
-            if isinstance(self.cost_function, PRECOMPUTED_COST):
-                uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
+        mpc_ref_action = np.tile(self.model.U_EQ, (self.num_drones, 1))
+        mpc_ref_action[self.sf_vec, :] = 0
+        for stage in range(self.horizon):
+            sf_ref_action = uncert_input_traj[stage, :, :]
+            sf_ref_action[list(np.invert(self.sf_vec)), :] = 0
+            action = (sf_ref_action + mpc_ref_action).flatten()
+            self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], action)))
 
-                for stage in range(1, self.mpsc_cost_horizon):
-                    ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx * self.num_drones)), uncert_input_traj[stage, :])))
+        self.ocp_solver.set(self.horizon, 'yref', clipped_X_GOAL[-1, :])
 
         # Solve the optimization problem.
         action = self.ocp_solver.solve_for_x0(x0_bar=obs)

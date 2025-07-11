@@ -193,16 +193,23 @@ class NL_MPSC(MPSC):
         ocp.cost.cost_type_e = 'LINEAR_LS'
 
         # Create block diagonal cost matrices for multiple drones
-        if self.mpc_mode:
-            Q_multi = block_diag(*[self.Q for _ in range(self.num_drones)])
-            R_multi = block_diag(*[self.R for _ in range(self.num_drones)])
-            ocp.cost.W = block_diag(Q_multi, R_multi)
-        else:
-            Q_multi = np.zeros((nx, nx))
-            R_multi = np.eye(nu)
-            ocp.cost.W = block_diag(Q_multi, R_multi)
-
-        ocp.cost.W_e = Q_multi
+        Q_mpc, Q_sf = [], []
+        R_mpc, R_sf = [], []
+        for sf_drone in self.sf_vec:
+            if sf_drone:
+                Q_sf.append(np.zeros((self.model.nx, self.model.nx)))
+                R_sf.append(np.eye(self.model.nu))
+                Q_mpc.append(np.zeros((self.model.nx, self.model.nx)))
+                R_mpc.append(np.zeros((self.model.nu, self.model.nu)))
+            else:
+                Q_mpc.append(self.Q)
+                R_mpc.append(self.R)
+                Q_sf.append(np.zeros((self.model.nx, self.model.nx)))
+                R_sf.append(np.zeros((self.model.nu, self.model.nu)))
+        W_mpc = block_diag(*Q_mpc, *R_mpc)
+        W_sf = block_diag(*Q_sf, *R_sf)
+        ocp.cost.W = W_mpc + W_sf
+        ocp.cost.W_e = (W_mpc + W_sf)[:nx, :nx]
         ocp.cost.Vx = np.zeros((ny, nx))
         ocp.cost.Vx[:nx, :] = np.eye(nx)
         ocp.cost.Vu = np.zeros((ny, nu))
@@ -284,12 +291,11 @@ class NL_MPSC(MPSC):
         solver_json = 'acados_ocp_mpsf.json'
         ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
 
-        if not self.mpc_mode:
-            for stage in range(self.mpsc_cost_horizon):
-                ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)
+        for stage in range(self.mpsc_cost_horizon):
+            ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * W_sf + W_mpc)
 
-            for stage in range(self.mpsc_cost_horizon, self.horizon):
-                ocp_solver.cost_set(stage, 'W', 0 * ocp.cost.W)
+        for stage in range(self.mpsc_cost_horizon, self.horizon):
+            ocp_solver.cost_set(stage, 'W', W_mpc)
 
         for i in range(1, self.horizon):
             uh = np.array(ocp.constraints.uh).copy()

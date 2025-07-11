@@ -9,8 +9,6 @@ sf_config:
   horizon: 20
   warmstart: True
 
-  mpc_mode: False
-
   # Cost function
   cost_function: one_step_cost
   mpsc_cost_horizon: 5
