@@ -63,7 +63,7 @@ def control(obs, i_error, des_pos, dt):
     return cmd.flatten(), i_error
 
 
-def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
+def run(gui=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
     # Create the simulation environment.
     sim = Sim(
         n_drones=num_drones,
@@ -111,7 +111,7 @@ def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
         sim.step(sim.freq // sim.control_freq)
         if i == 0:
             start_time = time.time()
-        if plot and ((i * fps) % sim.control_freq) < fps:
+        if gui and ((i * fps) % sim.control_freq) < fps:
             sim.render()
     print(f'Time taken: {time.time() - start_time} seconds')
     sim.close()
@@ -140,7 +140,7 @@ def main():
     safety_filter.reset()
 
     run(
-        plot=False,
+        gui=False,
         num_drones=config.num_drones,
         duration=15.0,
         fps=60,

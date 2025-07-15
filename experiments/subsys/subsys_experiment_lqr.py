@@ -12,7 +12,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
-def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None, controller=None, sf_vec=None):
+def run(gui=False, num_drones=1, duration=5.0, fps=60, safety_filter=None, controller=None, sf_vec=None):
     # Create the simulation environment.
     sim = Sim(
         n_drones=num_drones,
@@ -63,7 +63,7 @@ def run(plot=False, num_drones=1, duration=5.0, fps=60, safety_filter=None, cont
         sim.step(sim.freq // sim.control_freq)
         if i == 0:
             start_time = time.time()
-        if plot and ((i * fps) % sim.control_freq) < fps:
+        if gui and ((i * fps) % sim.control_freq) < fps:
             sim.render()
     print(f'Time taken: {time.time() - start_time} seconds')
     sim.close()
@@ -103,7 +103,7 @@ def main():
     safety_filter.reset()
 
     run(
-        plot=False,
+        gui=False,
         num_drones=config.num_drones,
         sf_vec=sf_vec,
         duration=15.0,
