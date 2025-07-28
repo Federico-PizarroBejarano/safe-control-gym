@@ -7,7 +7,7 @@ from crazyflow.sim import Sim
 from scipy.linalg import block_diag
 from scipy.spatial.transform import Rotation as RotLib
 
-from experiments.subsys.subsys_utils import generate_X_goal, plot_results
+from experiments.subsys.subsys_utils import create_video, generate_X_goal, plot_results
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
@@ -16,7 +16,6 @@ def run(
     gui=False,
     num_drones=1,
     duration=5.0,
-    fps=60,
     safety_filter=None,
     controller=None,
     sf_vec=None,
@@ -49,6 +48,13 @@ def run(
     all_obs = []
     all_corrections = []
     start_time = time.time()
+    frames = []
+    cam_config = {
+        'distance': 4.0,       # Distance from target to camera (increased from default)
+        'elevation': -20,      # Camera elevation angle (less steep downward angle)
+        'azimuth': 45,         # Camera azimuth (horizontal rotation)
+        'lookat': [0, 0, 1.5]  # Look at point 1.5m above ground level
+    }
     for i in range(int(duration * sim.control_freq)):
         # Get the current state.
         obs = sim.data.states
@@ -72,14 +78,15 @@ def run(
         sim.step(sim.freq // sim.control_freq)
         if i == 0:
             start_time = time.time()
-        if gui and ((i * fps) % sim.control_freq) < fps:
-            sim.render()
+        if gui:
+            frames.append(sim.render(mode='rgb_array', default_cam_config=cam_config))
     print(f'Time taken: {time.time() - start_time} seconds')
     sim.close()
 
     print('Mean Correction:', np.round(np.mean(all_corrections), 3))
     print('Max Correction:', np.round(np.max(all_corrections), 3))
 
+    create_video(frames, sim.control_freq, name=traj_type)
     plot_results(num_drones, all_obs)
 
 
@@ -113,11 +120,10 @@ def main():
     safety_filter.reset()
 
     run(
-        gui=False,
+        gui=True,
         num_drones=config.num_drones,
         sf_vec=sf_vec,
         duration=15.0,
-        fps=60,
         safety_filter=safety_filter,
         controller=lqr_controller,
         traj_type=traj_type,

@@ -1,3 +1,4 @@
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -27,6 +28,14 @@ def plot_results(num_drones, results):
     plt.axis('equal')
     plt.legend()
     plt.show()
+
+
+def create_video(frames, fps, name):
+    size = 480, 640
+    out = cv2.VideoWriter(f'./results/videos/{name}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    for frame in frames:
+        out.write(frame)
+    out.release()
 
 
 def generate_X_goal(traj_type, start_pos, num_iters, dt):
