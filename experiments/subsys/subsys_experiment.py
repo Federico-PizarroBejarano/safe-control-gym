@@ -1,69 +1,27 @@
 import time
 from functools import partial
 
-import jax
-import matplotlib.pyplot as plt
 import numpy as np
 from crazyflow.control import Control
-from crazyflow.control.control import state2attitude
 from crazyflow.sim import Sim
+from scipy.linalg import block_diag
 from scipy.spatial.transform import Rotation as RotLib
 
+from experiments.subsys.subsys_utils import generate_X_goal, plot_results
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
-jit_state2attitude = jax.jit(state2attitude)
 
-
-def plot_results(num_drones, results):
-    # Extract position data
-    positions = np.array([obs.pos.squeeze() for obs in results]).reshape((-1, num_drones, 3))
-    x = positions[:, :, 0]
-    y = positions[:, :, 1]
-
-    # Get constraint bounds from safety filter config
-    x_bounds = [-2.5, 0.5]
-    y_bounds = [-1.5, 1.5]
-
-    # Plot trajectory and constraints
-    plt.figure(figsize=(8, 8))
-    for drone_idx in range(positions.shape[1]):
-        plt.plot(x[:, drone_idx], y[:, drone_idx], label=f'Trajectory_{drone_idx}')
-
-    if x_bounds is not None and y_bounds is not None:
-        plt.axhline(y=y_bounds[0], color='r', linestyle='--', alpha=0.5)
-        plt.axhline(y=y_bounds[1], color='r', linestyle='--', alpha=0.5)
-        plt.axvline(x=x_bounds[0], color='r', linestyle='--', alpha=0.5)
-        plt.axvline(x=x_bounds[1], color='r', linestyle='--', alpha=0.5)
-
-    plt.grid(True)
-    plt.axis('equal')
-    plt.legend()
-    plt.show()
-
-
-def generate_X_goal(start_pos, num_iters, dt):
-    num_drones = start_pos.shape[0]
-    X_goal = np.zeros((num_iters, num_drones, 12))
-    for i in range(num_iters):
-        mag = 1.001**i
-        next_pos = start_pos + np.array([mag * np.cos(i * dt) - 1, mag * np.sin(i * dt), 1 - np.cos(i * dt)])
-        goal_state = np.zeros((num_drones, 12))
-        goal_state[:, [0, 2, 4]] = next_pos
-        X_goal[i, :] = goal_state
-    return X_goal
-
-
-def control(obs, i_error, des_pos, dt):
-    des_pos = des_pos[:, 0:5:2].reshape((1, -1, 3))
-    pos, vel, quat = obs.pos, obs.vel, obs.quat
-    cmd, i_error = jit_state2attitude(
-        pos, vel, quat, des_pos, np.zeros((1, 1, 3)), np.zeros((1, 1, 1)), i_error, dt,
-    )
-    return cmd.flatten(), i_error
-
-
-def run(gui=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
+def run(
+    gui=False,
+    num_drones=1,
+    duration=5.0,
+    fps=60,
+    safety_filter=None,
+    controller=None,
+    sf_vec=None,
+    traj_type='no_collision'
+):
     # Create the simulation environment.
     sim = Sim(
         n_drones=num_drones,
@@ -81,10 +39,13 @@ def run(gui=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
         states=sim.data.states.replace(pos=new_pos)
     )
 
-    X_goal = generate_X_goal(sim.data.states.pos[0, :, :], int(duration * sim.control_freq), dt)
+    X_goal = generate_X_goal(traj_type, sim.data.states.pos[0, :, :], int(duration * sim.control_freq), dt)
+    X_goal = X_goal.reshape((int(duration * sim.control_freq), num_drones * 12))
+    safety_filter.env.X_GOAL = X_goal
+    controller.env.X_GOAL = X_goal
+    safety_filter.cost_function.uncertified_controller = controller
 
     # Run the simulation.
-    i_error = np.zeros((1, 1, 3))
     all_obs = []
     all_corrections = []
     start_time = time.time()
@@ -102,9 +63,9 @@ def run(gui=False, num_drones=1, duration=5.0, fps=60, safety_filter=None):
         stacked_obs = stacked_obs.flatten()
 
         # Compute the control command.
-        uncert_cmd, i_error = control(obs, i_error, X_goal[i, :, :], dt)
-        cert_cmd, _ = safety_filter.certify_action(stacked_obs, uncert_cmd)
-        all_corrections.append(np.linalg.norm(uncert_cmd - cert_cmd))
+        uncert_cmd = controller.select_action(stacked_obs, info={'current_step': i})
+        cert_cmd, _ = safety_filter.certify_action(stacked_obs, uncert_cmd.flatten(), info={'current_step': i})
+        all_corrections.append(np.linalg.norm(uncert_cmd.reshape(num_drones, -1)[sf_vec, :] - cert_cmd.reshape(num_drones, -1)[sf_vec, :]))
 
         # Apply the control command.
         sim.attitude_control(cert_cmd.reshape(1, num_drones, -1))
@@ -126,25 +87,40 @@ def main():
     # Create the configuration dictionary.
     fac = ConfigFactory()
     config = fac.merge()
+    traj_type = config.traj_type
 
     # Create an environment
     env_func = partial(make,
                        config.task,
                        **config.task_config)
 
+    # Create an LQR controller
+    lqr_controller = make(config.algo,
+                          env_func,
+                          **config.algo_config)
+    lqr_controller.reset()
+    lqr_controller.gain = block_diag(*[lqr_controller.gain] * config.num_drones)
+    lqr_controller.model.U_EQ = np.tile(lqr_controller.model.U_EQ, (config.num_drones))
+
     # Setup MPSC.
+    sf_vec = [False, True, False, True]
+    assert len(sf_vec) == config.num_drones
     safety_filter = make(config.safety_filter,
                          env_func,
                          num_drones=config.num_drones,
+                         sf_vec=sf_vec,
                          **config.sf_config)
     safety_filter.reset()
 
     run(
         gui=False,
         num_drones=config.num_drones,
+        sf_vec=sf_vec,
         duration=15.0,
         fps=60,
         safety_filter=safety_filter,
+        controller=lqr_controller,
+        traj_type=traj_type,
     )
 
 

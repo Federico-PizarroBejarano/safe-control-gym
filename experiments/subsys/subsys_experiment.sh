@@ -8,8 +8,12 @@ MPSC_COST='precomputed_cost'
 MPSC_COST_HORIZON=10
 DECAY_FACTOR=0.85
 
-# python3 ./subsys_experiment.py \
-python3 ./subsys_experiment_lqr.py \
+# TRAJ_TYPE='no_collision'
+TRAJ_TYPE='mild_collision'
+# TRAJ_TYPE='medium_collision'
+# TRAJ_TYPE='severe_collision'
+
+python3 ./subsys_experiment.py \
     --algo ${ALGO} \
     --task quadrotor \
     --safety_filter nl_mpsc \
@@ -19,6 +23,7 @@ python3 ./subsys_experiment_lqr.py \
         ./config_overrides/lqr.yaml \
     --kv_overrides \
         num_drones=${NUM_DRONES} \
+        traj_type=${TRAJ_TYPE} \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \
