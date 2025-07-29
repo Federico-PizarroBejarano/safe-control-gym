@@ -223,9 +223,9 @@ def calculate_constraint_violations(all_stacked_obs, constraint_bounds, num_dron
 
 def calculate_collisions(all_obs, num_drones, min_collision_distance):
     collisions = 0
-    for iter in range(len(all_obs)):
+    for timestep in range(len(all_obs)):
         for d1 in range(num_drones):
             for d2 in range(d1 + 1, num_drones):
-                if np.linalg.norm(all_obs[iter].pos[0, d1, :] - all_obs[iter].pos[0, d2, :]) < min_collision_distance:
+                if np.linalg.norm(all_obs[timestep].pos[0, d1, :] - all_obs[timestep].pos[0, d2, :]) < min_collision_distance:
                     collisions += 1
     return collisions

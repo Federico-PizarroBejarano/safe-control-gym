@@ -112,7 +112,12 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             info = {'current_step': next_step}
 
-            action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
+            if self.uncertified_controller.gain.shape[0] > self.model.nu * num_drones:
+                real_num_drones = self.uncertified_controller.gain.shape[0] // self.model.nu
+                action = self.uncertified_controller.select_action(obs=np.tile(extended_obs, real_num_drones), info=info)
+                action = action[:self.model.nu]
+            else:
+                action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
 
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 action = uncert_env.denormalize_action(action)

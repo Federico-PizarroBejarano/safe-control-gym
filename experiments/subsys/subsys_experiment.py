@@ -21,7 +21,8 @@ def run(
     safety_filter=None,
     controller=None,
     sf_vec=None,
-    traj_type='no_collision'
+    traj_type='no_collision',
+    sf_type='none',
 ):
     # Create the simulation environment.
     sim = Sim(
@@ -74,7 +75,10 @@ def run(
 
         # Compute the control command.
         uncert_cmd = controller.select_action(stacked_obs, info={'current_step': i})
-        cert_cmd, _ = safety_filter.certify_action(stacked_obs, uncert_cmd.flatten(), info={'current_step': i})
+        if sf_type == 'none':
+            cert_cmd = uncert_cmd
+        else:
+            cert_cmd, _ = safety_filter.certify_action(stacked_obs, uncert_cmd.flatten(), info={'current_step': i})
         all_actions.append(cert_cmd)
 
         all_corrections.append(np.linalg.norm(uncert_cmd.reshape(num_drones, -1)[sf_vec, :] - cert_cmd.reshape(num_drones, -1)[sf_vec, :]))
@@ -116,6 +120,7 @@ def main():
     fac = ConfigFactory()
     config = fac.merge()
     traj_type = config.traj_type
+    sf_type = config.sf_type
 
     # Create an environment
     env_func = partial(make,
@@ -137,6 +142,7 @@ def main():
                          env_func,
                          num_drones=config.num_drones,
                          sf_vec=sf_vec,
+                         sf_type=sf_type,
                          **config.sf_config)
     safety_filter.reset()
 
@@ -148,6 +154,7 @@ def main():
         safety_filter=safety_filter,
         controller=lqr_controller,
         traj_type=traj_type,
+        sf_type=sf_type,
     )
 
 

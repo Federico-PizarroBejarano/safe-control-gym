@@ -13,6 +13,11 @@ TRAJ_TYPE='mild_collision'
 # TRAJ_TYPE='medium_collision'
 # TRAJ_TYPE='severe_collision'
 
+# SF_TYPE='none'
+SF_TYPE='naive'
+# SF_TYPE='ours'
+
+
 python3 ./subsys_experiment.py \
     --algo ${ALGO} \
     --task quadrotor \
@@ -24,6 +29,7 @@ python3 ./subsys_experiment.py \
     --kv_overrides \
         num_drones=${NUM_DRONES} \
         traj_type=${TRAJ_TYPE} \
+        sf_type=${SF_TYPE} \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
         sf_config.decay_factor=${DECAY_FACTOR} \

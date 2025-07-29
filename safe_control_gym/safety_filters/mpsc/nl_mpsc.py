@@ -38,6 +38,8 @@ class NL_MPSC(MPSC):
                  slack_cost: float = 250,
                  max_w: float = 0.002,
                  min_collision_distance: float = 0.2,
+                 sf_vec: list = None,
+                 sf_type: str = 'none',
                  **kwargs
                  ):
         '''Initialize the MPSC.
@@ -60,6 +62,11 @@ class NL_MPSC(MPSC):
 
         self.model_bias = None
         self.num_drones = num_drones
+        self.sf_vec = sf_vec
+        self.sf_type = sf_type
+        if self.sf_type == 'naive':
+            self.num_drones = 1
+            self.sf_vec = [True]
         super().__init__(env_func, horizon, q_mpc, r_mpc, warmstart, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
         self.soften_constraints = soften_constraints

@@ -75,4 +75,4 @@ class LQR(BaseController):
         '''Setup the results dictionary to store run information.'''
         self.results_dict = {
             'inference_time': []
-            }
+        }
