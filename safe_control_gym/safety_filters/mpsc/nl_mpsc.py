@@ -272,7 +272,8 @@ class NL_MPSC(MPSC):
         # Slack
         if self.soften_constraints:
             ocp.constraints.Jsh = np.eye(num_box_constraints + num_collision_constraints)
-            slack_weights = self.slack_cost * np.ones(num_box_constraints + num_collision_constraints)
+            slack_multiplier = np.array(([1] * self.model.nx + [100] * self.model.nu) * self.num_drones * 2 + [1] * num_collision_constraints)
+            slack_weights = self.slack_cost * slack_multiplier
             ocp.cost.Zu = slack_weights
             ocp.cost.Zl = slack_weights
             ocp.cost.zu = slack_weights
