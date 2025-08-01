@@ -21,7 +21,7 @@ def plot_results(num_drones, results, X_goal):
     colors = ['r', 'g', 'b', 'y']
     for drone_idx in range(positions.shape[1]):
         ax.plot(x[:, drone_idx], y[:, drone_idx], z[:, drone_idx], label=f'Trajectory_{drone_idx}', color=colors[drone_idx])
-        ax.plot(X_goal[:, drone_idx, 0], X_goal[:, drone_idx, 2], X_goal[:, drone_idx, 4], label=f'Goal_{drone_idx}', color=colors[drone_idx], linestyle='--')
+        ax.plot(X_goal[:, drone_idx, 0], X_goal[:, drone_idx, 2], X_goal[:, drone_idx, 4], label=f'Goal_{drone_idx}', color=colors[drone_idx], linestyle=(0, (5, 5)))
 
     add_box_to_plot(ax, x_bounds, y_bounds, z_bounds)
 
@@ -221,11 +221,13 @@ def calculate_constraint_violations(all_stacked_obs, constraint_bounds, num_dron
     return constraint_violations.reshape((num_drones, -1))
 
 
-def calculate_collisions(all_obs, num_drones, min_collision_distance):
+def calculate_collisions(all_obs, num_drones, min_collision_distance, sf_type, sf_vec):
     collisions = 0
     for timestep in range(len(all_obs)):
         for d1 in range(num_drones):
             for d2 in range(d1 + 1, num_drones):
+                if sf_type in ['safe_teleop_basic', 'safe_teleop_advanced'] and not (sf_vec[d1] or sf_vec[d2]):
+                    continue
                 if np.linalg.norm(all_obs[timestep].pos[0, d1, :] - all_obs[timestep].pos[0, d2, :]) < min_collision_distance:
                     collisions += 1
     return collisions

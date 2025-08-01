@@ -87,7 +87,7 @@ class MPSC(BaseSafetyFilter, ABC):
             self.mpsc_cost_horizon = 1
             self.cost_function.mpsc_cost_horizon = 1
         elif cost_function == Cost_Function.PRECOMPUTED_COST:
-            self.cost_function = PRECOMPUTED_COST(self.env, mpsc_cost_horizon, decay_factor, self.output_dir, self.horizon)
+            self.cost_function = PRECOMPUTED_COST(self.env, self.mpsc_cost_horizon if self.sf_type != 'safe_teleop_advanced' else self.horizon, decay_factor, self.output_dir, self.horizon)
         else:
             raise NotImplementedError(f'The MPSC cost function {cost_function} has not been implemented')
 
@@ -225,17 +225,25 @@ class MPSC(BaseSafetyFilter, ABC):
         if self.sf_type == 'naive':
             clipped_X_GOAL = clipped_X_GOAL[:, :self.model.nx]
 
-        if isinstance(self.cost_function, PRECOMPUTED_COST):
+        if isinstance(self.cost_function, PRECOMPUTED_COST) or self.sf_type == 'safe_teleop_advanced':
             uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
         else:
             uncert_input_traj = np.zeros((self.horizon, self.num_drones, self.model.nu))
             uncert_input_traj[0, :, :] = uncertified_action.reshape((self.num_drones, self.model.nu))
 
-        mpc_ref_action = np.tile(self.model.U_EQ, (self.num_drones, 1))
+        if self.sf_type == 'safe_teleop_basic':
+            mpc_ref_action = np.tile([uncertified_action[0], 0, 0, 0], (self.num_drones, 1))
+        elif self.sf_type == 'safe_teleop_advanced':
+            mpc_ref_action = uncert_input_traj[0, :, :].copy()
+        else:
+            mpc_ref_action = np.tile(self.model.U_EQ, (self.num_drones, 1))
         mpc_ref_action[self.sf_vec, :] = 0
         for stage in range(self.horizon):
-            sf_ref_action = uncert_input_traj[stage, :, :]
+            sf_ref_action = uncert_input_traj[stage, :, :].copy()
             sf_ref_action[list(np.invert(self.sf_vec)), :] = 0
+            if self.sf_type == 'safe_teleop_advanced':
+                mpc_ref_action = uncert_input_traj[stage, :, :].copy()
+                mpc_ref_action[self.sf_vec, :] = 0
             action = (sf_ref_action + mpc_ref_action).flatten()
             self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], action)))
 
@@ -243,12 +251,17 @@ class MPSC(BaseSafetyFilter, ABC):
 
         # Solve the optimization problem.
         action = self.ocp_solver.solve_for_x0(x0_bar=obs)
+        if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced']:
+            real_action = uncertified_action.copy().reshape(self.num_drones, -1)
+            real_action[self.sf_vec, :] = action.reshape(self.num_drones, -1)[self.sf_vec, :]
+            action = real_action.flatten()
         self.cost_prev = self.ocp_solver.get_cost()
         x_val = np.zeros((self.horizon + 1, self.model.nx * self.num_drones))
         u_val = np.zeros((self.horizon, self.model.nu * self.num_drones))
         for i in range(self.horizon):
             x_val[i, :] = self.ocp_solver.get(i, 'x')
             u_val[i, :] = self.ocp_solver.get(i, 'u')
+
         x_val[self.horizon, :] = self.ocp_solver.get(self.horizon, 'x')
         self.z_prev = x_val.T
         self.v_prev = u_val.T

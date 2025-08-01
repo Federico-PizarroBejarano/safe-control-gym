@@ -200,21 +200,23 @@ class NL_MPSC(MPSC):
         ocp.cost.cost_type_e = 'LINEAR_LS'
 
         # Create block diagonal cost matrices for multiple drones
-        Q_mpc, Q_sf = [], []
-        R_mpc, R_sf = [], []
+        R_sf = []
+        Q_mpc, R_mpc = [], []
         for sf_drone in self.sf_vec:
             if sf_drone:
-                Q_sf.append(np.zeros((self.model.nx, self.model.nx)))
                 R_sf.append(np.eye(self.model.nu))
                 Q_mpc.append(np.zeros((self.model.nx, self.model.nx)))
                 R_mpc.append(np.zeros((self.model.nu, self.model.nu)))
             else:
-                Q_mpc.append(self.Q)
-                R_mpc.append(self.R)
-                Q_sf.append(np.zeros((self.model.nx, self.model.nx)))
+                if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced']:
+                    Q_mpc.append(np.zeros((self.model.nx, self.model.nx)))
+                    R_mpc.append(1000 * np.eye(self.model.nu))
+                else:
+                    Q_mpc.append(self.Q)
+                    R_mpc.append(self.R)
                 R_sf.append(np.zeros((self.model.nu, self.model.nu)))
         W_mpc = block_diag(*Q_mpc, *R_mpc)
-        W_sf = block_diag(*Q_sf, *R_sf)
+        W_sf = block_diag(np.zeros((self.model.nx * self.num_drones, self.model.nx * self.num_drones)), *R_sf)
         ocp.cost.W = W_mpc + W_sf
         ocp.cost.W_e = (W_mpc + W_sf)[:nx, :nx]
         ocp.cost.Vx = np.zeros((ny, nx))
@@ -279,7 +281,11 @@ class NL_MPSC(MPSC):
         # Slack
         if self.soften_constraints:
             ocp.constraints.Jsh = np.eye(num_box_constraints + num_collision_constraints)
-            slack_multiplier = np.array(([1] * self.model.nx + [100] * self.model.nu) * self.num_drones * 2 + [1] * num_collision_constraints)
+            slack_multiplier = np.array(([1] * self.model.nx + [100] * self.model.nu) * self.num_drones * 2 + [1] * num_collision_constraints, dtype=float)
+            if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced']:
+                for i, sf_drone in enumerate(self.sf_vec):
+                    if not sf_drone:
+                        slack_multiplier[self.p * i:self.p * (i + 1)] /= 1000.0
             slack_weights = self.slack_cost * slack_multiplier
             ocp.cost.Zu = slack_weights
             ocp.cost.Zl = slack_weights
@@ -330,6 +336,8 @@ class NL_MPSC(MPSC):
         # Create collision avoidance constraints between all pairs of drones
         for i in range(self.num_drones):
             for j in range(i + 1, self.num_drones):
+                if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced'] and not (self.sf_vec[i] or self.sf_vec[j]):
+                    continue
                 # Extract positions for drones i and j
                 pos_i = x_stack[i * self.model.nx + pos_indices]
                 pos_j = x_stack[j * self.model.nx + pos_indices]

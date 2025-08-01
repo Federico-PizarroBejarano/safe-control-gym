@@ -100,7 +100,7 @@ def run(
     RMSE = calculate_RMSE(all_obs, full_X_goal)
     state_constraint_violation = calculate_constraint_violations(all_stacked_obs, safety_filter.state_constraint, num_drones)
     input_constraint_violation = calculate_constraint_violations(all_actions, safety_filter.input_constraint, num_drones)
-    collisions = calculate_collisions(all_obs, num_drones, safety_filter.min_collision_distance)
+    collisions = calculate_collisions(all_obs, num_drones, safety_filter.min_collision_distance, sf_type, sf_vec)
     discrete_derivative = get_discrete_derivative(np.array(all_actions), sim.control_freq)
     input_rate_of_change = np.linalg.norm(discrete_derivative, 'fro')
 
