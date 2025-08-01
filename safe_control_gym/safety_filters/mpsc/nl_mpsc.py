@@ -62,11 +62,13 @@ class NL_MPSC(MPSC):
 
         self.model_bias = None
         self.num_drones = num_drones
+        self.total_num_drones = num_drones
         self.sf_vec = sf_vec
+        self.total_sf_vec = sf_vec
         self.sf_type = sf_type
         if self.sf_type == 'naive':
-            self.num_drones = 1
-            self.sf_vec = [True]
+            self.num_drones = sum(sf_vec)
+            self.sf_vec = [True] * self.num_drones
         super().__init__(env_func, horizon, q_mpc, r_mpc, warmstart, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
         self.soften_constraints = soften_constraints

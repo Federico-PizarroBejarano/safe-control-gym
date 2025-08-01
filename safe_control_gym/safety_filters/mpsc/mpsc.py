@@ -87,7 +87,14 @@ class MPSC(BaseSafetyFilter, ABC):
             self.mpsc_cost_horizon = 1
             self.cost_function.mpsc_cost_horizon = 1
         elif cost_function == Cost_Function.PRECOMPUTED_COST:
-            self.cost_function = PRECOMPUTED_COST(self.env, self.mpsc_cost_horizon if self.sf_type != 'safe_teleop_advanced' else self.horizon, decay_factor, self.output_dir, self.horizon)
+            self.cost_function = PRECOMPUTED_COST(
+                self.env,
+                self.mpsc_cost_horizon if self.sf_type != 'safe_teleop_advanced' else self.horizon,
+                decay_factor,
+                self.output_dir,
+                self.horizon,
+                self.total_sf_vec
+            )
         else:
             raise NotImplementedError(f'The MPSC cost function {cost_function} has not been implemented')
 
@@ -223,7 +230,9 @@ class MPSC(BaseSafetyFilter, ABC):
 
         clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon + 1)
         if self.sf_type == 'naive':
-            clipped_X_GOAL = clipped_X_GOAL[:, :self.model.nx]
+            clipped_X_GOAL = clipped_X_GOAL.reshape(self.horizon + 1, self.total_num_drones, self.model.nx)
+            clipped_X_GOAL = clipped_X_GOAL[:, self.total_sf_vec, :]
+            clipped_X_GOAL = clipped_X_GOAL.reshape(self.horizon + 1, self.model.nx * self.num_drones)
 
         if isinstance(self.cost_function, PRECOMPUTED_COST) or self.sf_type == 'safe_teleop_advanced':
             uncert_input_traj = self.cost_function.calculate_unsafe_path(obs, uncertified_action, iteration)
@@ -288,8 +297,10 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
         if self.sf_type == 'naive':
             full_uncertified_action = uncertified_action.copy()
-            uncertified_action = uncertified_action[:self.model.nu]
-            current_state = current_state[:self.model.nx]
+            uncertified_action = uncertified_action.reshape(self.total_num_drones, self.model.nu)
+            uncertified_action = uncertified_action[self.total_sf_vec, :].flatten()
+            current_state = current_state.reshape(self.total_num_drones, self.model.nx)
+            current_state = current_state[self.total_sf_vec, :].flatten()
 
         uncertified_action = np.clip(uncertified_action, np.tile(self.env.physical_action_bounds[0], self.num_drones), np.tile(self.env.physical_action_bounds[1], self.num_drones))
         self.before_optimization(current_state)
@@ -304,9 +315,9 @@ class MPSC(BaseSafetyFilter, ABC):
         self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
 
         if self.sf_type == 'naive':
-            full_certified_action = full_uncertified_action.copy()
-            full_certified_action[:self.model.nu] = certified_action
-            certified_action = full_certified_action
+            full_certified_action = full_uncertified_action.copy().reshape(self.total_num_drones, self.model.nu)
+            full_certified_action[self.total_sf_vec, :] = certified_action.reshape(self.num_drones, -1)
+            certified_action = full_certified_action.flatten()
 
         return certified_action, feasible
 

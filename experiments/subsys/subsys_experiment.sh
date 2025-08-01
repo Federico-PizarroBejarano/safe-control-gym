@@ -14,9 +14,9 @@ TRAJ_TYPE='mild_collision'
 # TRAJ_TYPE='severe_collision'
 
 # SF_TYPE='none'
-# SF_TYPE='naive'
+SF_TYPE='naive'
 # SF_TYPE='safe_teleop_basic'
-SF_TYPE='safe_teleop_advanced'
+# SF_TYPE='safe_teleop_advanced'
 # SF_TYPE='ours'
 
 
