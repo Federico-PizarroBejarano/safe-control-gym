@@ -21,7 +21,7 @@ python3 ../../safe_control_gym/experiments/train_rl_controller.py \
         ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
     --output_dir ./ \
     --tag unsafe_rl_temp_data/ \
-    --seed 2 \
+    --seed 2
 
 # Move the newly trained unsafe model.
 mv ./unsafe_rl_temp_data/seed2_*/model_best.pt ./models/${ALGO}_model_${SYS}_${TASK}.pt

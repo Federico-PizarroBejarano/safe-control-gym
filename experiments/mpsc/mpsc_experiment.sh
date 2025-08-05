@@ -10,7 +10,6 @@ TASK='stab'
 # ALGO='lqr'
 # ALGO='pid'
 ALGO='ppo'
-# ALGO='cpo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 

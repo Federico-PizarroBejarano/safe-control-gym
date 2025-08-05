@@ -17,7 +17,6 @@ SYS='quadrotor_3D'
 TASK='track'
 
 ALGO='ppo'
-# ALGO='cpo'
 # ALGO='sac'
 # ALGO='safe_explorer_ppo'
 

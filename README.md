@@ -15,19 +15,21 @@ These environments include (and evaluate) symbolic safety constraints and implem
          url = {https://arxiv.org/abs/2108.06266}}
 ```
 
-To reproduce the results in the article, see [branch `ar`](https://github.com/utiasDSL/safe-control-gym/tree/ar).
+To reproduce the results in the article, see [branch `ar`](https://github.com/utiasDSL/safe-control-gym/releases/tag/v0.5.0).
 
 ```bibtex
-@misc{yuan2021safecontrolgym,
-      title={safe-control-gym: a Unified Benchmark Suite for Safe Learning-based Control and Reinforcement Learning},
-      author={Zhaocong Yuan and Adam W. Hall and Siqi Zhou and Lukas Brunke and Melissa Greeff and Jacopo Panerati and Angela P. Schoellig},
-      year={2021},
-      eprint={2109.06325},
-      archivePrefix={arXiv},
-      primaryClass={cs.RO}}
+@article{yuan2021safecontrolgym,
+  author={Yuan, Zhaocong and Hall, Adam W. and Zhou, Siqi and Brunke, Lukas and Greeff, Melissa and Panerati, Jacopo and Schoellig, Angela P.},
+  journal={IEEE Robotics and Automation Letters},
+  title={Safe-Control-Gym: A Unified Benchmark Suite for Safe Learning-Based Control and Reinforcement Learning in Robotics},
+  year={2022},
+  volume={7},
+  number={4},
+  pages={11142-11149},
+  doi={10.1109/LRA.2022.3196132}}
 ```
 
-To reproduce the results in the article, see [branch `submission`](https://github.com/utiasDSL/safe-control-gym/tree/submission).
+To reproduce the results in the article, see [branch `submission`](https://github.com/utiasDSL/safe-control-gym/releases/tag/v0.6.0).
 
 <!-- ![baselines](./figures/baselines.png) -->
 
@@ -55,8 +57,8 @@ conda activate safe
 Install the `safe-control-gym` repository
 
 ```bash
-pip install --upgrade pip
-pip install -e .
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
 #### Note
@@ -72,6 +74,13 @@ or
   ```bash
  sudo apt-get install libgmp-dev
  ```
+
+ #### (optional) Additional requirements for MPC
+
+You may need to separately install [`acados`](https://github.com/acados/acados) for fast MPC implementations.
+
+- To build and install acados, see their [installation guide](https://docs.acados.org/installation/index.html).
+- To set up the acados python interface, check out [these installtion steps](https://docs.acados.org/python_interface/index.html).
 
 ## Architecture
 

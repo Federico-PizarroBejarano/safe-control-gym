@@ -12,6 +12,7 @@ import numpy as np
 import pybullet as p
 from gymnasium import spaces
 
+from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
 from safe_control_gym.envs.benchmark_env import Cost, Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS
 from safe_control_gym.envs.gym_pybullet_drones.base_aviary import BaseAviary
@@ -42,7 +43,7 @@ class Quadrotor(BaseAviary):
         }
     }
 
-    INERTIAL_PROP_RAND_INFO = {
+    BASE_INERTIAL_PROP_RAND_INFO = {
         'M': {  # Nominal: 0.027
             'distrib': 'uniform',
             'low': 0.022,
@@ -65,7 +66,7 @@ class Quadrotor(BaseAviary):
         }
     }
 
-    INIT_STATE_RAND_INFO = {
+    BASE_INIT_STATE_RAND_INFO = {
         'init_x': {
             'distrib': 'uniform',
             'low': -0.5,
@@ -203,6 +204,7 @@ class Quadrotor(BaseAviary):
         super().__init__(init_state=init_state, inertial_prop=inertial_prop, **kwargs)
 
         # Store initial state info.
+        self.INIT_STATE_RAND_INFO = deepcopy(self.BASE_INIT_STATE_RAND_INFO)
         self.INIT_STATE_LABELS = {
             QuadType.ONE_D: ['init_x', 'init_x_dot'],
             QuadType.TWO_D: ['init_x', 'init_x_dot', 'init_z', 'init_z_dot', 'init_theta', 'init_theta_dot'],
@@ -227,6 +229,7 @@ class Quadrotor(BaseAviary):
             if init_name not in self.INIT_STATE_LABELS[self.QUAD_TYPE]:
                 self.INIT_STATE_RAND_INFO.pop(init_name, None)
         # Remove randomization info of inertial components inconsistent with quad type.
+        self.INERTIAL_PROP_RAND_INFO = deepcopy(self.BASE_INERTIAL_PROP_RAND_INFO)
         if self.QUAD_TYPE == QuadType.ONE_D:
             # Do NOT randomize J for the 1D quadrotor.
             self.INERTIAL_PROP_RAND_INFO.pop('Ixx', None)
@@ -385,10 +388,7 @@ class Quadrotor(BaseAviary):
         obs, info = super().after_reset(obs, info)
 
         # Return either an observation and dictionary or just the observation.
-        if self.INFO_IN_RESET:
-            return obs, info
-        else:
-            return obs
+        return obs, info
 
     def step(self, action):
         '''Advances the environment by one control step.
@@ -561,6 +561,11 @@ class Quadrotor(BaseAviary):
             X_dot = cs.vertcat(pos_dot[0], pos_ddot[0], pos_dot[1], pos_ddot[1], pos_dot[2], pos_ddot[2], ang_dot, rate_dot)
 
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body)
+
+        # Expand Q and R to be full matrices.
+        self.Q = get_cost_weight_matrix(self.rew_state_weight, nx)
+        self.R = get_cost_weight_matrix(self.rew_act_weight, nu)
+
         # Set the equilibrium values for linearizations.
         X_EQ = np.zeros(self.state_dim)
         U_EQ = np.ones(self.action_dim) * u_eq / self.action_dim
@@ -634,48 +639,54 @@ class Quadrotor(BaseAviary):
     def _set_observation_space(self):
         '''Sets the observation space of the environment.'''
         self.x_threshold = 2
+        self.x_dot_threshold = 30
         self.y_threshold = 2
+        self.y_dot_threshold = 30
         self.z_threshold = 2
+        self.z_dot_threshold = 30
         self.phi_threshold_radians = 85 * math.pi / 180
         self.theta_threshold_radians = 85 * math.pi / 180
         self.psi_threshold_radians = 180 * math.pi / 180  # Do not bound yaw.
+        self.phi_dot_threshold_radians = 500 * math.pi / 180
+        self.theta_dot_threshold_radians = 500 * math.pi / 180
+        self.psi_dot_threshold_radians = 500 * math.pi / 180
 
         # Define obs/state bounds, labels and units.
         if self.QUAD_TYPE == QuadType.ONE_D:
             # obs/state = {z, z_dot}.
-            low = np.array([self.GROUND_PLANE_Z, -np.finfo(np.float32).max])
-            high = np.array([self.z_threshold, np.finfo(np.float32).max])
+            low = np.array([self.GROUND_PLANE_Z, -self.z_dot_threshold])
+            high = np.array([self.z_threshold, self.z_dot_threshold])
             self.STATE_LABELS = ['z', 'z_dot']
             self.STATE_UNITS = ['m', 'm/s']
         elif self.QUAD_TYPE == QuadType.TWO_D:
             # obs/state = {x, x_dot, z, z_dot, theta, theta_dot}.
             low = np.array([
-                -self.x_threshold, -np.finfo(np.float32).max,
-                self.GROUND_PLANE_Z, -np.finfo(np.float32).max,
-                -self.theta_threshold_radians, -np.finfo(np.float32).max
+                -self.x_threshold, -self.x_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
+                -self.theta_threshold_radians, -self.theta_dot_threshold_radians
             ])
             high = np.array([
-                self.x_threshold, np.finfo(np.float32).max,
-                self.z_threshold, np.finfo(np.float32).max,
-                self.theta_threshold_radians, np.finfo(np.float32).max
+                self.x_threshold, self.x_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
+                self.theta_threshold_radians, self.theta_dot_threshold_radians
             ])
             self.STATE_LABELS = ['x', 'x_dot', 'z', 'z_dot', 'theta', 'theta_dot']
             self.STATE_UNITS = ['m', 'm/s', 'm', 'm/s', 'rad', 'rad/s']
         elif self.QUAD_TYPE == QuadType.THREE_D:
             # obs/state = {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
             low = np.array([
-                -self.x_threshold, -np.finfo(np.float32).max,
-                -self.y_threshold, -np.finfo(np.float32).max,
-                self.GROUND_PLANE_Z, -np.finfo(np.float32).max,
+                -self.x_threshold, -self.x_dot_threshold,
+                -self.y_threshold, -self.y_dot_threshold,
+                self.GROUND_PLANE_Z, -self.z_dot_threshold,
                 -self.phi_threshold_radians, -self.theta_threshold_radians, -self.psi_threshold_radians,
-                -np.finfo(np.float32).max, -np.finfo(np.float32).max, -np.finfo(np.float32).max
+                -self.phi_dot_threshold_radians, -self.theta_dot_threshold_radians, -self.psi_dot_threshold_radians
             ])
             high = np.array([
-                self.x_threshold, np.finfo(np.float32).max,
-                self.y_threshold, np.finfo(np.float32).max,
-                self.z_threshold, np.finfo(np.float32).max,
+                self.x_threshold, self.x_dot_threshold,
+                self.y_threshold, self.y_dot_threshold,
+                self.z_threshold, self.z_dot_threshold,
                 self.phi_threshold_radians, self.theta_threshold_radians, self.psi_threshold_radians,
-                np.finfo(np.float32).max, np.finfo(np.float32).max, np.finfo(np.float32).max
+                self.phi_dot_threshold_radians, self.theta_dot_threshold_radians, self.psi_dot_threshold_radians
             ])
             self.STATE_LABELS = ['x', 'x_dot', 'y', 'y_dot', 'z', 'z_dot',
                                  'phi', 'theta', 'psi', 'p', 'q', 'r']

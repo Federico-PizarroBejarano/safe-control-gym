@@ -54,7 +54,6 @@ class BenchmarkEnv(gym.Env, ABC):
     def __init__(self,
                  output_dir=None,
                  seed=None,
-                 info_in_reset: bool = False,
                  gui: bool = False,
                  verbose: bool = False,
                  normalized_rl_action_space: bool = False,
@@ -91,8 +90,6 @@ class BenchmarkEnv(gym.Env, ABC):
         Args:
             output_dir (str, optional): Path to directory to save any env outputs.
             seed (int, optional): Seed for the random number generator.
-            info_in_reset (bool, optional): Whether .reset() returns a dictionary with the
-                                            environment's symbolic model.
             gui (bool, optional): Whether to show PyBullet's GUI.
             verbose (bool, optional): If to suppress environment print statetments.
             normalized_rl_action_space (bool, optional): Whether to normalize the action space.
@@ -176,10 +173,6 @@ class BenchmarkEnv(gym.Env, ABC):
             self.state_dim = self.state_space.shape[0]
         else:
             self.state_dim = self.obs_dim
-        # Default Q and R matrices for quadratic cost.
-        if self.COST == Cost.QUADRATIC:
-            self.Q = np.eye(self.observation_space.shape[0])
-            self.R = np.eye(self.action_space.shape[0])
         # Set constraint info.
         self.CONSTRAINTS = constraints
         self.DONE_ON_VIOLATION = done_on_violation
@@ -196,7 +189,6 @@ class BenchmarkEnv(gym.Env, ABC):
         self.seed(seed)
         self.initial_reset = False
         self.at_reset = False
-        self.INFO_IN_RESET = info_in_reset
 
     def seed(self,
              seed=None
@@ -220,25 +212,6 @@ class BenchmarkEnv(gym.Env, ABC):
         for _, disturbs in self.disturbances.items():
             disturbs.seed(self)
         return [seed]
-
-    def set_cost_function_param(self,
-                                Q,
-                                R
-                                ):
-        '''Set the cost function parameters.
-
-        Args:
-            Q (ndarray): State weight matrix (nx by nx).
-            R (ndarray): Input weight matrix (nu by nu).
-        '''
-
-        if not self.initial_reset:
-            self.Q = Q
-            self.R = R
-        else:
-            raise RuntimeError(
-                '[ERROR] env.set_cost_function_param() cannot be called after the first reset of the environment.'
-            )
 
     def set_adversary_control(self, action):
         '''Sets disturbance by an adversary controller, called before (each) step().

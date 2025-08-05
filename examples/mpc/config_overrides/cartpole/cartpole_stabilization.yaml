@@ -1,0 +1,40 @@
+task_config:
+  seed: 42
+  ctrl_freq: 15
+  pyb_freq: 750
+  physics: pyb
+
+  init_state_randomization_info:
+    init_x:
+      distrib: 'uniform'
+      low: -2
+      high: 2
+    init_x_dot:
+      distrib: 'uniform'
+      low: -0.1
+      high: 0.1
+    init_theta:
+      distrib: 'uniform'
+      low: -0.2
+      high: 0.2
+    init_theta_dot:
+      distrib: 'uniform'
+      low: -0.1
+      high: 0.1
+
+  task: stabilization
+  task_info:
+    stabilization_goal: [1.0, 0.0]
+    stabilization_goal_tolerance: 0.0
+
+  episode_len_sec: 6
+  cost: quadratic
+  rew_state_weight: [5.0, 0.1, 5.0, 0.1]  # Match MPC weights
+  rew_act_weight: [0.1]
+  done_on_out_of_bound: True
+
+  constraints:
+  - constraint_form: default_constraint
+    constrained_variable: input
+  - constraint_form: default_constraint
+    constrained_variable: state

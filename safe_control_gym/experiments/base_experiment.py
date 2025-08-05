@@ -1,8 +1,8 @@
 '''To standardize training/evaluation interface.'''
 
+import time
 from collections import defaultdict
 from copy import deepcopy
-from time import time
 
 import gymnasium as gym
 import numpy as np
@@ -36,6 +36,7 @@ class BaseExperiment:
         self.metric_extractor = MetricExtractor()
         self.verbose = verbose
         self.env = env
+        self.MAX_STEPS = int(self.env.CTRL_FREQ * self.env.EPISODE_LEN_SEC)
         if not is_wrapped(self.env, RecordDataWrapper):
             self.env = RecordDataWrapper(self.env)
         self.ctrl = ctrl
@@ -45,9 +46,15 @@ class BaseExperiment:
             self.train_env = RecordDataWrapper(self.train_env)
         self.safety_filter = safety_filter
 
-        self.reset()
-
-    def run_evaluation(self, training=False, n_episodes=None, n_steps=None, log_freq=None, verbose=True, **kwargs):
+    def run_evaluation(self,
+                       training=False,
+                       n_episodes=None,
+                       n_steps=None,
+                       done_on_max_steps=None,
+                       log_freq=None,
+                       verbose=True,
+                       visualization_time_multiplier=1,
+                       **kwargs):
         '''Evaluate a trained controller.
 
         Args:
@@ -55,15 +62,18 @@ class BaseExperiment:
             n_episodes (int): Number of runs to execute.
             n_steps (int): The number of steps to collect in total.
             log_freq (int): The frequency with which to log information.
+            visualization_time_multiplier (float): Changes speed of visualization, where 1x is realtime,
+                2x is twice as fast as real-time, etc. None results in fastest visualization.
 
         Returns:
             trajs_data (dict): The raw data from the executed runs.
             metrics (dict): The metrics calculated from the raw data.
         '''
+        self.visualization_time_multiplier = visualization_time_multiplier
 
         if not training:
             self.reset()
-        trajs_data = self._execute_evaluations(log_freq=log_freq, n_episodes=n_episodes, n_steps=n_steps, **kwargs)
+        trajs_data = self._execute_evaluations(log_freq=log_freq, n_episodes=n_episodes, n_steps=n_steps, done_on_max_steps=done_on_max_steps, **kwargs)
         metrics = self.compute_metrics(trajs_data)
 
         # terminal printouts
@@ -77,7 +87,7 @@ class BaseExperiment:
             print('Evaluation done.')
         return dict(trajs_data), metrics
 
-    def _execute_evaluations(self, n_episodes=None, n_steps=None, log_freq=None, seeds=None):
+    def _execute_evaluations(self, n_episodes=None, n_steps=None, done_on_max_steps=None, log_freq=None, seeds=None):
         '''Runs the experiments and collects all the required data.
 
         Args:
@@ -113,11 +123,16 @@ class BaseExperiment:
                 action = self._select_action(obs=obs, info=info)
                 # inner sim loop to accomodate different control frequencies
                 for _ in range(sim_steps):
+                    steps += 1
                     obs, _, done, info = self.env.step(action)
+                    if done_on_max_steps:
+                        done = done and steps >= self.MAX_STEPS
                     if done:
                         trajs += 1
+                        steps = 0
                         if trajs < n_episodes and seeds is not None:
                             seed = seeds[trajs]
+                        self.env.save_data()
                         obs, info = self._evaluation_reset(ctrl_data=ctrl_data, sf_data=sf_data)
                         break
         elif n_steps is not None:
@@ -125,8 +140,8 @@ class BaseExperiment:
                 action = self._select_action(obs=obs, info=info)
                 # inner sim loop to accomodate different control frequencies
                 for _ in range(sim_steps):
-                    obs, _, done, info = self.env.step(action)
                     steps += 1
+                    obs, _, done, info = self.env.step(action)
                     if steps >= n_steps:
                         self.env.save_data()
                         for data_key, data_val in self.ctrl.results_dict.items():
@@ -135,7 +150,11 @@ class BaseExperiment:
                             for data_key, data_val in self.safety_filter.results_dict.items():
                                 sf_data[data_key].append(np.array(deepcopy(data_val)))
                         break
+                    if done_on_max_steps:
+                        done = done and steps >= self.MAX_STEPS
                     if done:
+                        steps = 0
+                        self.env.save_data()
                         obs, info = self._evaluation_reset(ctrl_data=ctrl_data, sf_data=sf_data)
                         break
 
@@ -160,8 +179,17 @@ class BaseExperiment:
         if self.safety_filter is not None:
             physical_action = self.env.denormalize_action(action)
             unextended_obs = obs[:self.env.symbolic.nx]
-            certified_action, _ = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-            action = self.env.normalize_action(certified_action)
+            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
+            if success:
+                action = self.env.normalize_action(certified_action)
+
+        if self.last_step_timestep is not None and \
+                self.env.GUI is True and \
+                self.visualization_time_multiplier is not None:
+            # Sleep to maintain real-time pacing
+            elapsed = time.time() - self.last_step_timestep
+            time.sleep(max(0, 1.0 / self.env.CTRL_FREQ / self.visualization_time_multiplier - elapsed))
+        self.last_step_timestep = time.time()
 
         return action
 
@@ -177,11 +205,8 @@ class BaseExperiment:
             obs (ndarray): The initial observation.
             info (dict): The initial info.
         '''
-        if self.env.INFO_IN_RESET:
-            obs, info = self.env.reset(seed=seed)
-        else:
-            obs = self.env.reset(seed=seed)
-            info = None
+        obs, info = self.env.reset(seed=seed)
+
         if ctrl_data is not None:
             for data_key, data_val in self.ctrl.results_dict.items():
                 ctrl_data[data_key].append(np.array(deepcopy(data_val)))
@@ -240,6 +265,8 @@ class BaseExperiment:
         if self.train_env is not None:
             self.train_env.reset()
             self.train_env.clear_data()
+
+        self.last_step_timestep = None
 
     def close(self):
         '''Closes the environments, controller, and safety filter.'''
@@ -314,26 +341,17 @@ class RecordDataWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         '''Wrapper for the gym.env reset function.'''
 
-        if self.env.INFO_IN_RESET:
-            obs, info = self.env.reset(**kwargs)
-            if 'symbolic_model' in info:
-                info.pop('symbolic_model')
-            if 'symbolic_constraints' in info:
-                info.pop('symbolic_constraints')
-            step_data = dict(
-                obs=obs, info=info, state=self.env.state
-            )
-            for key, val in step_data.items():
-                self.episode_data[key].append(val)
-            return obs, info
-        else:
-            obs = self.env.reset(**kwargs)
-            step_data = dict(
-                obs=obs, state=self.env.state
-            )
-            for key, val in step_data.items():
-                self.episode_data[key].append(val)
-            return obs
+        obs, info = self.env.reset(**kwargs)
+        if 'symbolic_model' in info:
+            info.pop('symbolic_model')
+        if 'symbolic_constraints' in info:
+            info.pop('symbolic_constraints')
+        step_data = dict(
+            obs=obs, info=info, state=self.env.state
+        )
+        for key, val in step_data.items():
+            self.episode_data[key].append(val)
+        return obs, info
 
     def step(self, action):
         '''Wrapper for the gym.env step function.'''
@@ -351,13 +369,10 @@ class RecordDataWrapper(gym.Wrapper):
             current_physical_action=self.env.current_physical_action,
             current_noisy_physical_action=self.env.current_noisy_physical_action,
             current_clipped_action=self.env.current_clipped_action,
-            timestamp=time(),
+            timestamp=time.time(),
         )
         for key, val in step_data.items():
             self.episode_data[key].append(val)
-
-        if done:
-            self.save_data()
 
         return obs, reward, done, info
 

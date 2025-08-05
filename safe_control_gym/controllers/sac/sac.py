@@ -42,10 +42,6 @@ class SAC(BaseController):
                  use_gpu=False,
                  seed=0,
                  **kwargs):
-        self.filter_train_actions = False
-        self.penalize_sf_diff = False
-        self.sf_penalty = 1
-        self.use_safe_reset = False
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
 
         # task
@@ -55,7 +51,6 @@ class SAC(BaseController):
             self.env = VecRecordEpisodeStatistics(self.env, self.deque_size)
             self.eval_env = env_func(seed=seed * 111)
             self.eval_env = RecordEpisodeStatistics(self.eval_env, self.deque_size)
-            self.model = self.get_prior(self.eval_env, self.prior_info)
         else:
             # testing only
             self.env = env_func()
@@ -95,9 +90,6 @@ class SAC(BaseController):
             use_tensorboard = False
         self.logger = ExperimentLogger(output_dir, log_file_out=log_file_out, use_tensorboard=use_tensorboard)
 
-        # Adding safety filter
-        self.safety_filter = None
-
     def reset(self):
         '''Prepares for training or testing.'''
         if self.training:
@@ -108,9 +100,7 @@ class SAC(BaseController):
             self.eval_env.add_tracker('mse', 0, mode='queue')
 
             self.total_steps = 0
-            obs, info = self.env_reset(self.env, self.use_safe_reset)
-            self.info = info['n'][0]
-            self.true_obs = obs
+            obs, _ = self.env.reset()
             self.obs = self.obs_normalizer(obs)
             self.buffer = SACBuffer(self.env.observation_space, self.env.action_space, self.max_buffer_size, self.train_batch_size)
         else:
@@ -171,6 +161,9 @@ class SAC(BaseController):
 
     def learn(self, env=None, **kwargs):
         '''Performs learning (pre-training, training, fine-tuning, etc).'''
+        if self.num_checkpoints > 0:
+            step_interval = np.linspace(0, self.max_env_steps, self.num_checkpoints)
+            interval_save = np.zeros_like(step_interval, dtype=bool)
         while self.total_steps < self.max_env_steps:
             results = self.train_step()
 
@@ -179,10 +172,15 @@ class SAC(BaseController):
                 # latest/final checkpoint
                 self.save(self.checkpoint_path, save_buffer=False)
                 self.logger.info(f'Checkpoint | {self.checkpoint_path}')
-            if self.num_checkpoints and self.total_steps % (self.max_env_steps // self.num_checkpoints) == 0:
-                # intermediate checkpoint
-                path = os.path.join(self.output_dir, 'checkpoints', f'model_{self.total_steps}.pt')
-                self.save(path, save_buffer=True)
+                path = os.path.join(self.output_dir, 'checkpoints', 'model_{}.pt'.format(self.total_steps))
+                self.save(path)
+            if self.num_checkpoints > 0:
+                interval_id = np.argmin(np.abs(np.array(step_interval) - self.total_steps))
+                if interval_save[interval_id] is False:
+                    # Intermediate checkpoint.
+                    path = os.path.join(self.output_dir, 'checkpoints', f'model_{self.total_steps}.pt')
+                    self.save(path, save_buffer=False)
+                    interval_save[interval_id] = True
 
             # eval
             if self.eval_interval and self.total_steps % self.eval_interval == 0:
@@ -234,35 +232,15 @@ class SAC(BaseController):
                 env.add_tracker('constraint_values', 0, mode='queue')
                 env.add_tracker('mse', 0, mode='queue')
 
-        obs, info = self.env_reset(env, True)
-        true_obs = obs
+        obs, info = env.reset()
         obs = self.obs_normalizer(obs)
         ep_returns, ep_lengths = [], []
         frames = []
-        total_return = 0
 
         while len(ep_returns) < n_episodes:
             action = self.select_action(obs=obs, info=info)
 
-            # Adding safety filter
-            applied_action = action
-            success = False
-
-            physical_action = env.denormalize_action(action)
-            unextended_obs = np.squeeze(true_obs)[:env.symbolic.nx]
-            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-            if success:
-                applied_action = env.normalize_action(certified_action)
-            else:
-                self.safety_filter.ocp_solver.reset()
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
-                    applied_action = self.env.envs[0].normalize_action(certified_action)
-
-            action = np.atleast_2d(np.squeeze([applied_action]))
-            obs, rew, done, info = env.step(action)
-            total_return += rew
-
+            obs, _, done, info = env.step(action)
             if render:
                 env.render()
                 frames.append(env.render('rgb_array'))
@@ -271,11 +249,9 @@ class SAC(BaseController):
 
             if done:
                 assert 'episode' in info
-                ep_returns.append(total_return)
+                ep_returns.append(info['episode']['r'])
                 ep_lengths.append(info['episode']['l'])
-                obs, info = self.env_reset(env, True)
-                total_return = 0
-            true_obs = obs
+                obs, info = env.reset()
             obs = self.obs_normalizer(obs)
 
         # collect evaluation results
@@ -295,8 +271,6 @@ class SAC(BaseController):
         self.agent.train()
         self.obs_normalizer.unset_read_only()
         obs = self.obs
-        true_obs = self.true_obs
-        info = self.info
         start = time.time()
 
         if self.total_steps < self.warm_up_steps:
@@ -304,35 +278,8 @@ class SAC(BaseController):
         else:
             with torch.no_grad():
                 action = self.agent.ac.act(torch.FloatTensor(obs).to(self.device), deterministic=False)
-
-        # Adding safety filter
-        unsafe_action = action
-        applied_action = action
-        success = False
-
-        if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
-            physical_action = self.env.envs[0].denormalize_action(action)
-            unextended_obs = np.squeeze(true_obs)[:self.env.envs[0].symbolic.nx]
-            certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-            if success and self.filter_train_actions is True:
-                applied_action = self.env.envs[0].normalize_action(certified_action)
-            else:
-                self.safety_filter.ocp_solver.reset()
-                certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success and self.filter_train_actions is True:
-                    applied_action = self.env.envs[0].normalize_action(certified_action)
-
-        action = np.atleast_2d(np.squeeze([applied_action]))
         next_obs, rew, done, info = self.env.step(action)
-        if done[0] and self.use_safe_reset is True:
-            next_obs, info = self.env_reset(self.env, self.use_safe_reset)
-        if self.penalize_sf_diff and success:
-            unsafe_rew = np.log(rew)
-            unsafe_rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
-            unsafe_rew = np.exp(unsafe_rew)
-        else:
-            unsafe_rew = rew
-        next_true_obs = next_obs
+
         next_obs = self.obs_normalizer(next_obs)
         rew = self.reward_normalizer(rew, done)
         mask = 1 - np.asarray(done)
@@ -357,20 +304,9 @@ class SAC(BaseController):
             true_mask[idx] = 1.0
         true_next_obs = _flatten_obs(true_next_obs)
 
-        if not np.array_equal(unsafe_rew, rew):
-            self.buffer.push({
-                'obs': obs,
-                'act': unsafe_action,
-                'rew': unsafe_rew,
-                # 'next_obs': next_obs,
-                # 'mask': mask,
-                'next_obs': true_next_obs,
-                'mask': true_mask,
-            })
-
         self.buffer.push({
             'obs': obs,
-            'act': applied_action,
+            'act': action,
             'rew': rew,
             # 'next_obs': next_obs,
             # 'mask': mask,
@@ -378,12 +314,8 @@ class SAC(BaseController):
             'mask': true_mask,
         })
         obs = next_obs
-        true_obs = next_true_obs
-        info = info['n'][0]
 
         self.obs = obs
-        self.true_obs = true_obs
-        self.info = info
         self.total_steps += self.rollout_batch_size
 
         # learn
@@ -413,9 +345,7 @@ class SAC(BaseController):
                 'progress': step / self.max_env_steps,
             },
             step,
-            prefix='time',
-            write=False,
-            write_tb=False)
+            prefix='time')
 
         # learning stats
         if 'policy_loss' in results:
@@ -463,33 +393,3 @@ class SAC(BaseController):
 
         # print summary table
         self.logger.dump_scalars()
-
-    def env_reset(self, env, use_safe_reset):
-        '''Resets the environment until a feasible initial state is found.
-
-        Args:
-            env (BenchmarkEnv): The environment that is being reset.
-            use_safe_reset (bool): Whether to safely reset the system using the SF.
-
-        Returns:
-            obs (ndarray): The initial observation.
-            info (dict): The initial info.
-        '''
-        success = False
-        action = self.model.U_EQ
-        obs, info = env.reset()
-        if self.safety_filter is not None:
-            self.safety_filter.reset_before_run()
-
-        if use_safe_reset is True and self.safety_filter is not None:
-            while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
-                obs, info = env.reset()
-                info['current_step'] = 1
-                unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
-                self.safety_filter.reset_before_run()
-                _, success = self.safety_filter.certify_action(unextended_obs, action, info)
-                if not success:
-                    self.safety_filter.ocp_solver.reset()
-                    _, success = self.safety_filter.certify_action(unextended_obs, action, info)
-
-        return obs, info

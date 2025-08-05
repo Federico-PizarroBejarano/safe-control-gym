@@ -50,6 +50,6 @@ register(idx='rap',
          entry_point='safe_control_gym.controllers.rarl.rap:RAP',
          config_entry_point='safe_control_gym.controllers.rarl:rap.yaml')
 
-register(idx='cpo',
-         entry_point='safe_control_gym.controllers.cpo.cpo:CPO',
-         config_entry_point='safe_control_gym.controllers.cpo:cpo.yaml')
+register(idx='mpc_acados',
+         entry_point='safe_control_gym.controllers.mpc.mpc_acados:MPC_ACADOS',
+         config_entry_point='safe_control_gym.controllers.mpc:mpc_acados.yaml')

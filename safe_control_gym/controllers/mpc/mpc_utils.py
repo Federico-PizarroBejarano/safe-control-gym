@@ -3,35 +3,32 @@
 import casadi as cs
 import numpy as np
 import scipy
+import scipy.linalg
 
 from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
 from safe_control_gym.envs.constraints import ConstraintList
 
 
-def get_cost_weight_matrix(weights,
-                           dim
-                           ):
-    '''Gets weight matrix from input args.'''
-    if len(weights) == dim:
-        W = np.diag(weights)
-    elif len(weights) == 1:
-        W = np.diag(weights * dim)
-    else:
-        raise Exception('Wrong dimension for cost weights.')
-    return W
-
-
-def compute_discrete_lqr_gain_from_cont_linear_system(dfdx, dfdu, Q_lqr, R_lqr, dt):
-    '''Computes the LQR gain used for propograting GP uncertainty from the prior model dynamics.
+def compute_discrete_lqr_gain_from_cont_linear_system(dfdx,
+                                                      dfdu,
+                                                      Q_lqr,
+                                                      R_lqr,
+                                                      dt
+                                                      ):
+    '''Compute the LQR gain used for propagating GP uncertainty from the prior model dynamics.
 
     Args:
-        dfdx (np.array): CT A matrix
-        dfdu (np.array): CT B matrix
-        Q, R (np.array): Gain matrices
-        dt (float): Time discretization
+        dfdx (np.array): Continuous-time A matrix.
+        dfdu (np.array): Continuous-time B matrix.
+        Q_lqr (np.array): State cost matrix.
+        R_lqr (np.array): Input cost matrix.
+        dt (float): Time discretization.
 
-    Retrun:
-        lqr_gain (np.array): LQR optimal gain, such that (A+BK) is hurwitz
+    Returns:
+        lqr_gain (np.array): LQR optimal gain, such that (A+BK) is Hurwitz.
+        A (np.array): Discretized A matrix.
+        B (np.array): Discretized B matrix.
+        P (np.array): Solution to the discrete-time Riccati equation.
     '''
     # Determine the LQR gain K to propogate the input uncertainty (doing this at each timestep will increase complexity).
     A, B = discretize_linear_system(dfdx, dfdu, dt)
@@ -39,20 +36,20 @@ def compute_discrete_lqr_gain_from_cont_linear_system(dfdx, dfdu, Q_lqr, R_lqr, 
     btp = np.dot(B.T, P)
     lqr_gain = -np.dot(np.linalg.inv(R_lqr + np.dot(btp, B)), np.dot(btp, A))
 
-    return lqr_gain, A, B
+    return lqr_gain, A, B, P
 
 
 def rk_discrete(f, n, m, dt):
-    '''Runge Kutta discretization for the function.
+    '''Runge-Kutta discretization for the function.
 
     Args:
-        f (casadi function): Function to discretize.
-        n (int): state dimensions.
-        m (int): input dimension.
-        dt (float): discretization time.
+        f (casadi.Function): Function to discretize.
+        n (int): State dimension.
+        m (int): Input dimension.
+        dt (float): Discretization time.
 
-    Return:
-        x_next (casadi function?):
+    Returns:
+        rk_dyn (casadi.Function): Discretized function.
     '''
     X = cs.SX.sym('X', n)
     U = cs.SX.sym('U', m)
@@ -68,7 +65,15 @@ def rk_discrete(f, n, m, dt):
 
 
 def compute_state_rmse(state_error):
-    '''Compute root-mean-square error.'''
+    '''Compute root-mean-square error.
+
+    Args:
+        state_error (np.array): State error array.
+
+    Returns:
+        state_rmse (np.array): Root-mean-square error of the state.
+        state_rmse_scalar (float): Total RMSE across all states.
+    '''
     mse = np.mean(state_error ** 2, axis=0)
     state_rmse = np.sqrt(mse)
     state_rmse_scalar = np.sqrt(np.sum(mse))
@@ -77,10 +82,15 @@ def compute_state_rmse(state_error):
 
 
 def reset_constraints(constraints):
-    '''Setup the constraints list.
+    '''Set up the constraints list.
 
     Args:
-        constraints (list): List of constraints controller is subject too.
+        constraints (list): List of constraints the controller is subject to.
+
+    Returns:
+        constraints_list (ConstraintList): List of constraints.
+        state_constraints_sym (list): Symbolic state constraints.
+        input_constraints_sym (list): Symbolic input constraints.
     '''
 
     constraints_list = ConstraintList(constraints)

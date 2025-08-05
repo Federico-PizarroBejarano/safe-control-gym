@@ -14,9 +14,9 @@ results/
 z_docstring.py
 TODOs.md
 
+# acados
 **/c_generated_code/**
 **/acados_*
-
 
 # macOS users
 .DS_Store
@@ -79,6 +79,7 @@ coverage.xml
 *.pot
 
 # Django stuff:
+*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal

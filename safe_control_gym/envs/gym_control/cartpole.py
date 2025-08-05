@@ -19,6 +19,7 @@ import pybullet as p
 import pybullet_data
 from gymnasium import spaces
 
+from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
 from safe_control_gym.envs.benchmark_env import BenchmarkEnv, Cost, Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS, SymmetricStateConstraint
 from safe_control_gym.math_and_models.normalization import normalize_angle
@@ -32,7 +33,6 @@ class CartPole(BenchmarkEnv):
     multiple cost functions, stabilization and trajectory tracking references.
 
     task_config:
-        info_in_reset: True
         randomized_inertial_prop: True
         inertial_prop_randomization_info:
             pole_length:
@@ -151,6 +151,9 @@ class CartPole(BenchmarkEnv):
         self.obs_wrap_angle = obs_wrap_angle
         self.rew_state_weight = np.array(rew_state_weight, ndmin=1, dtype=float)
         self.rew_act_weight = np.array(rew_act_weight, ndmin=1, dtype=float)
+        # Expand Q and R to be full matrices.
+        self.Q = get_cost_weight_matrix(self.rew_state_weight, 4)
+        self.R = get_cost_weight_matrix(self.rew_act_weight, 1)
         self.rew_exponential = rew_exponential
         self.done_on_out_of_bound = done_on_out_of_bound
         # BenchmarkEnv constructor, called after defining the custom args,
@@ -336,10 +339,7 @@ class CartPole(BenchmarkEnv):
         obs, info = self._get_observation(), self._get_reset_info()
         obs, info = super().after_reset(obs, info)
         # Return either an observation and dictionary or just the observation.
-        if self.INFO_IN_RESET:
-            return obs, info
-        else:
-            return obs
+        return obs, info
 
     def render(self, mode='human'):
         '''Retrieves a frame from PyBullet rendering.

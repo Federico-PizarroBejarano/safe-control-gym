@@ -13,8 +13,8 @@ from copy import deepcopy
 
 import numpy as np
 
-from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain
-from safe_control_gym.controllers.mpc.mpc_utils import get_cost_weight_matrix, reset_constraints
+from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain, get_cost_weight_matrix
+from safe_control_gym.controllers.mpc.mpc_utils import reset_constraints
 from safe_control_gym.safety_filters.base_safety_filter import BaseSafetyFilter
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.constant_cost import CONSTANT_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.learned_cost import LEARNED_COST
