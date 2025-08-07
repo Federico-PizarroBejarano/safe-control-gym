@@ -582,12 +582,14 @@ class GPMPC(MPC):
             self.z_ind_val = z_ind_val
 
     def select_action_with_gp(self,
-                              obs
+                              obs,
+                              step,
                               ):
         '''Solves nonlinear MPC problem to get next action.
 
         Args:
             obs (np.array): Current state/observation.
+            step (int): The current step/iteration of the environment.
 
         Returns:
             action (np.array): Input/action to the task/env.
@@ -603,13 +605,14 @@ class GPMPC(MPC):
         mean_post_factor = opti_dict['mean_post_factor']
         z_ind = opti_dict['z_ind']
         n_ind_points = opti_dict['n_ind_points']
+
         # Assign the initial state.
         opti.set_value(x_init, obs)
+
         # Assign reference trajectory within horizon.
-        goal_states = self.get_references()
+        goal_states = self.get_references(step)
         opti.set_value(x_ref, goal_states)
-        if self.mode == 'tracking':
-            self.traj_step += 1
+
         # Set the probabilistic state and input constraint set limits.
         state_constraint_set_prev, input_constraint_set_prev = self.precompute_probabilistic_limits()
 
@@ -976,7 +979,8 @@ class GPMPC(MPC):
                 print('[ERROR]: Not yet supported.')
                 exit()
             t1 = time.perf_counter()
-            action = self.select_action_with_gp(obs)
+            step = self.extract_step(info)
+            action = self.select_action_with_gp(obs, step)
             t2 = time.perf_counter()
             print(f'GP SELECT ACTION TIME: {(t2 - t1)}')
             self.last_obs = obs
@@ -1010,7 +1014,6 @@ class GPMPC(MPC):
         elif self.env.TASK == Task.TRAJ_TRACKING:
             self.mode = 'tracking'
             self.traj = self.env.X_GOAL.T
-            self.traj_step = 0
         # Dynamics model.
         if self.gaussian_process is not None:
             if self.sparse_gp and self.train_data['train_targets'].shape[0] <= self.n_ind_points:

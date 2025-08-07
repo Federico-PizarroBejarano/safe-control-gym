@@ -151,7 +151,6 @@ class CartPole(BenchmarkEnv):
         self.obs_wrap_angle = obs_wrap_angle
         self.rew_state_weight = np.array(rew_state_weight, ndmin=1, dtype=float)
         self.rew_act_weight = np.array(rew_act_weight, ndmin=1, dtype=float)
-        # Expand Q and R to be full matrices.
         self.Q = get_cost_weight_matrix(self.rew_state_weight, 4)
         self.R = get_cost_weight_matrix(self.rew_act_weight, 1)
         self.rew_exponential = rew_exponential
