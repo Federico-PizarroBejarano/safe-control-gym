@@ -27,7 +27,6 @@ class NL_MPSC(MPSC):
     def __init__(self,
                  env_func,
                  horizon: int = 10,
-                 num_drones: int = 1,
                  q_mpc: list = None,
                  r_mpc: list = None,
                  warmstart: bool = True,
@@ -38,8 +37,11 @@ class NL_MPSC(MPSC):
                  slack_cost: float = 250,
                  max_w: float = 0.002,
                  min_collision_distance: float = 0.2,
-                 sf_vec: list = None,
+                 initial_state: np.ndarray = None,
+                 teleop_vec: list = None,
+                 true_teleop_vec: list = None,
                  sf_type: str = 'none',
+                 mpc_mode: bool = False,
                  **kwargs
                  ):
         '''Initialize the MPSC.
@@ -58,17 +60,22 @@ class NL_MPSC(MPSC):
             slack_cost (float): The slack cost.
             max_w (float): The maximum model mismatch.
             min_collision_distance (float): The minimum distance between drones.
+            initial_state (np.ndarray): The initial state.
+            teleop_vec (list): The safety filter vector.
+            true_teleop_vec (list): The true safety filter vector.
+            sf_type (str): The safety filter type.
+            mpc_mode (bool): Whether to use MPC mode or not.
         '''
 
         self.model_bias = None
-        self.num_drones = num_drones
-        self.total_num_drones = num_drones
-        self.sf_vec = sf_vec
-        self.total_sf_vec = sf_vec
+
+        self.initial_state = initial_state
+        self.teleop_vec = teleop_vec
+        self.num_drones = len(teleop_vec)
+        self.true_teleop_vec = true_teleop_vec
         self.sf_type = sf_type
-        if self.sf_type == 'naive':
-            self.num_drones = sum(sf_vec)
-            self.sf_vec = [True] * self.num_drones
+        self.mpc_mode = mpc_mode
+
         super().__init__(env_func, horizon, q_mpc, r_mpc, warmstart, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
         self.soften_constraints = soften_constraints
@@ -166,6 +173,20 @@ class NL_MPSC(MPSC):
 
         return Z_mid, np.array(Limit), np.array(limit_active)
 
+    def select_action(self, obs, info=None):
+        '''Determine the action to take at the current timestep.
+
+        Args:
+            obs (ndarray): The observation at this timestep.
+            info (dict): The info at this timestep.
+
+        Returns:
+            action (ndarray): The action chosen by the controller.
+        '''
+
+        action, _ = self.certify_action(obs, np.tile(self.U_EQ, self.num_drones), info=info)
+        return action
+
     def setup_casadi_optimizer(self):
         raise NotImplementedError('Casadi not implemented')
 
@@ -188,7 +209,7 @@ class NL_MPSC(MPSC):
 
         model.x = cs.vertcat(*x_stack)
         model.u = cs.vertcat(*u_stack)
-        model.name = f'{self.env.NAME}_multi_drone'
+        model.name = f'{self.env.NAME}_multi_drone{"_mpc" if self.mpc_mode else ""}'
 
         # Use the multi-drone dynamics
         model.f_expl_expr = self.dynamics_func(model.x, model.u)
@@ -204,8 +225,8 @@ class NL_MPSC(MPSC):
         # Create block diagonal cost matrices for multiple drones
         R_sf = []
         Q_mpc, R_mpc = [], []
-        for sf_drone in self.sf_vec:
-            if sf_drone:
+        for teleop_drone in self.teleop_vec:
+            if teleop_drone:
                 R_sf.append(np.eye(self.model.nu))
                 Q_mpc.append(np.zeros((self.model.nx, self.model.nx)))
                 R_mpc.append(np.zeros((self.model.nu, self.model.nu)))
@@ -228,23 +249,7 @@ class NL_MPSC(MPSC):
         ocp.cost.Vx_e = np.eye(nx)
 
         # Stack equilibrium points for all drones
-        X_EQ_multi = np.tile(self.model.X_EQ, self.num_drones)
-        if self.num_drones == 1:
-            positions = np.array([[0, 0]])
-        elif self.num_drones == 2:
-            positions = np.array([[-0.5, -0.5],
-                                  [0.5, -0.5]])
-        elif self.num_drones == 4:
-            positions = np.array([[-0.5, -0.5],
-                                  [0.5, -0.5],
-                                  [-0.5, 0.5],
-                                  [0.5, 0.5]])
-        else:
-            raise ValueError(f'Number of drones {self.num_drones} not supported')
-
-        for i in range(self.num_drones):
-            X_EQ_multi[[i * self.model.nx, i * self.model.nx + 2]] = positions[i]
-
+        X_EQ_multi = self.initial_state.flatten()
         U_EQ_multi = np.tile(self.model.U_EQ, self.num_drones)
 
         # Updated on each iteration
@@ -285,8 +290,8 @@ class NL_MPSC(MPSC):
             ocp.constraints.Jsh = np.eye(num_box_constraints + num_collision_constraints)
             slack_multiplier = np.array(([1] * self.model.nx + [100] * self.model.nu) * self.num_drones * 2 + [1] * num_collision_constraints, dtype=float)
             if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced']:
-                for i, sf_drone in enumerate(self.sf_vec):
-                    if not sf_drone:
+                for i, teleop_drone in enumerate(self.teleop_vec):
+                    if not teleop_drone:
                         slack_multiplier[self.p * i:self.p * (i + 1)] /= 1000.0
             slack_weights = self.slack_cost * slack_multiplier
             ocp.cost.Zu = slack_weights
@@ -304,7 +309,7 @@ class NL_MPSC(MPSC):
         ocp.solver_options.nlp_solver_type = 'SQP_RTI'
         ocp.solver_options.nlp_solver_max_iter = 200
 
-        solver_json = 'acados_ocp_mpsf.json'
+        solver_json = f'acados_ocp_mpsf{"_mpc" if self.mpc_mode else ""}.json'
         ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
 
         for stage in range(self.mpsc_cost_horizon):
@@ -338,7 +343,7 @@ class NL_MPSC(MPSC):
         # Create collision avoidance constraints between all pairs of drones
         for i in range(self.num_drones):
             for j in range(i + 1, self.num_drones):
-                if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced'] and not (self.sf_vec[i] or self.sf_vec[j]):
+                if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced'] and not (self.teleop_vec[i] or self.teleop_vec[j]):
                     continue
                 # Extract positions for drones i and j
                 pos_i = x_stack[i * self.model.nx + pos_indices]

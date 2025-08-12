@@ -1,6 +1,7 @@
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 def plot_results(num_drones, results, X_goal):
@@ -88,9 +89,10 @@ def create_video(frames, fps, name):
     out.release()
 
 
-def generate_X_goal(traj_type, start_pos, num_iters, dt):
-    num_drones = start_pos.shape[0]
+def generate_X_goal(traj_type, num_iters, dt):
+    num_drones = 4
     if traj_type == 'no_collision':
+        start_pos = np.array([[0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, -0.5, 0.5]])
         return generate_no_collision_traj(start_pos, num_iters, dt)
     elif traj_type == 'mild_collision':
         return generate_mild_collision_traj(num_drones, num_iters, dt)
@@ -127,36 +129,63 @@ def generate_medium_collision_traj(num_drones, num_iters, dt):
 
     amplitude = 1.0  # Size of the figure 8
     center = np.array([0, 0, 1.5])  # Center point of intersection
+    freq_mult = 0.8
 
     for i in range(num_iters):
         t = i * dt
 
+        # Drone 0
         drone0_pos = center + amplitude * np.array([
-            np.cos(-t),  # x
-            np.cos(-t),  # y
-            np.sin(-t)  # z
+            np.cos(-t * freq_mult),  # x
+            np.cos(-t * freq_mult),  # y
+            np.sin(-t * freq_mult)  # z
+        ])
+        drone0_vel = amplitude * freq_mult * np.array([
+            np.sin(-t * freq_mult),  # dx/dt
+            np.sin(-t * freq_mult),  # dy/dt
+            np.cos(-t * freq_mult)  # dz/dt
         ])
 
+        # Drone 1
         drone1_pos = center + amplitude * np.array([
-            np.cos(-t),  # x
-            -np.cos(-t),  # y
-            np.sin(-t)  # z
+            np.cos(-t * freq_mult),  # x
+            -np.cos(-t * freq_mult),  # y
+            np.sin(-t * freq_mult)  # z
+        ])
+        drone1_vel = amplitude * freq_mult * np.array([
+            np.sin(-t * freq_mult),  # dx/dt
+            -np.sin(-t * freq_mult),  # dy/dt
+            np.cos(-t * freq_mult)  # dz/dt
         ])
 
+        # Drone 2
         drone2_pos = center + amplitude * np.array([
-            np.cos(t),  # x
-            np.cos(t),  # y
-            np.sin(t)  # z
+            np.cos(t * freq_mult),  # x
+            np.cos(t * freq_mult),  # y
+            np.sin(t * freq_mult)  # z
+        ])
+        drone2_vel = amplitude * freq_mult * np.array([
+            -np.sin(t * freq_mult),  # dx/dt
+            -np.sin(t * freq_mult),  # dy/dt
+            np.cos(t * freq_mult)  # dz/dt
         ])
 
+        # Drone 3
         drone3_pos = center + amplitude * np.array([
-            np.cos(t),  # x
-            -np.cos(t),  # y
-            np.sin(t)  # z
+            np.cos(t * freq_mult),  # x
+            -np.cos(t * freq_mult),  # y
+            np.sin(t * freq_mult)  # z
+        ])
+        drone3_vel = amplitude * freq_mult * np.array([
+            -np.sin(t * freq_mult),  # dx/dt
+            np.sin(t * freq_mult),  # dy/dt
+            np.cos(t * freq_mult)  # dz/dt
         ])
 
         all_pos = np.stack([drone0_pos, drone1_pos, drone2_pos, drone3_pos])
+        all_vel = np.stack([drone0_vel, drone1_vel, drone2_vel, drone3_vel])
         X_goal[i, :, [0, 2, 4]] = all_pos.T
+        X_goal[i, :, [1, 3, 5]] = all_vel.T
 
     return X_goal
 
@@ -171,36 +200,63 @@ def generate_4_figure_8_traj(num_drones, num_iters, dt, phase):
 
     amplitude = 1.0  # Size of the figure 8
     center = np.array([0, 0, 1.5])  # Center point of intersection
+    freq_mult = 0.8
 
     for i in range(num_iters):
         t = i * dt
 
+        # Drone 0
         drone0_pos = center + amplitude * np.array([
-            np.sin(t + phase[0]),  # x
-            np.sin(t + phase[0]) * np.cos(t + phase[0]),  # y
-            np.sin(2 * (t + phase[0]))  # z
+            np.sin(t * freq_mult + phase[0]),  # x
+            np.sin(t * freq_mult + phase[0]) * np.cos(t * freq_mult + phase[0]),  # y
+            np.sin(2 * (t * freq_mult + phase[0]))  # z
+        ])
+        drone0_vel = amplitude * freq_mult * np.array([
+            np.cos(t * freq_mult + phase[0]),  # dx/dt
+            np.cos(2 * (t * freq_mult + phase[0])),  # dy/dt
+            2 * np.cos(2 * (t * freq_mult + phase[0]))  # dz/dt
         ])
 
+        # Drone 1
         drone1_pos = center + amplitude * np.array([
-            -np.sin(t + phase[1]) * np.cos(t + phase[1]),  # x
-            -np.sin(t + phase[1]),  # y
-            np.sin(2 * (t + phase[1]))  # z
+            -np.sin(t * freq_mult + phase[1]) * np.cos(t * freq_mult + phase[1]),  # x
+            -np.sin(t * freq_mult + phase[1]),  # y
+            np.sin(2 * (t * freq_mult + phase[1]))  # z
+        ])
+        drone1_vel = amplitude * freq_mult * np.array([
+            -np.cos(2 * (t * freq_mult + phase[1])),  # dx/dt
+            -np.cos(t * freq_mult + phase[1]),  # dy/dt
+            2 * np.cos(2 * (t * freq_mult + phase[1]))  # dz/dt
         ])
 
+        # Drone 2
         drone2_pos = center + amplitude * np.array([
-            np.sin(t + phase[2]) * np.cos(t + phase[2]),  # x
-            np.sin(t + phase[2]),  # y
-            np.sin(2 * (t + phase[2]))  # z
+            np.sin(t * freq_mult + phase[2]) * np.cos(t * freq_mult + phase[2]),  # x
+            np.sin(t * freq_mult + phase[2]),  # y
+            np.sin(2 * (t * freq_mult + phase[2]))  # z
+        ])
+        drone2_vel = amplitude * freq_mult * np.array([
+            np.cos(2 * (t * freq_mult + phase[2])),  # dx/dt
+            np.cos(t * freq_mult + phase[2]),  # dy/dt
+            2 * np.cos(2 * (t * freq_mult + phase[2]))  # dz/dt
         ])
 
+        # Drone 3
         drone3_pos = center + amplitude * np.array([
-            -np.sin(t + phase[3]),  # x
-            -np.sin(t + phase[3]) * np.cos(t + phase[3]),  # y
-            np.sin(2 * (t + phase[3]))  # z
+            -np.sin(t * freq_mult + phase[3]),  # x
+            -np.sin(t * freq_mult + phase[3]) * np.cos(t * freq_mult + phase[3]),  # y
+            np.sin(2 * (t * freq_mult + phase[3]))  # z
+        ])
+        drone3_vel = amplitude * freq_mult * np.array([
+            -np.cos(t * freq_mult + phase[3]),  # dx/dt
+            -np.cos(2 * (t * freq_mult + phase[3])),  # dy/dt
+            2 * np.cos(2 * (t * freq_mult + phase[3]))  # dz/dt
         ])
 
         all_pos = np.stack([drone0_pos, drone1_pos, drone2_pos, drone3_pos])
+        all_vel = np.stack([drone0_vel, drone1_vel, drone2_vel, drone3_vel])
         X_goal[i, :, [0, 2, 4]] = all_pos.T
+        X_goal[i, :, [1, 3, 5]] = all_vel.T
 
     return X_goal
 
@@ -221,13 +277,58 @@ def calculate_constraint_violations(all_stacked_obs, constraint_bounds, num_dron
     return constraint_violations.reshape((num_drones, -1))
 
 
-def calculate_collisions(all_obs, num_drones, min_collision_distance, sf_vec):
+def calculate_collisions(all_obs, num_drones, min_collision_distance, teleop_vec):
     collisions = 0
     for timestep in range(len(all_obs)):
         for d1 in range(num_drones):
             for d2 in range(d1 + 1, num_drones):
-                if not (sf_vec[d1] or sf_vec[d2]):
+                if not (teleop_vec[d1] or teleop_vec[d2]):
                     continue
                 if np.linalg.norm(all_obs[timestep].pos[0, d1, :] - all_obs[timestep].pos[0, d2, :]) < min_collision_distance:
                     collisions += 1
     return collisions
+
+
+def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, start_step=0):
+    '''Calculate open-loop trajectory by simulating forward.
+
+    Args:
+        stacked_obs (np.ndarray): Current observation/state
+        controller (Controller): Controller to generate actions
+        sim (CrazyflowSimulator): Crazyflow simulator instance
+        teleop_vec (np.ndarray): Safety filter vector
+        horizon (int): Number of steps to simulate forward
+        start_step (int): Start step for the controller
+
+    Returns:
+        input_traj (np.ndarray): Array of input commands for horizon steps
+    '''
+    # Save initial state
+    initial_state = sim.data
+
+    input_traj = []
+
+    # Simulate forward for horizon steps
+    for i in range(horizon):
+        action = np.zeros((len(teleop_vec), 4))
+        action[teleop_vec, :] = controller.select_action(stacked_obs[teleop_vec, :].flatten(), info={'current_step': i + start_step}).reshape(sum(teleop_vec), 4)
+        input_traj.append(action[teleop_vec, :])
+
+        # Step simulation
+        sim.attitude_control(action.reshape((1, len(teleop_vec), 4)))
+        sim.step(sim.freq // sim.control_freq)
+
+        # Get next observation
+        obs = sim.data.states
+        rpys = []
+        for drone_idx in range(len(teleop_vec)):
+            rpy = Rotation.from_quat(obs.quat[0, drone_idx, :].flatten()).as_euler('xyz')
+            rpys.append(rpy)
+        rpys = np.array(rpys).reshape((1, len(teleop_vec), 3))
+        stacked_obs = np.concatenate([obs.pos, obs.vel, rpys, obs.ang_vel], axis=-1)[0, :, :]
+        stacked_obs = stacked_obs[:, np.array([0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11])]
+
+    # Reset simulator to initial state
+    sim.data = initial_state
+
+    return np.array(input_traj)

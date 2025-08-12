@@ -5,7 +5,7 @@ from crazyflow.constants import GRAVITY, MASS
 from crazyflow.control import Control
 from crazyflow.sim import Sim
 from crazyflow.sim.symbolic import symbolic_from_sim
-from jax.scipy.spatial.transform import Rotation as RotLib
+from jax.scipy.spatial.transform import Rotation
 
 from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain, get_cost_weight_matrix
 
@@ -13,7 +13,7 @@ from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain, get_cos
 def lqr_control(obs, t, gain, U_EQ):
     circle = jnp.array([jnp.cos(t) - 1, jnp.sin(t), 0.2 * t] + [0] * 9)
 
-    rpy = RotLib.from_quat(obs.quat).as_euler('xyz').reshape(1, 1, 3)
+    rpy = Rotation.from_quat(obs.quat).as_euler('xyz').reshape(1, 1, 3)
     stacked_obs = jnp.concatenate([obs.pos, rpy, obs.vel, obs.ang_vel], axis=-1).flatten()
 
     cmd = -gain @ (stacked_obs - circle) + U_EQ

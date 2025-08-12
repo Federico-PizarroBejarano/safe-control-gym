@@ -1,8 +1,5 @@
 #!/bin/bash
 
-ALGO='lqr'
-
-NUM_DRONES=4
 # MPSC_COST='one_step_cost'
 MPSC_COST='precomputed_cost'
 MPSC_COST_HORIZON=10
@@ -21,7 +18,7 @@ SF_TYPE='naive'
 
 
 python3 ./subsys_experiment.py \
-    --algo ${ALGO} \
+    --algo lqr \
     --task quadrotor \
     --safety_filter nl_mpsc \
     --overrides \
@@ -29,7 +26,6 @@ python3 ./subsys_experiment.py \
         ./config_overrides/nl_mpsc.yaml \
         ./config_overrides/lqr.yaml \
     --kv_overrides \
-        num_drones=${NUM_DRONES} \
         traj_type=${TRAJ_TYPE} \
         sf_type=${SF_TYPE} \
         sf_config.cost_function=${MPSC_COST} \

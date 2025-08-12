@@ -16,7 +16,6 @@ class PRECOMPUTED_COST(MPSC_COST):
                  decay_factor: float = 0.85,
                  output_dir: str = '.',
                  horizon: int = 10,
-                 sf_vec: list = None,
                  ):
         '''Initialize the MPSC Cost.
 
@@ -26,7 +25,6 @@ class PRECOMPUTED_COST(MPSC_COST):
             decay_factor (float): How much to discount future costs.
             output_dir (str): Folder to write outputs.
             horizon (int): The MPC horizon.
-            sf_vec (list): The vector of booleans indicating which drones are under safety filter control.
         '''
 
         super().__init__(env, mpsc_cost_horizon, decay_factor)
@@ -34,7 +32,6 @@ class PRECOMPUTED_COST(MPSC_COST):
         self.output_dir = output_dir
         self.uncertified_controller = None
         self.horizon = horizon
-        self.sf_vec = sf_vec
 
     def get_cost(self, opti_dict):
         '''Returns the cost function for the MPSC optimization in symbolic form.
@@ -115,14 +112,7 @@ class PRECOMPUTED_COST(MPSC_COST):
 
             info = {'current_step': next_step}
 
-            if self.uncertified_controller.gain.shape[0] > self.model.nu * num_drones:
-                real_extended_obs = np.zeros((len(self.sf_vec), self.model.nx))
-                real_extended_obs[self.sf_vec, :] = extended_obs.reshape(num_drones, self.model.nx)
-                real_extended_obs = real_extended_obs.flatten()
-                action = self.uncertified_controller.select_action(obs=real_extended_obs, info=info)
-                action = action.reshape(len(self.sf_vec), self.model.nu)[self.sf_vec, :].flatten()
-            else:
-                action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
+            action = self.uncertified_controller.select_action(obs=extended_obs, info=info)
 
             if uncert_env.NORMALIZED_RL_ACTION_SPACE:
                 action = uncert_env.denormalize_action(action)
