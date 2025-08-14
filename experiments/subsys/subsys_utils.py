@@ -272,12 +272,13 @@ def calculate_RMSE(all_obs, X_goal):
     return np.array(RMSEs)
 
 
-def calculate_constraint_violations(all_obs, constraint_bounds, num_drones):
-    all_obs = all_obs.reshape((len(all_obs), -1))
-    constraint_violations = np.zeros(all_obs.shape[1])
-    for i in range(all_obs.shape[0]):
-        constraint_violations += all_obs[i, :] - np.tile(constraint_bounds.upper_bounds, num_drones) > 0
-        constraint_violations += np.tile(constraint_bounds.lower_bounds, num_drones) - all_obs[i, :] > 0
+def calculate_constraint_violations(all_values, constraint_bounds):
+    num_drones = all_values.shape[1]
+    all_values = all_values.reshape((len(all_values), -1))
+    constraint_violations = np.zeros(all_values.shape[1])
+    for i in range(all_values.shape[0]):
+        constraint_violations += all_values[i, :] - np.tile(constraint_bounds.upper_bounds, num_drones) > 0
+        constraint_violations += np.tile(constraint_bounds.lower_bounds, num_drones) - all_values[i, :] > 0
     return constraint_violations.reshape((num_drones, -1))
 
 

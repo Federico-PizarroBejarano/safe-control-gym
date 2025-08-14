@@ -116,7 +116,7 @@ def run(
                 full_cert_cmd[teleop_vec, :] = cert_cmd.reshape(sum(teleop_vec), -1)
                 cert_cmd = full_cert_cmd.flatten()
 
-        all_actions.append(cert_cmd)
+        all_actions.append(cert_cmd.reshape(num_drones, -1))
         all_corrections.append(np.linalg.norm(uncert_cmd.reshape(num_drones, -1)[teleop_vec, :] - cert_cmd.reshape(num_drones, -1)[teleop_vec, :]))
 
         cert_cmd_clipped = np.clip(cert_cmd.copy(),
@@ -143,10 +143,10 @@ def run(
 
     # Print Metrics
     RMSE = calculate_RMSE(all_obs, X_goal[:experiment_len, :, :])
-    state_constraint_violation = calculate_constraint_violations(all_obs, safety_filter.state_constraint, num_drones)
-    input_constraint_violation = calculate_constraint_violations(all_actions, safety_filter.input_constraint, num_drones)
+    state_constraint_violation = calculate_constraint_violations(all_obs, safety_filter.state_constraint)
+    input_constraint_violation = calculate_constraint_violations(all_actions, safety_filter.input_constraint)
     collisions = calculate_collisions(all_obs, safety_filter.min_collision_distance, teleop_vec)
-    input_rate_of_change = calculate_input_rate_of_change(all_actions.reshape((len(all_actions), num_drones, -1)), frequency)
+    input_rate_of_change = calculate_input_rate_of_change(all_actions, frequency)
 
     print('RMSE:', np.round(RMSE, 3))
     print('State Constraint Violation:', np.round(state_constraint_violation, 3))
