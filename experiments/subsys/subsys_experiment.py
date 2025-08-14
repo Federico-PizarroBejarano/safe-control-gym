@@ -8,10 +8,9 @@ from scipy.linalg import block_diag
 from scipy.spatial.transform import Rotation
 
 from experiments.subsys.subsys_utils import (calculate_collisions, calculate_constraint_violations,
-                                             calculate_open_loop_traj, calculate_RMSE, create_video,
-                                             generate_X_goal, plot_results)
+                                             calculate_input_rate_of_change, calculate_open_loop_traj,
+                                             calculate_RMSE, create_video, generate_X_goal, plot_results)
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.precomputed_cost import PRECOMPUTED_COST
-from safe_control_gym.safety_filters.mpsc.mpsc_utils import get_discrete_derivative
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
@@ -59,7 +58,6 @@ def run(
 
     # Run the simulation.
     all_obs = []
-    all_stacked_obs = []
     all_actions = []
     all_corrections = []
     start_time = time.time()
@@ -73,15 +71,14 @@ def run(
     for i in range(experiment_len):
         # Get the current state.
         obs = sim.data.states
-        all_obs.append(obs)
         rpys = []
         for drone_idx in range(num_drones):
             rpy = Rotation.from_quat(obs.quat[0, drone_idx, :].flatten()).as_euler('xyz')
             rpys.append(rpy)
         rpys = np.array(rpys).reshape((1, num_drones, 3))
         stacked_obs = np.concatenate([obs.pos, obs.vel, rpys, obs.ang_vel], axis=-1)[0, :, :]
-        stacked_obs = stacked_obs[:, np.array([0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11])]
-        all_stacked_obs.append(stacked_obs.flatten())
+        stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11]]
+        all_obs.append(stacked_obs)
 
         # Compute the control command.
         uncert_cmd = np.zeros((num_drones, 4))
@@ -89,7 +86,7 @@ def run(
         if teleop_controller is not None:
             uncert_cmd_teleop = teleop_controller.select_action(stacked_obs[teleop_vec, :].flatten(), info={'current_step': i})
             uncert_cmd[teleop_vec, :] = uncert_cmd_teleop.copy().reshape(sum(teleop_vec), 4)
-            if isinstance(safety_filter.cost_function, PRECOMPUTED_COST) or sf_type == 'safe_teleop_advanced':
+            if (sf_type != 'none' and isinstance(safety_filter.cost_function, PRECOMPUTED_COST)) or sf_type == 'safe_teleop_advanced':
                 lqr_trajectory = calculate_open_loop_traj(stacked_obs.copy(), teleop_controller, sim, teleop_vec, safety_filter.horizon, start_step=i)
                 uncert_traj[:, teleop_vec, :] = lqr_trajectory
                 assert np.linalg.norm(uncert_traj[0, teleop_vec, :].flatten() - uncert_cmd_teleop) < 1e-6, '[ERROR] LQR trajectory and uncert_cmd_teleop are not the same.'
@@ -137,16 +134,19 @@ def run(
     print(f'Time taken: {time.time() - start_time} seconds')
     sim.close()
 
+    all_obs = np.array(all_obs)
+    all_actions = np.array(all_actions)
+    all_corrections = np.array(all_corrections)
+
     print('Mean Correction:', np.round(np.mean(all_corrections), 3))
     print('Max Correction:', np.round(np.max(all_corrections), 3))
 
     # Print Metrics
     RMSE = calculate_RMSE(all_obs, X_goal[:experiment_len, :, :])
-    state_constraint_violation = calculate_constraint_violations(all_stacked_obs, safety_filter.state_constraint, num_drones)
+    state_constraint_violation = calculate_constraint_violations(all_obs, safety_filter.state_constraint, num_drones)
     input_constraint_violation = calculate_constraint_violations(all_actions, safety_filter.input_constraint, num_drones)
-    collisions = calculate_collisions(all_obs, num_drones, safety_filter.min_collision_distance, teleop_vec)
-    discrete_derivative = get_discrete_derivative(np.array(all_actions), sim.control_freq)
-    input_rate_of_change = np.linalg.norm(discrete_derivative, 'fro')
+    collisions = calculate_collisions(all_obs, safety_filter.min_collision_distance, teleop_vec)
+    input_rate_of_change = calculate_input_rate_of_change(all_actions.reshape((len(all_actions), num_drones, -1)), frequency)
 
     print('RMSE:', np.round(RMSE, 3))
     print('State Constraint Violation:', np.round(state_constraint_violation, 3))
@@ -156,7 +156,7 @@ def run(
 
     if gui:
         create_video(frames, sim.control_freq, sf_type)
-    plot_results(num_drones, all_obs, X_goal)
+    plot_results(all_obs, X_goal)
 
 
 def main():

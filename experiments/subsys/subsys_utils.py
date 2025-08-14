@@ -4,9 +4,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-def plot_results(num_drones, results, X_goal):
+def plot_results(all_obs, X_goal):
     # Extract position data
-    positions = np.array([obs.pos.squeeze() for obs in results]).reshape((-1, num_drones, 3))
+    positions = all_obs[:, :, [0, 2, 4]]
     x = positions[:, :, 0]
     y = positions[:, :, 1]
     z = positions[:, :, 2]
@@ -33,7 +33,7 @@ def plot_results(num_drones, results, X_goal):
 
     # Plot velocity data
     # Extract velocity data
-    velocities = np.array([obs.vel.squeeze() for obs in results]).reshape((-1, num_drones, 3))
+    velocities = all_obs[:, :, [1, 3, 5]]
     x = velocities[:, :, 0]
     y = velocities[:, :, 1]
     z = velocities[:, :, 2]
@@ -100,6 +100,8 @@ def generate_X_goal(traj_type, num_iters, dt):
         return generate_medium_collision_traj(num_drones, num_iters, dt)
     elif traj_type == 'severe_collision':
         return generate_severe_collision_traj(num_drones, num_iters, dt)
+    else:
+        raise ValueError(f'Invalid trajectory type: {traj_type}')
 
 
 def generate_no_collision_traj(start_pos, num_iters, dt):
@@ -262,31 +264,42 @@ def generate_4_figure_8_traj(num_drones, num_iters, dt, phase):
 
 
 def calculate_RMSE(all_obs, X_goal):
-    all_pos = np.array([obs.pos[0, :, :].flatten() for obs in all_obs])
-    X_goal = X_goal[:, :, [0, 2, 4]].reshape((len(all_obs), -1))
-    RMSE = np.sqrt(np.mean(np.sum((all_pos - X_goal)**2, axis=1)))
-    return RMSE
+    all_pos = all_obs[:, :, [0, 2, 4]]
+    X_goal_pos = X_goal[:, :, [0, 2, 4]]
+    RMSEs = []
+    for drone in range(all_pos.shape[1]):
+        RMSEs.append(np.sqrt(np.mean(np.sum((all_pos[:, drone, :] - X_goal_pos[:, drone, :])**2, axis=1))))
+    return np.array(RMSEs)
 
 
-def calculate_constraint_violations(all_stacked_obs, constraint_bounds, num_drones):
-    all_stacked_obs = np.array(all_stacked_obs)
-    constraint_violations = np.zeros(all_stacked_obs.shape[1])
-    for i in range(all_stacked_obs.shape[0]):
-        constraint_violations += all_stacked_obs[i] - np.tile(constraint_bounds.upper_bounds, num_drones) > 0
-        constraint_violations += np.tile(constraint_bounds.lower_bounds, num_drones) - all_stacked_obs[i] > 0
+def calculate_constraint_violations(all_obs, constraint_bounds, num_drones):
+    all_obs = all_obs.reshape((len(all_obs), -1))
+    constraint_violations = np.zeros(all_obs.shape[1])
+    for i in range(all_obs.shape[0]):
+        constraint_violations += all_obs[i, :] - np.tile(constraint_bounds.upper_bounds, num_drones) > 0
+        constraint_violations += np.tile(constraint_bounds.lower_bounds, num_drones) - all_obs[i, :] > 0
     return constraint_violations.reshape((num_drones, -1))
 
 
-def calculate_collisions(all_obs, num_drones, min_collision_distance, teleop_vec):
-    collisions = 0
+def calculate_collisions(all_obs, min_collision_distance, teleop_vec):
+    num_drones = all_obs.shape[1]
+    collision_matrix = np.zeros((num_drones, num_drones))
     for timestep in range(len(all_obs)):
         for d1 in range(num_drones):
             for d2 in range(d1 + 1, num_drones):
                 if not (teleop_vec[d1] or teleop_vec[d2]):
                     continue
-                if np.linalg.norm(all_obs[timestep].pos[0, d1, :] - all_obs[timestep].pos[0, d2, :]) < min_collision_distance:
-                    collisions += 1
-    return collisions
+                if np.linalg.norm(all_obs[timestep, d1, [0, 2, 4]] - all_obs[timestep, d2, [0, 2, 4]]) < min_collision_distance:
+                    collision_matrix[d1, d2] += 1
+    return collision_matrix
+
+
+def calculate_input_rate_of_change(all_actions, frequency):
+    num_drones = all_actions.shape[1]
+    input_rate_of_change = np.zeros((num_drones))
+    for i in range(num_drones):
+        input_rate_of_change[i] = np.linalg.norm(np.diff(all_actions[:, i, :], axis=0), 'fro') * frequency
+    return input_rate_of_change
 
 
 def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, start_step=0):
@@ -326,7 +339,7 @@ def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, 
             rpys.append(rpy)
         rpys = np.array(rpys).reshape((1, len(teleop_vec), 3))
         stacked_obs = np.concatenate([obs.pos, obs.vel, rpys, obs.ang_vel], axis=-1)[0, :, :]
-        stacked_obs = stacked_obs[:, np.array([0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11])]
+        stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11]]
 
     # Reset simulator to initial state
     sim.data = initial_state
