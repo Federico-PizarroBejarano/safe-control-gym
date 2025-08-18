@@ -1,7 +1,7 @@
 task_config:
   seed: 1337
-  ctrl_freq: 60
-  pyb_freq: 60
+  ctrl_freq: 25
+  pyb_freq: 100
   gui: False
   physics: dyn_si_3d
   quad_type: 6
@@ -17,3 +17,5 @@ task_config:
       lower_bounds: [-1, -2, -1, -2, 0.01, -2, -0.75, -0.75, -0.75, -3, -3, -3]
     - constraint_form: default_constraint
       constrained_variable: input
+      upper_bounds: [0.4499, 0.4363,  0.4363,  0.4363]
+      lower_bounds: [0.08,  -0.4363, -0.4363, -0.4363]

@@ -282,14 +282,12 @@ def calculate_constraint_violations(all_values, constraint_bounds):
     return constraint_violations.reshape((num_drones, -1))
 
 
-def calculate_collisions(all_obs, min_collision_distance, teleop_vec):
+def calculate_collisions(all_obs, min_collision_distance):
     num_drones = all_obs.shape[1]
     collision_matrix = np.zeros((num_drones, num_drones))
     for timestep in range(len(all_obs)):
         for d1 in range(num_drones):
             for d2 in range(d1 + 1, num_drones):
-                if not (teleop_vec[d1] or teleop_vec[d2]):
-                    continue
                 if np.linalg.norm(all_obs[timestep, d1, [0, 2, 4]] - all_obs[timestep, d2, [0, 2, 4]]) < min_collision_distance:
                     collision_matrix[d1, d2] += 1
     return collision_matrix

@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 from crazyflow.control import Control
 from crazyflow.sim import Sim
+from munch import munchify
 from scipy.linalg import block_diag
 from scipy.spatial.transform import Rotation
 
@@ -42,7 +43,7 @@ def run(
 
     if sf_type == 'naive':
         safety_filter.env.X_GOAL = X_goal[:, teleop_vec, :].reshape((goal_len, sum(teleop_vec) * 12))
-    else:
+    elif sf_type != 'none':
         safety_filter.env.X_GOAL = X_goal.reshape((goal_len, num_drones * 12))
 
     if teleop_controller is not None:
@@ -145,7 +146,7 @@ def run(
     RMSE = calculate_RMSE(all_obs, X_goal[:experiment_len, :, :])
     state_constraint_violation = calculate_constraint_violations(all_obs, safety_filter.state_constraint)
     input_constraint_violation = calculate_constraint_violations(all_actions, safety_filter.input_constraint)
-    collisions = calculate_collisions(all_obs, safety_filter.min_collision_distance, teleop_vec)
+    collisions = calculate_collisions(all_obs, safety_filter.min_collision_distance)
     input_rate_of_change = calculate_input_rate_of_change(all_actions, frequency)
 
     print('RMSE:', np.round(RMSE, 3))
@@ -169,7 +170,7 @@ def main():
     sf_type = config.sf_type
 
     # Generate goal trajectory.
-    frequency = 25.0
+    frequency = config.task_config.ctrl_freq
     duration = 15.0
     X_goal = generate_X_goal(config.traj_type, int(duration * frequency) + config.sf_config.horizon + 1, 1 / frequency)
 
@@ -209,18 +210,33 @@ def main():
         mpc_controller.reset()
 
     # Setup MPSC.
-    if sf_type == 'naive':
-        sf_initial_state = X_goal[0, teleop_vec, :]
+    if sf_type == 'none':
+        safety_filter = {
+            'horizon': config.sf_config.horizon,
+            'min_collision_distance': config.sf_config.min_collision_distance,
+            'state_constraint': {
+                'lower_bounds': config.task_config.constraints[0].lower_bounds,
+                'upper_bounds': config.task_config.constraints[0].upper_bounds,
+            },
+            'input_constraint': {
+                'lower_bounds': config.task_config.constraints[1].lower_bounds,
+                'upper_bounds': config.task_config.constraints[1].upper_bounds,
+            },
+        }
+        safety_filter = munchify(safety_filter)
     else:
-        sf_initial_state = X_goal[0, :, :]
-    safety_filter = make(config.safety_filter,
-                         env_func,
-                         initial_state=sf_initial_state,
-                         teleop_vec=np.array([True] * sum(teleop_vec)) if sf_type == 'naive' else teleop_vec,
-                         sf_type=sf_type,
-                         cost_function=cost_func,
-                         **config.sf_config)
-    safety_filter.reset()
+        if sf_type == 'naive':
+            sf_initial_state = X_goal[0, teleop_vec, :]
+        else:
+            sf_initial_state = X_goal[0, :, :]
+        safety_filter = make(config.safety_filter,
+                             env_func,
+                             initial_state=sf_initial_state,
+                             teleop_vec=np.array([True] * sum(teleop_vec)) if sf_type == 'naive' else teleop_vec,
+                             sf_type=sf_type,
+                             cost_function=cost_func,
+                             **config.sf_config)
+        safety_filter.reset()
 
     run(
         gui=False,

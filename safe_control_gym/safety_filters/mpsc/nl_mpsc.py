@@ -258,36 +258,26 @@ class NL_MPSC(MPSC):
 
         ocp.constraints.x0 = X_EQ_multi
 
-        # Create all constraints as nonlinear constraints
-        constraints = []
+        # Add box constraints
+        ocp.constraints.constr_type = 'BGH'
+        ocp.constraints.C = block_diag(*[self.L_x] * self.num_drones)
+        ocp.constraints.D = block_diag(*[self.L_u] * self.num_drones)
+        ocp.constraints.lg = -1000 * np.ones((self.p * self.num_drones))
+        ocp.constraints.ug = np.zeros((self.p * self.num_drones))
 
-        # Create box constraints (converted from linear form)
-        for i in range(self.num_drones):
-            # Extract state and input for drone i
-            x_i = model.x[i * self.model.nx:(i + 1) * self.model.nx]
-            u_i = model.u[i * self.model.nu:(i + 1) * self.model.nu]
-
-            # Convert linear constraints Lx*x + Lu*u <= l to nonlinear form
-            constraint_expr = (self.L_x @ (x_i - self.X_mid)) + (self.L_u @ (u_i - self.U_mid)) - self.l_xu
-            constraints.append(constraint_expr)
-
+        # Add collision constraints
         collision_constraints = self.create_collision_constraints(model.x)
-        constraints.append(collision_constraints)
-        model.con_h_expr = cs.vertcat(*constraints)
+        model.con_h_expr = cs.vertcat(collision_constraints)
 
         # Stack constraint bounds for all drones
-        num_box_constraints = self.p * self.num_drones
         num_collision_constraints = collision_constraints.shape[0]
-        box_lh = -1000 * np.ones(num_box_constraints)
-        box_uh = np.zeros(num_box_constraints)
-        collision_lh = self.min_collision_distance**2 * np.ones(num_collision_constraints)
-        collision_uh = 1000 * np.ones(num_collision_constraints)
-        ocp.constraints.lh = np.concatenate((box_lh, collision_lh))
-        ocp.constraints.uh = np.concatenate((box_uh, collision_uh))
+        ocp.constraints.lh = self.min_collision_distance**2 * np.ones(num_collision_constraints)
+        ocp.constraints.uh = 1000 * np.ones(num_collision_constraints)
 
         # Slack
         if self.soften_constraints:
-            ocp.constraints.Jsh = np.eye(num_box_constraints + num_collision_constraints)
+            ocp.constraints.Jsg = np.eye(self.p * self.num_drones)
+            ocp.constraints.Jsh = np.eye(num_collision_constraints)
             slack_multiplier = np.array(([1] * self.model.nx + [100] * self.model.nu) * self.num_drones * 2 + [1] * num_collision_constraints, dtype=float)
             if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced']:
                 for i, teleop_drone in enumerate(self.teleop_vec):
@@ -298,6 +288,10 @@ class NL_MPSC(MPSC):
             ocp.cost.Zl = slack_weights
             ocp.cost.zu = slack_weights
             ocp.cost.zl = slack_weights
+            ocp.cost.Zu_0 = slack_weights[:self.p * self.num_drones]
+            ocp.cost.Zl_0 = slack_weights[:self.p * self.num_drones]
+            ocp.cost.zu_0 = slack_weights[:self.p * self.num_drones]
+            ocp.cost.zl_0 = slack_weights[:self.p * self.num_drones]
 
         # Options
         ocp.solver_options.N_horizon = self.horizon
@@ -318,13 +312,14 @@ class NL_MPSC(MPSC):
         for stage in range(self.mpsc_cost_horizon, self.horizon):
             ocp_solver.cost_set(stage, 'W', W_mpc)
 
-        for i in range(1, self.horizon):
-            uh = np.array(ocp.constraints.uh).copy()
-            for j in range(num_box_constraints):
-                local_constraint_idx = j % self.p
-                tighten_by = (self.max_w * i) if local_constraint_idx < self.n * 2 else 0
-                uh[j] -= tighten_by
-            ocp_solver.constraints_set(i, 'uh', uh)
+        g = np.zeros((self.horizon, self.p * self.num_drones))
+
+        for i in range(self.horizon):
+            for j in range(self.p * self.num_drones):
+                tighten_by = (self.max_w * i) if j < self.n * 2 else 0
+                g[i, j] = (self.l_xu[j % self.p] - tighten_by)
+            g[i, :] += np.tile((self.L_x @ self.X_mid) + (self.L_u @ self.U_mid), self.num_drones)
+            ocp_solver.constraints_set(i, 'ug', g[i, :])
 
         self.ocp_solver = ocp_solver
 
