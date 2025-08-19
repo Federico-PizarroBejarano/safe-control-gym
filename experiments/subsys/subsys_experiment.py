@@ -1,3 +1,4 @@
+import pickle
 import time
 from functools import partial
 
@@ -18,7 +19,6 @@ from safe_control_gym.utils.registration import make
 
 def run(
     gui=False,
-    num_drones=1,
     frequency=25,
     duration=5.0,
     safety_filter=None,
@@ -28,6 +28,8 @@ def run(
     X_goal=None,
     sf_type='none',
 ):
+    num_drones = len(teleop_vec)
+
     # Create the simulation environment.
     sim = Sim(
         n_drones=num_drones,
@@ -145,12 +147,45 @@ def run(
         if gui:
             frames.append(sim.render(mode='rgb_array', default_cam_config=cam_config))
 
-    print(f'Time taken: {time.time() - start_time} seconds')
+    time_taken = time.time() - start_time
+    print(f'Time taken: {time_taken} seconds')
     sim.close()
 
     all_obs = np.array(all_obs)
     all_actions = np.array(all_actions)
     all_corrections = np.array(all_corrections)
+
+    all_results = munchify({
+        'sf_type': sf_type,
+        'teleop_vec': teleop_vec,
+        'X_goal': X_goal,
+        'obs': all_obs,
+        'actions': all_actions,
+        'corrections': all_corrections,
+        'state_constraints': {
+            'lower_bounds': safety_filter.state_constraint.lower_bounds,
+            'upper_bounds': safety_filter.state_constraint.upper_bounds,
+        },
+        'input_constraints': {
+            'lower_bounds': safety_filter.input_constraint.lower_bounds,
+            'upper_bounds': safety_filter.input_constraint.upper_bounds,
+        },
+        'min_collision_distance': safety_filter.min_collision_distance,
+        'experiment_len': experiment_len,
+        'frequency': frequency,
+        'time': time_taken,
+    })
+
+    # Save results to pickle file
+    if sf_type == 'none' and sum(teleop_vec) == 4:
+        name = 'none_lqr'
+    elif sf_type == 'none' and sum(teleop_vec) == 0:
+        name = 'none_mpc'
+    else:
+        name = sf_type
+
+    with open(f'./results/experiments/{name}.pkl', 'wb') as f:
+        pickle.dump(all_results, f)
 
     print('Mean Correction:', np.round(np.mean(all_corrections), 3))
     print('Max Correction:', np.round(np.max(all_corrections), 3))
@@ -270,7 +305,6 @@ def main():
 
     run(
         gui=False,
-        num_drones=len(teleop_vec),
         teleop_vec=teleop_vec,
         frequency=frequency,
         duration=duration,
