@@ -36,6 +36,15 @@ def compute_lqr_gain(model, x_0, u_0, Q, R, discrete_dynamics=True):
         P = scipy.linalg.solve_continuous_are(A, B, Q, R)
         gain = np.dot(np.linalg.inv(R), np.dot(B.T, P))
 
+    # check closed-loop stability
+    A_cl = A - B @ gain
+    eigenvalues = np.linalg.eigvals(A_cl)
+    if discrete_dynamics:
+        if np.any(np.abs(eigenvalues) >= 1):
+            print('Warning: Closed-loop system is unstable!')
+    else:
+        if np.any(np.real(eigenvalues) >= 0):
+            print('Warning: Closed-loop system is unstable!')
     return gain
 
 
@@ -88,7 +97,12 @@ def get_cost_weight_matrix(weights, dim):
     if len(weights) == dim:
         W = np.diag(weights)
     elif len(weights) == 1:
-        W = np.diag(weights * dim)
+        if isinstance(weights, list):
+            W = np.diag(weights * dim)
+        elif isinstance(weights, np.ndarray):
+            W = np.diag(weights.item() * np.ones(dim))
+        else:
+            raise Exception('Wrong type for cost weights.')
     else:
         raise Exception('Wrong dimension for cost weights.')
     return W

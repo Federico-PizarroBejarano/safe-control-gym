@@ -17,10 +17,11 @@ class QuadType(IntEnum):
     TWO_D_ATTITUDE = 4  # Two-dimensional (in the x-z plane) movement with attitude control.
     TWO_D_ATTITUDE_5S = 5  # Two-dimensional (in the x-z plane) movement with attitude control with 5 states.
     THREE_D_ATTITUDE = 6  # Three-dimensional movement with attitude control with 12 states.
-    TWO_D_ATTITUDE_BODY= 7  # Two-dimensional (in the x-z plane) 
-                                 # movement with attitude control with extended state for residual.
+    TWO_D_ATTITUDE_BODY = 7  # Two-dimensional (in the x-z plane)
+    # movement with attitude control with extended state for residual.
     THREE_D_ATTITUDE_10 = 8
     THREE_D_ATTITUDE_DELAY = 9  # Three-dimensional movement with attitude control with delay.
+
 
 def cmd2pwm(thrust, pwm2rpm_scale, pwm2rpm_const, ct, pwm_min, pwm_max):
     """Generic cmd to pwm function.
@@ -171,7 +172,7 @@ class AttitudeControl(ABC):
         self.integral_rpy_e = self.integral_rpy_e - rot_e * sim_timestep
         self.integral_rpy_e = np.clip(self.integral_rpy_e, -1500., 1500.)
         self.integral_rpy_e[0:2] = np.clip(self.integral_rpy_e[0:2], -1., 1.)
-        #### PID target torques ####################################
+        # PID target torques
         target_torques = - np.multiply(self.P_COEFF_TOR, rot_e) \
             + np.multiply(self.D_COEFF_TOR, rpy_rates_e) \
             + np.multiply(self.I_COEFF_TOR, self.integral_rpy_e)
@@ -198,3 +199,85 @@ class AttitudeControl(ABC):
         pwm = np.minimum(pwm, 1.0)
         thrust_pwm = pwm * self.MAX_PWM
         return thrust_pwm
+
+
+class ThrustTransformer:
+    """
+    Data transformation utilities for drone system identification.
+
+    Supports three transformation modes:
+    1. No transformation (raw data)
+    2. Subtract hover force
+    3. Normalize to [-1, 1] range
+    """
+
+    def __init__(self, transform_params: dict = None):
+        """
+        Initialize the transformer.
+
+        Args:
+            transformation_mode: 1 (no transform), 2 (subtract hover), 3 (normalize)
+        """
+        self.transform_params = transform_params
+
+    def apply_transform_force(self, force_data: np.ndarray) -> np.ndarray:
+        """Apply transformation to new force data using fitted parameters."""
+        if not self.transform_params:
+            raise ValueError('Must call fit_transform first to establish parameters')
+
+        if self.transformation_mode == 1:
+            return force_data.copy()
+        elif self.transformation_mode == 2:
+            return force_data - self.transform_params['f_hover']
+        elif self.transformation_mode == 3:
+            force_hover_sub = force_data - self.transform_params['f_hover']
+            f_range = self.transform_params['f_max'] - self.transform_params['f_min']
+            if f_range == 0:
+                return np.zeros_like(force_hover_sub)
+            return 2 * (force_hover_sub - self.transform_params['f_min']) / f_range - 1
+
+    def apply_transform_cmd(self, cmd_data: np.ndarray) -> np.ndarray:
+        """Apply transformation to new command data using fitted parameters."""
+        if not self.transform_params:
+            raise ValueError('Must call fit_transform first to establish parameters')
+
+        if self.transformation_mode == 1:
+            return cmd_data.copy()
+        elif self.transformation_mode == 2:
+            return cmd_data - self.transform_params['cmd_hover']
+        elif self.transformation_mode == 3:
+            cmd_hover_sub = cmd_data - self.transform_params['cmd_hover']
+            cmd_range = self.transform_params['cmd_max'] - self.transform_params['cmd_min']
+            if cmd_range == 0:
+                return np.zeros_like(cmd_hover_sub)
+            return 2 * (cmd_hover_sub - self.transform_params['cmd_min']) / cmd_range - 1
+
+    def reverse_transform_force(self, transformed_force: np.ndarray) -> np.ndarray:
+        """Convert transformed force data back to original space."""
+        if not self.transform_params:
+            raise ValueError('Must call fit_transform first to establish parameters')
+
+        if self.transformation_mode == 1:
+            return transformed_force.copy()
+        elif self.transformation_mode == 2:
+            return transformed_force + self.transform_params['f_hover']
+        elif self.transformation_mode == 3:
+            # Denormalize from [-1, 1]
+            f_range = self.transform_params['f_max'] - self.transform_params['f_min']
+            denormalized = (transformed_force + 1) * f_range / 2 + self.transform_params['f_min']
+            return denormalized + self.transform_params['f_hover']
+
+    def reverse_transform_cmd(self, transformed_cmd: np.ndarray) -> np.ndarray:
+        """Convert transformed command data back to original space."""
+        if not self.transform_params:
+            raise ValueError('Must call fit_transform first to establish parameters')
+
+        if self.transformation_mode == 1:
+            return transformed_cmd.copy()
+        elif self.transformation_mode == 2:
+            return transformed_cmd + self.transform_params['cmd_hover']
+        elif self.transformation_mode == 3:
+            # Denormalize from [-1, 1]
+            cmd_range = self.transform_params['cmd_max'] - self.transform_params['cmd_min']
+            denormalized = (transformed_cmd + 1) * cmd_range / 2 + self.transform_params['cmd_min']
+            return denormalized + self.transform_params['cmd_hover']

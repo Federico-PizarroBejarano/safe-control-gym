@@ -3,17 +3,17 @@ from copy import deepcopy
 
 import casadi as cs
 import numpy as np
+from numpy.linalg import LinAlgError
 from termcolor import colored
 
 from safe_control_gym.controllers.base_controller import BaseController
-from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system
+from safe_control_gym.controllers.lqr.lqr_utils import discretize_linear_system, get_cost_weight_matrix
 from safe_control_gym.controllers.mpc.mpc_utils import (compute_discrete_lqr_gain_from_cont_linear_system,
-                                                        compute_state_rmse, get_cost_weight_matrix,
-                                                        reset_constraints, rk_discrete)
+                                                        compute_state_rmse, reset_constraints, rk_discrete)
 from safe_control_gym.envs.benchmark_env import Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS, create_constraint_list
 from safe_control_gym.utils.utils import timing
-from numpy.linalg import LinAlgError
+
 
 class MPC(BaseController):
     '''MPC with full nonlinear model.'''
@@ -187,7 +187,7 @@ class MPC(BaseController):
             print(colored('LQR gain computation failed', 'red'))
             print(colored('Using the LQR gain and terminal cost in the MPC is disabled', 'yellow'))
             self.use_lqr_gain_and_terminal_cost = False
-            
+
         # nonlinear dynamics
         self.dynamics_func = rk_discrete(self.model.fc_func,
                                          self.model.nx,
@@ -418,18 +418,18 @@ class MPC(BaseController):
             goal_states = np.tile(self.env.X_GOAL.reshape(-1, 1), (1, self.T + 1))
         elif self.env.TASK == Task.TRAJ_TRACKING:
             # if the task is to track a periodic trajectory (circle, square, figure 8)
-            # append the T+1 states of the trajectory to the goal_states 
+            # append the T+1 states of the trajectory to the goal_states
             # such that the vel states won't drop at the end of an episode
             self.extended_ref_traj = deepcopy(self.traj)
             if self.env.TASK_INFO['trajectory_type'] in ['circle', 'square', 'figure8'] and \
-                not ('ilqr_ref' in self.env.TASK_INFO.keys() and self.env.TASK_INFO['ilqr_ref']):
-                self.extended_ref_traj = np.concatenate([self.extended_ref_traj, self.extended_ref_traj[:, :self.T+1]], axis=1)
+                    not ('ilqr_ref' in self.env.TASK_INFO.keys() and self.env.TASK_INFO['ilqr_ref']):
+                self.extended_ref_traj = np.concatenate([self.extended_ref_traj, self.extended_ref_traj[:, :self.T + 1]], axis=1)
             # Slice trajectory for horizon steps, if not long enough, repeat last state.
             start = min(self.traj_step, self.extended_ref_traj.shape[-1])
             end = min(self.traj_step + self.T + 1, self.extended_ref_traj.shape[-1])
-            remain = max(0, self.T + 1 - (end - start)) 
+            remain = max(0, self.T + 1 - (end - start))
             '''
-            TODO: if using the extended reference trajectory, 
+            TODO: if using the extended reference trajectory,
             variable remain will always be 0. Consider removing it.
             '''
             # print('start:', start, 'end:', end, 'remain:', remain)
@@ -476,16 +476,14 @@ class MPC(BaseController):
             dict: evaluation statisitcs, rendered frames.
         '''
         if env is None:
-            env = self.env  
+            env = self.env
         if terminate_run_on_done is None:
             terminate_run_on_done = self.terminate_run_on_done
 
         self.x_prev = None
         self.u_prev = None
-        if not env.initial_reset:
-            env.set_cost_function_param(self.Q, self.R)
+
         obs, info = env.reset()
-        # obs = env.reset()
         print('Init State:')
         print(obs)
         ep_returns, ep_lengths = [], []

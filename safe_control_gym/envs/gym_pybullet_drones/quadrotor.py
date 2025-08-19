@@ -13,6 +13,7 @@ import numpy as np
 import pybullet as p
 from gymnasium import spaces
 
+from safe_control_gym.controllers.lqr.lqr_utils import get_cost_weight_matrix
 from safe_control_gym.envs.benchmark_env import Cost, Task
 from safe_control_gym.envs.constraints import GENERAL_CONSTRAINTS
 from safe_control_gym.envs.disturbances import Downwash
@@ -223,7 +224,6 @@ class Quadrotor(BaseAviary):
                  rew_state_weight=1.0,
                  rew_act_weight=0.0001,
                  rew_exponential=True,
-                 use_rl_reward_weights=False,
                  done_on_out_of_bound=True,
                  info_mse_metric_state_weight=None,
                  **kwargs
@@ -247,11 +247,8 @@ class Quadrotor(BaseAviary):
         self.norm_act_scale = norm_act_scale
         self.obs_goal_horizon = obs_goal_horizon
         self.rew_state_weight = np.array(rew_state_weight, ndmin=1, dtype=float)
-        self.Q = np.diag(self.rew_state_weight)
         self.rew_act_weight = np.array(rew_act_weight, ndmin=1, dtype=float)
-        self.R = np.diag(self.rew_act_weight)
         self.rew_exponential = rew_exponential
-        self.use_rl_reward_weights = use_rl_reward_weights
         self.done_on_out_of_bound = done_on_out_of_bound
         if info_mse_metric_state_weight is None:
             if self.QUAD_TYPE == QuadType.ONE_D:
@@ -306,7 +303,7 @@ class Quadrotor(BaseAviary):
             QuadType.THREE_D_ATTITUDE_10: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
                                            'init_phi', 'init_theta', 'init_p', 'init_q'],
             QuadType.THREE_D_ATTITUDE_DELAY: ['init_x', 'init_x_dot', 'init_y', 'init_y_dot', 'init_z', 'init_z_dot',
-                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_tau']
+                                              'init_phi', 'init_theta', 'init_psi', 'init_p', 'init_q', 'init_r', 'init_tau']
         }
         if init_state is None:
             for init_name in self.INIT_STATE_RAND_INFO:  # Default zero state.
@@ -411,9 +408,7 @@ class Quadrotor(BaseAviary):
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0])
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0])
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
-            self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY]:
             self.U_GOAL = np.array([self.MASS * self.GRAVITY_ACC, 0.0, 0.0, 0.0])
         else:
             self.U_GOAL = np.ones(self.action_dim) * self.MASS * self.GRAVITY_ACC / self.action_dim
@@ -537,6 +532,11 @@ class Quadrotor(BaseAviary):
                 self.alpha_9 = prop_values['alpha_9']
                 self._setup_symbolic(prop_values)
                 self.setup_dynamics_si_3d_expression(prop_values)
+        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            if self.PHYSICS == Physics.DYN_SI_3D_DELAY:
+                prop_values['M'] = self.OVERRIDDEN_QUAD_MASS
+                self._setup_symbolic(prop_values)
+                self.setup_dynamics_si_3d_delay_expression(prop_values)
         self.last_prop_values = prop_values
 
         # Override inertial properties.
@@ -563,6 +563,10 @@ class Quadrotor(BaseAviary):
             self.attitude_control.reset()
         else:
             INIT_ANG_VEL = [init_values.get('init_' + k, 0.) for k in ['p', 'q', 'r']]  # TODO: transform from body rates.
+        if self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
+            INIT_TAU = init_values.get('init_tau', self.MASS * self.GRAVITY_ACC)
+            self.init_tau = INIT_TAU
+            self.motor_forces = INIT_TAU * np.ones((self.NUM_DRONES, 1))
         p.resetBasePositionAndOrientation(self.DRONE_IDS[0], INIT_XYZ,
                                           p.getQuaternionFromEuler(INIT_RPY),
                                           physicsClientId=self.PYB_CLIENT)
@@ -970,11 +974,11 @@ class Quadrotor(BaseAviary):
             psi_dot = cs.MX.sym('psi_dot')
             X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
             # Define input collective thrust and theta.
-            T = cs.MX.sym('T_c')  # normalized thrust [N]
-            R = cs.MX.sym('R_c')  # desired roll angle [rad]
-            P = cs.MX.sym('P_c')  # desired pitch angle [rad]
+            T_c = cs.MX.sym('T_c')  # normalized thrust [N]
+            R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
+            P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
-            U = cs.vertcat(T, R, P, Y_c)
+            U = cs.vertcat(T_c, R_c, P_c, Y_c)
             # The thrust in PWM is converted from the normalized thrust.
             # With the formulat F_desired = b_F * T + a_F
             # Haocheng's model
@@ -1003,29 +1007,29 @@ class Quadrotor(BaseAviary):
             # Define dynamics equations.
             # TODO: create a parameter for the new quad model
             X_dot = cs.vertcat(x_dot,
-                               (self.beta_1 * T + self.beta_2) * (
+                               (self.beta_1 * T_c + self.beta_2) * (
                                    cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
                                y_dot,
-                               (self.beta_1 * T + self.beta_2) * (
+                               (self.beta_1 * T_c + self.beta_2) * (
                                    cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
                                z_dot,
-                               (self.beta_1 * T + self.beta_2) * cs.cos(phi) * cs.cos(theta) - g,
+                               (self.beta_1 * T_c + self.beta_2) * cs.cos(phi) * cs.cos(theta) - g,
                                phi_dot,
                                theta_dot,
                                psi_dot,
-                               self.alpha_1 * phi + self.alpha_2 * phi_dot + self.alpha_3 * R,
-                               self.alpha_4 * theta + self.alpha_5 * theta_dot + self.alpha_6 * P,
+                               self.alpha_1 * phi + self.alpha_2 * phi_dot + self.alpha_3 * R_c,
+                               self.alpha_4 * theta + self.alpha_5 * theta_dot + self.alpha_6 * P_c,
                                self.alpha_7 * psi + self.alpha_8 * psi_dot + self.alpha_9 * Y_c)
             # Define observation.
             Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot)
 
-            T_mapping = self.beta_1 * T + self.beta_2
-            P_mapping = self.alpha_1 * theta + self.alpha_2 * theta_dot + self.alpha_3 * P
-            R_mapping = self.alpha_4 * phi + self.alpha_5 * phi_dot + self.alpha_6 * R
+            T_mapping = self.beta_1 * T_c + self.beta_2
+            P_mapping = self.alpha_1 * theta + self.alpha_2 * theta_dot + self.alpha_3 * P_c
+            R_mapping = self.alpha_4 * phi + self.alpha_5 * phi_dot + self.alpha_6 * R_c
             Y_mapping = self.alpha_7 * psi + self.alpha_8 * psi_dot + self.alpha_9 * Y_c
-            self.T_mapping_func = cs.Function('T_mapping', [T], [T_mapping])
-            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P], [P_mapping])
-            self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R], [R_mapping])
+            self.T_mapping_func = cs.Function('T_mapping', [T_c], [T_mapping])
+            self.P_mapping_func = cs.Function('P_mapping', [theta, theta_dot, P_c], [P_mapping])
+            self.R_mapping_func = cs.Function('R_mapping', [phi, phi_dot, R_c], [R_mapping])
             self.Y_mapping_func = cs.Function('Y_mapping', [psi, psi_dot, Y_c], [Y_mapping])
 
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_10:
@@ -1099,41 +1103,57 @@ class Quadrotor(BaseAviary):
             theta_dot = cs.MX.sym('theta_dot')
             psi = cs.MX.sym('psi')  # yaw angle [rad]
             psi_dot = cs.MX.sym('psi_dot')
-            thrust = cs.MX.sym('thrust')  # force from the motor
-            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, thrust)
+            force_motor = cs.MX.sym('force_motor')  # force from the motor
+            X = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
             T_c = cs.MX.sym('T_c')  # normalized thrust [N]
             R_c = cs.MX.sym('R_c')  # desired roll angle [rad]
             P_c = cs.MX.sym('P_c')  # desired pitch angle [rad]
             Y_c = cs.MX.sym('Y_c')  # desired yaw angle [rad]
             U = cs.vertcat(T_c, R_c, P_c, Y_c)
-            params_acc = prior_prop.get('param_acc', [1.0591, 0, 0.1108])
-            params_roll_rate = prior_prop.get('params_roll_rate', [-286.2, -23.03, 225.6])
-            params_pitch_rate = prior_prop.get('params_pitch_rate', [-286.2, -23.03, 225.6])
-            params_yaw_rate = prior_prop.get('params_yaw_rate', [-192.9, -22.22, 323.5])
-            thrust_dot = 1 / params_acc[2] * (T_c - thrust)  # [N/s]
-            thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
-            thrust_applied = thrust_scaled / 0.033
+            params_acc = prior_prop.get('param_acc', [0.0905, 0.8, 0.0814])
+            # params_acc = prior_prop.get('params_acc', [-0.2039, 0.8, 0.076])
+            params_roll_rate = prior_prop.get('params_roll_rate', [-238.1, -21.35, 179.65])
+            params_pitch_rate = prior_prop.get('params_pitch_rate', [-238.1, -21.35, 179.65])
+            params_yaw_rate = prior_prop.get('params_yaw_rate', [-170.4, -22.22, 280])
+            # thrust_dot = 1/params_acc[2] * (T_c - force_motor)  # [N/s]
+            cmd_min = self.transform_params['cmd_min']
+            cmd_max = self.transform_params['cmd_max']
+            f_min = self.transform_params['f_min']
+            f_max = self.transform_params['f_max']
+            dT_c = 2 * (T_c - cmd_min) / (cmd_max - cmd_min) - 1
+            df = 2 * (force_motor - f_min) / (f_max - f_min) - 1
+            df_dot = (params_acc[1] * (dT_c + params_acc[0]) - df) / params_acc[2]
+            # df_dot = (params_acc[1] * (T_c + params_acc[0]) - force_motor) / params_acc[2]
+            # thrust_scaled = params_acc[0] * thrust + params_acc[1]  # [N]
+            # print('in quad', self.MASS)
+            # thrust = force_motor
+            # force_motor_z = 30.30 * (params_acc[0] * thrust + params_acc[1])  # [N]
+            # force_motor_z = 32.221212 * thrust_scaled
             # Define dynamics equations.
             X_dot = cs.vertcat(x_dot,
-                               (thrust_applied) * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
+                               1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.cos(psi) + cs.sin(phi) * cs.sin(psi)),
                                y_dot,
-                               (thrust_applied) * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
+                               1 / self.MASS * force_motor * (cs.cos(phi) * cs.sin(theta) * cs.sin(psi) - cs.sin(phi) * cs.cos(psi)),
                                z_dot,
-                               (thrust_applied) * cs.cos(phi) * cs.cos(theta) - g,
+                               1 / self.MASS * force_motor * cs.cos(phi) * cs.cos(theta) - g,
                                phi_dot,
                                theta_dot,
                                psi_dot,
                                params_roll_rate[0] * phi + params_roll_rate[1] * phi_dot + params_roll_rate[2] * R_c,
                                params_pitch_rate[0] * theta + params_pitch_rate[1] * theta_dot + params_pitch_rate[2] * P_c,
                                params_yaw_rate[0] * psi + params_yaw_rate[1] * psi_dot + params_yaw_rate[2] * Y_c,
-                               thrust_dot)
+                               (f_max - f_min) / 2 * df_dot)
             # Define observation.
-            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, thrust_dot)
+            Y = cs.vertcat(x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, phi_dot, theta_dot, psi_dot, force_motor)
+
+        # Expand Q and R to be full matrices.
+        self.Q = get_cost_weight_matrix(self.rew_state_weight, nx)
+        self.R = get_cost_weight_matrix(self.rew_act_weight, nu)
 
         # Set the equilibrium values for linearizations.
         X_EQ = np.zeros(self.state_dim)
         if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE_DELAY]:
-            X_EQ[-1] = self.MASS * g  # thrust equilibrium
+            X_EQ[-1] = self.MASS * self.GRAVITY_ACC  # thrust equilibrium
 
         # if self.QUAD_TYPE == QuadType.TWO_D_ATTITUDE:
         if self.QUAD_TYPE in [QuadType.TWO_D_ATTITUDE, QuadType.TWO_D_ATTITUDE_5S]:
@@ -1209,7 +1229,7 @@ class Quadrotor(BaseAviary):
             action_dim = 4
             self.ACTION_LABELS = ['T1', 'T2', 'T3', 'T4']
             self.ACTION_UNITS = ['N', 'N', 'N', 'N'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-', '-']
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY]:
             action_dim = 4
             self.ACTION_LABELS = ['T_c', 'R_c', 'P_c', 'Y_c']
             self.ACTION_UNITS = ['N', 'rad', 'rad', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-', '-']
@@ -1217,10 +1237,7 @@ class Quadrotor(BaseAviary):
             action_dim = 3
             self.ACTION_LABELS = ['T_c', 'R_c', 'P_c']
             self.ACTION_UNITS = ['N', 'rad', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-']
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
-            action_dim = 4
-            self.ACTION_LABELS = ['T_c', 'R_c', 'P_c', 'Y_c']
-            self.ACTION_UNITS = ['N', 'rad', 'rad', 'rad'] if not self.NORMALIZED_RL_ACTION_SPACE else ['-', '-', '-', '-']
+
         # Defining physical bounds for actions
         max_roll_deg = 25
         max_pitch_deg = 25
@@ -1235,12 +1252,18 @@ class Quadrotor(BaseAviary):
             a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
             self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32), np.full(1, -max_pitch_rad, np.float32)]).flatten(),
                                            np.array([np.full(1, a_high, np.float32), np.full(1, max_pitch_rad, np.float32)]).flatten())
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE:
+        elif self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_DELAY]:
             n_mot = 4  # due to collective thrust
             # a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
             # a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
             a_low = 0.08  # [N] measured from hardware data
             a_high = 0.45  # [N]
+            max_roll_deg = 60
+            max_pitch_deg = 60
+            max_yaw_deg = 25
+            max_roll_rad = max_roll_deg * math.pi / 180
+            max_pitch_rad = max_pitch_deg * math.pi / 180
+            max_yaw_rad = max_yaw_deg * math.pi / 180
             self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32),
                                                      np.full(1, -max_roll_rad, np.float32),
                                                      np.full(1, -max_pitch_rad, np.float32),
@@ -1259,21 +1282,6 @@ class Quadrotor(BaseAviary):
                                            np.array([np.full(1, a_high, np.float32),
                                                      np.full(1, max_roll_rad, np.float32),
                                                      np.full(1, max_pitch_rad, np.float32)]).flatten())
-        elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
-            n_mot = 4
-            # a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
-            # a_high = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MAX_PWM + self.PWM2RPM_CONST)**2
-            a_low = 0.08  # [N] measured from hardware data
-            a_high = 0.45
-            self.physical_action_bounds = (np.array([np.full(1, a_low, np.float32),
-                                                     np.full(1, -max_roll_rad, np.float32),
-                                                     np.full(1, -max_pitch_rad, np.float32),
-                                                     np.full(1, -max_yaw_rad, np.float32)]).flatten(),
-                                           np.array([np.full(1, a_high, np.float32),
-                                                     np.full(1, max_roll_rad, np.float32),
-                                                     np.full(1, max_pitch_rad, np.float32),
-                                                     np.full(1, max_yaw_rad, np.float32)]).flatten())
-
         else:
             n_mot = 4 / action_dim
             a_low = self.KF * n_mot * (self.PWM2RPM_SCALE * self.MIN_PWM + self.PWM2RPM_CONST)**2
@@ -1302,9 +1310,9 @@ class Quadrotor(BaseAviary):
 
     def _set_observation_space(self):
         """Sets the observation space of the environment."""
-        self.x_threshold = 2
-        self.y_threshold = 2
-        self.z_threshold = 2
+        self.x_threshold = 4
+        self.y_threshold = 3
+        self.z_threshold = 2.5
         self.phi_threshold_radians = 85 * math.pi / 180
         self.theta_threshold_radians = 85 * math.pi / 180
         self.psi_threshold_radians = 180 * math.pi / 180  # Do not bound yaw.
@@ -1319,8 +1327,8 @@ class Quadrotor(BaseAviary):
 
         if self.QUAD_TYPE in [QuadType.THREE_D_ATTITUDE, QuadType.THREE_D_ATTITUDE_10, QuadType.THREE_D_ATTITUDE_DELAY]:
             # space for obstacle course
-            self.x_threshold = 3
-            self.y_threshold = 2
+            self.x_threshold = 4
+            self.y_threshold = 3
             self.z_threshold = 2.5
 
         # Define obs/state bounds, labels and units.
@@ -1615,10 +1623,17 @@ class Quadrotor(BaseAviary):
             ).reshape((10,))
         elif self.QUAD_TYPE == QuadType.THREE_D_ATTITUDE_DELAY:
             # {x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p_body, q_body, r_body}.
-            force_motor = self.current_physical_action[0] if self.current_physical_action is not None else 0.0
+            # print(f'{self.last_clipped_action[0, 0]=}')
+            # print(f'{self.motor_forces[0, 0]=}')
+            # if self.current_clipped_action is not None:
+            #     print(f'{self.current_clipped_action[0]=}')
+            # force_motor = self.last_clipped_action[0, 0] if self.last_clipped_action is not None else self.init_tau
+            force_motor = self.motor_forces[0, 0]
+            # force_motor = self.current_clipped_action[0] if self.current_clipped_action is not None else self.init_tau
+            force_motor = np.clip(force_motor, self.force_motor_low, self.force_motor_high)
             self.state = np.hstack(
-                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy[0], rpy[1], rpy[2],
-                 ang_v[0], ang_v[1], ang_v[2], force_motor]
+                [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
+                # [pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], rpy, rpy_rate, force_motor]
             ).reshape((13,))
         # if not np.array_equal(self.state,
         #                       np.clip(self.state, self.observation_space.low, self.observation_space.high)):
@@ -1741,9 +1756,6 @@ class Quadrotor(BaseAviary):
             return rew
 
         # Control cost.
-        if self.use_rl_reward_weights:
-            self.Q = np.diag(self.rew_state_weight)
-            self.R = np.diag(self.rew_act_weight)
         if self.COST == Cost.QUADRATIC:
             if self.TASK == Task.STABILIZATION:
                 return float(-1 * self.symbolic.loss(x=obs,
