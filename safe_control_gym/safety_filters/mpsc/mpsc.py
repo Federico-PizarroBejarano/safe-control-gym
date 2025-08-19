@@ -229,14 +229,14 @@ class MPSC(BaseSafetyFilter, ABC):
 
         clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon + 1)
 
-        if isinstance(self.cost_function, PRECOMPUTED_COST) or self.sf_type == 'safe_teleop_advanced':
+        if isinstance(self.cost_function, PRECOMPUTED_COST) or self.sf_type in ['safe_teleop_advanced', 'safe_swarm_advanced']:
             uncert_input_traj = self.uncert_traj
         else:
-            uncert_input_traj = np.zeros((self.horizon, self.num_drones, self.model.nu))
-            uncert_input_traj[0, :, :] = uncertified_action.reshape((self.num_drones, self.model.nu))
+            uncert_input_traj = np.tile(uncertified_action.reshape((self.num_drones, self.model.nu)), (self.horizon, 1, 1))
 
         if self.sf_type == 'safe_teleop_basic':
-            mpc_ref_action = np.tile([uncertified_action[0], 0, 0, 0], (self.num_drones, 1))
+            mpc_ref_action = np.zeros((self.num_drones, self.model.nu))
+            mpc_ref_action[:, 0] = uncertified_action.reshape(self.num_drones, self.model.nu)[:, 0]
         elif self.sf_type == 'safe_teleop_advanced':
             mpc_ref_action = uncert_input_traj[0, :, :].copy()
         else:

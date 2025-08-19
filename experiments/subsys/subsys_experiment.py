@@ -41,7 +41,7 @@ def run(
     experiment_len = int(duration * sim.control_freq)
     goal_len = experiment_len + safety_filter.horizon + 1
 
-    if sf_type == 'naive':
+    if sf_type in ['naive', 'safe_swarm_basic', 'safe_swarm_advanced']:
         safety_filter.env.X_GOAL = X_goal[:, teleop_vec, :].reshape((goal_len, sum(teleop_vec) * 12))
     elif sf_type != 'none':
         safety_filter.env.X_GOAL = X_goal.reshape((goal_len, num_drones * 12))
@@ -49,7 +49,10 @@ def run(
     if teleop_controller is not None:
         teleop_controller.env.X_GOAL = X_goal[:, teleop_vec, :].reshape((goal_len, sum(teleop_vec) * 12))
     if swarm_controller is not None:
-        swarm_controller.env.X_GOAL = X_goal[:, ~teleop_vec, :].reshape((goal_len, sum(~teleop_vec) * 12))
+        if sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
+            swarm_controller.env.X_GOAL = X_goal.reshape((goal_len, num_drones * 12))
+        else:
+            swarm_controller.env.X_GOAL = X_goal[:, ~teleop_vec, :].reshape((goal_len, sum(~teleop_vec) * 12))
 
     start_pos = X_goal[0, :, [0, 2, 4]].T.reshape((1, num_drones, 3))
     start_vel = X_goal[0, :, [1, 3, 5]].T.reshape((1, num_drones, 3))
@@ -91,7 +94,7 @@ def run(
                 lqr_trajectory = calculate_open_loop_traj(stacked_obs.copy(), teleop_controller, sim, teleop_vec, safety_filter.horizon, start_step=i)
                 uncert_traj[:, teleop_vec, :] = lqr_trajectory
                 assert np.linalg.norm(uncert_traj[0, teleop_vec, :].flatten() - uncert_cmd_teleop) < 1e-6, '[ERROR] LQR trajectory and uncert_cmd_teleop are not the same.'
-        if swarm_controller is not None:
+        if swarm_controller is not None and sf_type not in ['safe_swarm_basic', 'safe_swarm_advanced']:
             uncert_cmd_swarm = swarm_controller.select_action(stacked_obs[~teleop_vec, :].flatten(), info={'current_step': i})
             uncert_cmd[~teleop_vec, :] = uncert_cmd_swarm.copy().reshape(sum(~teleop_vec), 4)
             uncert_traj[:, ~teleop_vec, :] = swarm_controller.v_prev.T[:, :].reshape(safety_filter.horizon, sum(~teleop_vec), 4)
@@ -102,7 +105,7 @@ def run(
             cert_cmd = uncert_cmd
         else:
             safety_filter.uncert_traj = uncert_traj
-            if sf_type == 'naive':
+            if sf_type in ['naive', 'safe_swarm_basic', 'safe_swarm_advanced']:
                 uncert_traj = uncert_traj[:, teleop_vec, :]
                 safety_filter.uncert_traj = uncert_traj
                 cert_cmd, _ = safety_filter.certify_action(
@@ -112,10 +115,20 @@ def run(
             else:
                 cert_cmd, _ = safety_filter.certify_action(stacked_obs.flatten(), uncert_cmd.flatten(), info={'current_step': i})
 
-            if sf_type == 'naive':
+            if sf_type in ['naive', 'safe_swarm_basic', 'safe_swarm_advanced']:
                 full_cert_cmd = uncert_cmd.reshape(num_drones, -1).copy()
                 full_cert_cmd[teleop_vec, :] = cert_cmd.reshape(sum(teleop_vec), -1)
                 cert_cmd = full_cert_cmd.flatten()
+
+        if swarm_controller is not None and sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
+            cert_traj = np.tile(swarm_controller.model.U_EQ, (swarm_controller.horizon, num_drones, 1))
+            cert_traj[:, teleop_vec, :] = safety_filter.v_prev.T[:, :].reshape(safety_filter.horizon, sum(teleop_vec), 4)
+            assert np.linalg.norm(cert_traj[0, teleop_vec, :] - full_cert_cmd[teleop_vec, :]) < 1e-6, '[ERROR] SF trajectory and cert_cmd are not the same.'
+            swarm_controller.uncert_traj = cert_traj
+            cert_cmd_swarm = swarm_controller.select_action(stacked_obs.flatten(), info={'current_step': i})
+            cert_cmd = cert_cmd.copy().reshape(num_drones, -1)
+            cert_cmd[~teleop_vec, :] = cert_cmd_swarm.reshape(len(teleop_vec), 4)[~teleop_vec, :]
+            cert_cmd = cert_cmd.flatten()
 
         all_actions.append(cert_cmd.reshape(num_drones, -1))
         all_corrections.append(np.linalg.norm(uncert_cmd.reshape(num_drones, -1)[teleop_vec, :] - cert_cmd.reshape(num_drones, -1)[teleop_vec, :]))
@@ -198,15 +211,26 @@ def main():
     if sum(~teleop_vec) == 0 or sf_type == 'ours':
         mpc_controller = None
     else:
-        mpc_controller = make(config.safety_filter,
-                              env_func,
-                              initial_state=X_goal[0, ~teleop_vec, :],
-                              teleop_vec=np.array([False] * sum(~teleop_vec)),
-                              sf_type='ours',
-                              mpc_mode=True,
-                              cost_function='one_step_cost',
-                              **config.sf_config,
-                              )
+        if sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
+            mpc_controller = make(config.safety_filter,
+                                  env_func,
+                                  initial_state=X_goal[0, :, :],
+                                  teleop_vec=teleop_vec,
+                                  sf_type=sf_type,
+                                  mpc_mode=True,
+                                  cost_function='one_step_cost',
+                                  **config.sf_config,
+                                  )
+        else:
+            mpc_controller = make(config.safety_filter,
+                                  env_func,
+                                  initial_state=X_goal[0, ~teleop_vec, :],
+                                  teleop_vec=np.array([False] * sum(~teleop_vec)),
+                                  sf_type='ours',
+                                  mpc_mode=True,
+                                  cost_function='one_step_cost',
+                                  **config.sf_config,
+                                  )
         mpc_controller.reset()
 
     # Setup MPSC.
@@ -225,17 +249,23 @@ def main():
         }
         safety_filter = munchify(safety_filter)
     else:
-        if sf_type == 'naive':
-            sf_initial_state = X_goal[0, teleop_vec, :]
+        if sf_type in ['naive', 'safe_swarm_basic', 'safe_swarm_advanced']:
+            safety_filter = make(config.safety_filter,
+                                 env_func,
+                                 initial_state=X_goal[0, teleop_vec, :],
+                                 teleop_vec=np.array([True] * sum(teleop_vec)),
+                                 sf_type='naive',
+                                 cost_function=cost_func,
+                                 **config.sf_config)
         else:
-            sf_initial_state = X_goal[0, :, :]
-        safety_filter = make(config.safety_filter,
-                             env_func,
-                             initial_state=sf_initial_state,
-                             teleop_vec=np.array([True] * sum(teleop_vec)) if sf_type == 'naive' else teleop_vec,
-                             sf_type=sf_type,
-                             cost_function=cost_func,
-                             **config.sf_config)
+            safety_filter = make(config.safety_filter,
+                                 env_func,
+                                 initial_state=X_goal[0, :, :],
+                                 teleop_vec=teleop_vec,
+                                 sf_type=sf_type,
+                                 cost_function=cost_func,
+                                 **config.sf_config)
+
         safety_filter.reset()
 
     run(

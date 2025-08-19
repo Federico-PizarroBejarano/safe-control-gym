@@ -227,7 +227,10 @@ class NL_MPSC(MPSC):
         Q_mpc, R_mpc = [], []
         for teleop_drone in self.teleop_vec:
             if teleop_drone:
-                R_sf.append(np.eye(self.model.nu))
+                if self.sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
+                    R_sf.append(1000 * np.eye(self.model.nu))
+                else:
+                    R_sf.append(np.eye(self.model.nu))
                 Q_mpc.append(np.zeros((self.model.nx, self.model.nx)))
                 R_mpc.append(np.zeros((self.model.nu, self.model.nu)))
             else:
@@ -282,6 +285,10 @@ class NL_MPSC(MPSC):
             if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced']:
                 for i, teleop_drone in enumerate(self.teleop_vec):
                     if not teleop_drone:
+                        slack_multiplier[self.p * i:self.p * (i + 1)] /= 1000.0
+            if self.sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
+                for i, teleop_drone in enumerate(self.teleop_vec):
+                    if teleop_drone:
                         slack_multiplier[self.p * i:self.p * (i + 1)] /= 1000.0
             slack_weights = self.slack_cost * slack_multiplier
             ocp.cost.Zu = slack_weights
@@ -339,6 +346,8 @@ class NL_MPSC(MPSC):
         for i in range(self.num_drones):
             for j in range(i + 1, self.num_drones):
                 if self.sf_type in ['safe_teleop_basic', 'safe_teleop_advanced'] and not (self.teleop_vec[i] or self.teleop_vec[j]):
+                    continue
+                if self.sf_type in ['safe_swarm_basic', 'safe_swarm_advanced'] and (self.teleop_vec[i] and self.teleop_vec[j]):
                     continue
                 # Extract positions for drones i and j
                 pos_i = x_stack[i * self.model.nx + pos_indices]

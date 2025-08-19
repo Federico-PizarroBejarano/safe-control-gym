@@ -290,6 +290,7 @@ def calculate_collisions(all_obs, min_collision_distance):
             for d2 in range(d1 + 1, num_drones):
                 if np.linalg.norm(all_obs[timestep, d1, [0, 2, 4]] - all_obs[timestep, d2, [0, 2, 4]]) < min_collision_distance:
                     collision_matrix[d1, d2] += 1
+                    collision_matrix[d2, d1] += 1
     return collision_matrix
 
 

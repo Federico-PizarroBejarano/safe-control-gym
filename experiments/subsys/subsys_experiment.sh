@@ -14,6 +14,8 @@ TRAJ_TYPE='mild_collision'
 SF_TYPE='naive'
 # SF_TYPE='safe_teleop_basic'
 # SF_TYPE='safe_teleop_advanced'
+# SF_TYPE='safe_swarm_basic'
+# SF_TYPE='safe_swarm_advanced'
 # SF_TYPE='ours'
 
 
