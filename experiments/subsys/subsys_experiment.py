@@ -9,9 +9,10 @@ from munch import munchify
 from scipy.linalg import block_diag
 from scipy.spatial.transform import Rotation
 
+from experiments.subsys.plotting_results import create_video, plot_trajectory_3D
 from experiments.subsys.subsys_utils import (calculate_collisions, calculate_constraint_violations,
                                              calculate_input_rate_of_change, calculate_open_loop_traj,
-                                             calculate_RMSE, create_video, generate_X_goal, plot_results)
+                                             calculate_RMSE, generate_X_goal)
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.precomputed_cost import PRECOMPUTED_COST
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
@@ -205,7 +206,7 @@ def run(
 
     if gui:
         create_video(frames, sim.control_freq, sf_type)
-    plot_results(all_obs, X_goal)
+    plot_trajectory_3D(all_obs, X_goal, safety_filter.state_constraint)
 
 
 def main():
