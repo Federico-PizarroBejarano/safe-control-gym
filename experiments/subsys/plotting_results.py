@@ -67,8 +67,8 @@ all_state_labels = [
 
 def plot_trajectory_2D(approach_name, all_obs, X_goal, indices, state_constraints):
     # Get constraint bounds from safety filter config
-    upper_bounds = np.array(state_constraints['upper_bounds'])[[indices]].squeeze()
-    lower_bounds = np.array(state_constraints['lower_bounds'])[[indices]].squeeze()
+    upper_bounds = np.array(state_constraints.upper_bounds)[[indices]].squeeze()
+    lower_bounds = np.array(state_constraints.lower_bounds)[[indices]].squeeze()
 
     # Plot trajectory and constraints
     fig = plt.figure(figsize=(8, 8))
@@ -99,9 +99,9 @@ def plot_trajectory_3D(all_obs, X_goal, state_constraints):
     z = positions[:, :, 2]
 
     # Get constraint bounds from safety filter config
-    x_bounds = [state_constraints['lower_bounds'][0], state_constraints['upper_bounds'][0]]
-    y_bounds = [state_constraints['lower_bounds'][2], state_constraints['upper_bounds'][2]]
-    z_bounds = [state_constraints['lower_bounds'][4], state_constraints['upper_bounds'][4]]
+    x_bounds = [state_constraints.lower_bounds[0], state_constraints.upper_bounds[0]]
+    y_bounds = [state_constraints.lower_bounds[2], state_constraints.upper_bounds[2]]
+    z_bounds = [state_constraints.lower_bounds[4], state_constraints.upper_bounds[4]]
 
     # Plot trajectory and constraints
     fig = plt.figure(figsize=(8, 8))
@@ -126,9 +126,9 @@ def plot_trajectory_3D(all_obs, X_goal, state_constraints):
     z = velocities[:, :, 2]
 
     # Get constraint bounds from safety filter config
-    x_bounds = [state_constraints['lower_bounds'][1], state_constraints['upper_bounds'][1]]
-    y_bounds = [state_constraints['lower_bounds'][3], state_constraints['upper_bounds'][3]]
-    z_bounds = [state_constraints['lower_bounds'][5], state_constraints['upper_bounds'][5]]
+    x_bounds = [state_constraints.lower_bounds[1], state_constraints.upper_bounds[1]]
+    y_bounds = [state_constraints.lower_bounds[3], state_constraints.upper_bounds[3]]
+    z_bounds = [state_constraints.lower_bounds[5], state_constraints.upper_bounds[5]]
 
     # Plot trajectory and constraints
     fig = plt.figure(figsize=(8, 8))

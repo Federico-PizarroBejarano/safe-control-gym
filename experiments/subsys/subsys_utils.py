@@ -115,7 +115,7 @@ def generate_4_figure_8_traj(num_drones, num_iters, dt, phase):
 
     amplitude = 1.0  # Size of the figure 8
     center = np.array([0, 0, 1.5])  # Center point of intersection
-    freq_mult = 0.8
+    freq_mult = 0.75
 
     for i in range(num_iters):
         t = i * dt
