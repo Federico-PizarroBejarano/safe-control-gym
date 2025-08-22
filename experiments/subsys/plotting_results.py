@@ -10,7 +10,7 @@ from munch import munchify
 from experiments.subsys.subsys_utils import (calculate_collisions, calculate_constraint_violations,
                                              calculate_input_rate_of_change, calculate_RMSE)
 
-show_plots = True
+show_plots = False
 save_plots = True
 
 ordered_approaches = [

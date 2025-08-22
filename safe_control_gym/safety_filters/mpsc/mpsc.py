@@ -233,23 +233,13 @@ class MPSC(BaseSafetyFilter, ABC):
             uncert_input_traj = self.uncert_traj
         else:
             uncert_input_traj = np.tile(uncertified_action.reshape((self.num_drones, self.model.nu)), (self.horizon, 1, 1))
+            uncert_input_traj[1:, :, 1:] = 0.0
 
-        if self.sf_type == 'safe_teleop_basic':
-            mpc_ref_action = np.zeros((self.num_drones, self.model.nu))
-            mpc_ref_action[:, 0] = uncertified_action.reshape(self.num_drones, self.model.nu)[:, 0]
-        elif self.sf_type == 'safe_teleop_advanced':
-            mpc_ref_action = uncert_input_traj[0, :, :].copy()
-        else:
-            mpc_ref_action = np.tile(self.model.U_EQ, (self.num_drones, 1))
-        mpc_ref_action[self.teleop_vec, :] = 0
         for stage in range(self.horizon):
-            sf_ref_action = uncert_input_traj[stage, :, :].copy()
-            sf_ref_action[~self.teleop_vec, :] = 0
-            if self.sf_type == 'safe_teleop_advanced':
-                mpc_ref_action = uncert_input_traj[stage, :, :].copy()
-                mpc_ref_action[self.teleop_vec, :] = 0
-            action = (sf_ref_action + mpc_ref_action).flatten()
-            self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], action)))
+            action = uncert_input_traj[stage, :, :]
+            if self.sf_type not in ['safe_teleop_basic', 'safe_teleop_advanced']:
+                action[~self.teleop_vec, :] = self.model.U_EQ
+            self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], action.flatten())))
 
         self.ocp_solver.set(self.horizon, 'yref', clipped_X_GOAL[-1, :])
 
