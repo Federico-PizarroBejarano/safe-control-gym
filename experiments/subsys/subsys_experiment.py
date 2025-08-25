@@ -206,7 +206,7 @@ def run(
     print('Input Rate of Change:', np.round(input_rate_of_change, 3))
 
     if gui:
-        create_video(frames, sim.control_freq, sf_type)
+        create_video(frames, sim.control_freq, name, traj_type)
     plot_trajectory_3D(all_obs, X_goal, safety_filter.state_constraint)
 
 

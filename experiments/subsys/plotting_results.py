@@ -170,9 +170,9 @@ def add_box_to_plot(ax, x_bounds, y_bounds, z_bounds):
     ax.plot_surface(xx, y2, zz, alpha=0.1, color='r')  # Back
 
 
-def create_video(frames, fps, name):
+def create_video(frames, fps, name, traj_type):
     size = 480, 640
-    out = cv2.VideoWriter(f'./results/videos/{name}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
+    out = cv2.VideoWriter(f'./results/videos/{traj_type}/{name}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (size[1], size[0]), True)
     for frame in frames:
         out.write(frame)
     out.release()
