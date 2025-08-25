@@ -13,6 +13,8 @@ from experiments.subsys.subsys_utils import (calculate_collisions, calculate_con
 show_plots = False
 save_plots = True
 
+traj_types = ['no_collision', 'mild_collision', 'medium_collision', 'severe_collision']
+
 ordered_approaches = [
     'none_lqr',
     'none_mpc',
@@ -65,7 +67,7 @@ all_state_labels = [
 ]
 
 
-def plot_trajectory_2D(approach_name, all_obs, X_goal, indices, state_constraints):
+def plot_trajectory_2D(traj_type, approach_name, all_obs, X_goal, indices, state_constraints):
     # Get constraint bounds from safety filter config
     upper_bounds = np.array(state_constraints.upper_bounds)[[indices]].squeeze()
     lower_bounds = np.array(state_constraints.lower_bounds)[[indices]].squeeze()
@@ -86,7 +88,7 @@ def plot_trajectory_2D(approach_name, all_obs, X_goal, indices, state_constraint
     plt.grid(True)
     plt.legend()
     if save_plots:
-        plt.savefig(f'./results/plots/trajectories/{approach_name}.png', dpi=300)
+        plt.savefig(f'./results/plots/{traj_type}/trajectories/{approach_name}.png', dpi=300)
     if show_plots:
         plt.show()
 
@@ -176,7 +178,7 @@ def create_video(frames, fps, name):
     out.release()
 
 
-def load_all_approaches():
+def load_all_approaches(traj_type):
     '''Loads the results of every experiment.
 
     Returns:
@@ -186,7 +188,7 @@ def load_all_approaches():
     all_approaches = {}
 
     for approach in ordered_approaches:
-        with open(f'./results/experiments/{approach}.pkl', 'rb') as f:
+        with open(f'./results/experiments/{traj_type}/{approach}.pkl', 'rb') as f:
             all_approaches[approach] = munchify(pickle.load(f))
 
     return all_approaches
@@ -227,7 +229,7 @@ def extract_metric(data, key):
         raise ValueError(f'Invalid key: {key}')
 
 
-def plot_all_results(all_results, key):
+def plot_all_results(traj_type, all_results, key):
     '''Plots all the results.
 
     Args:
@@ -266,26 +268,27 @@ def plot_all_results(all_results, key):
     ax.yaxis.grid(True)
 
     if save_plots:
-        plt.savefig(f'./results/plots/{key}.png', dpi=300)
+        plt.savefig(f'./results/plots/{traj_type}/{key}.png', dpi=300)
     if show_plots:
         plt.show()
 
 
 if __name__ == '__main__':
-    all_results = load_all_approaches()
+    for traj_type in traj_types:
+        all_results = load_all_approaches(traj_type)
 
-    # Plot metrics
-    plot_all_results(all_results, 'RMSE_teleop')
-    plot_all_results(all_results, 'RMSE_swarm')
-    plot_all_results(all_results, 'state_violations')
-    plot_all_results(all_results, 'input_violations')
-    plot_all_results(all_results, 'collisions')
-    plot_all_results(all_results, 'rate_of_change_of_inputs')
-    plot_all_results(all_results, 'mean_corrections')
-    plot_all_results(all_results, 'max_corrections')
-    plot_all_results(all_results, 'time')
+        # Plot metrics
+        plot_all_results(traj_type, all_results, 'RMSE_teleop')
+        plot_all_results(traj_type, all_results, 'RMSE_swarm')
+        plot_all_results(traj_type, all_results, 'state_violations')
+        plot_all_results(traj_type, all_results, 'input_violations')
+        plot_all_results(traj_type, all_results, 'collisions')
+        plot_all_results(traj_type, all_results, 'rate_of_change_of_inputs')
+        plot_all_results(traj_type, all_results, 'mean_corrections')
+        plot_all_results(traj_type, all_results, 'max_corrections')
+        plot_all_results(traj_type, all_results, 'time')
 
-    # Plot trajectories
-    for approach in ordered_approaches:
-        exp_data = all_results[approach]
-        plot_trajectory_2D(approach, exp_data['obs'], exp_data['X_goal'], [0, 2], exp_data['state_constraints'])
+        # Plot trajectories
+        for approach in ordered_approaches:
+            exp_data = all_results[approach]
+            plot_trajectory_2D(traj_type, approach, exp_data['obs'], exp_data['X_goal'], [0, 2], exp_data['state_constraints'])

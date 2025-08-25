@@ -18,6 +18,12 @@ SF_TYPE='none'
 # SF_TYPE='safe_swarm_advanced'
 # SF_TYPE='ours'
 
+if [ "$1" ]; then
+  TRAJ_TYPE=$1
+fi
+if [ "$2" ]; then
+  SF_TYPE=$2
+fi
 
 python3 ./subsys_experiment.py \
     --algo lqr \

@@ -28,6 +28,7 @@ def run(
     teleop_vec=None,
     X_goal=None,
     sf_type='none',
+    traj_type='no_collision',
 ):
     num_drones = len(teleop_vec)
 
@@ -185,7 +186,7 @@ def run(
     else:
         name = sf_type
 
-    with open(f'./results/experiments/{name}.pkl', 'wb') as f:
+    with open(f'./results/experiments/{traj_type}/{name}.pkl', 'wb') as f:
         pickle.dump(all_results, f)
 
     print('Mean Correction:', np.round(np.mean(all_corrections), 3))
@@ -314,6 +315,7 @@ def main():
         swarm_controller=mpc_controller,
         X_goal=X_goal,
         sf_type=sf_type,
+        traj_type=config.traj_type,
     )
 
 

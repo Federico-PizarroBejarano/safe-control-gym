@@ -23,7 +23,7 @@ def generate_no_collision_traj(start_pos, num_iters, dt):
 
     for i in range(num_iters):
         # Gradually increase radius from 0 to 0.5 over the trajectory
-        radius = min(0.5, i / num_iters)
+        radius = min(0.6, i / num_iters)
 
         spiral_x = start_pos[:, 0] + radius * np.cos(i * dt)
         spiral_y = start_pos[:, 1] + radius * np.sin(i * dt)
