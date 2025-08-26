@@ -19,7 +19,7 @@ from safe_control_gym.utils.registration import make
 
 
 def run(
-    gui=False,
+    save_video=False,
     frequency=25,
     duration=5.0,
     safety_filter=None,
@@ -146,7 +146,7 @@ def run(
         sim.step(sim.freq // sim.control_freq)
         if i == 2:  # First few iters are very slow, so we don't count them
             start_time = time.time()
-        if gui:
+        if save_video:
             frames.append(sim.render(mode='rgb_array', default_cam_config=cam_config))
 
     time_taken = time.time() - start_time
@@ -205,7 +205,7 @@ def run(
     print('Collisions:', collisions)
     print('Input Rate of Change:', np.round(input_rate_of_change, 3))
 
-    if gui:
+    if save_video:
         create_video(frames, sim.control_freq, name, traj_type)
     plot_trajectory_3D(all_obs, X_goal, safety_filter.state_constraint)
 
@@ -306,7 +306,7 @@ def main():
         safety_filter.reset()
 
     run(
-        gui=False,
+        save_video=False,
         teleop_vec=teleop_vec,
         frequency=frequency,
         duration=duration,
