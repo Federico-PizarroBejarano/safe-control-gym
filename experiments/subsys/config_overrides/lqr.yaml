@@ -1,7 +1,7 @@
 algo: lqr
 algo_config:
   # Cost parameters
-  q_lqr: [10, 0.1, 10, 0.1, 10, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  q_lqr: [10, 0.1, 10, 0.1, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
   r_lqr: [0.1]
 
   # Model arguments

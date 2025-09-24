@@ -1,7 +1,7 @@
 safety_filter: nl_mpsc
 sf_config:
   # LQR controller parameters
-  q_mpc: [10, 0.1, 10, 0.1, 10, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  q_mpc: [10, 0.1, 10, 0.1, 10, 0.1, 0.1, 0.1, 0.1, 0.1]
   r_mpc: [0.1]
 
   # MPC Parameters

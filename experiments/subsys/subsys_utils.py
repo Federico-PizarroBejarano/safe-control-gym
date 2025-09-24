@@ -2,24 +2,24 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-def generate_X_goal(traj_type, num_iters, dt):
+def generate_X_goal(traj_type, num_iters, dt, nx):
     num_drones = 4
     if traj_type == 'no_collision':
         start_pos = np.array([[0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, -0.5, 0.5]])
-        return generate_no_collision_traj(start_pos, num_iters, dt)
+        return generate_no_collision_traj(start_pos, num_iters, dt, nx)
     elif traj_type == 'mild_collision':
-        return generate_mild_collision_traj(num_drones, num_iters, dt)
+        return generate_mild_collision_traj(num_drones, num_iters, dt, nx)
     elif traj_type == 'medium_collision':
-        return generate_medium_collision_traj(num_drones, num_iters, dt)
+        return generate_medium_collision_traj(num_drones, num_iters, dt, nx)
     elif traj_type == 'severe_collision':
-        return generate_severe_collision_traj(num_drones, num_iters, dt)
+        return generate_severe_collision_traj(num_drones, num_iters, dt, nx)
     else:
         raise ValueError(f'Invalid trajectory type: {traj_type}')
 
 
-def generate_no_collision_traj(start_pos, num_iters, dt):
+def generate_no_collision_traj(start_pos, num_iters, dt, nx):
     num_drones = start_pos.shape[0]
-    X_goal = np.zeros((num_iters, num_drones, 12))
+    X_goal = np.zeros((num_iters, num_drones, nx))
 
     for i in range(num_iters):
         # Gradually increase radius from 0 to 0.5 over the trajectory
@@ -34,13 +34,13 @@ def generate_no_collision_traj(start_pos, num_iters, dt):
     return X_goal
 
 
-def generate_mild_collision_traj(num_drones, num_iters, dt):
+def generate_mild_collision_traj(num_drones, num_iters, dt, nx):
     assert num_drones == 4, '[ERROR] Only 4 drones are supported for this trajectory'
-    return generate_4_figure_8_traj(num_drones, num_iters, dt, phase=[np.pi / 4, np.pi / 4, 3 * np.pi / 4, 3 * np.pi / 4])
+    return generate_4_figure_8_traj(num_drones, num_iters, dt, nx, phase=[np.pi / 4, np.pi / 4, 3 * np.pi / 4, 3 * np.pi / 4])
 
 
-def generate_medium_collision_traj(num_drones, num_iters, dt):
-    X_goal = np.zeros((num_iters, num_drones, 12))
+def generate_medium_collision_traj(num_drones, num_iters, dt, nx):
+    X_goal = np.zeros((num_iters, num_drones, nx))
 
     amplitude = 1.0  # Size of the figure 8
     center = np.array([0, 0, 1.5])  # Center point of intersection
@@ -105,13 +105,13 @@ def generate_medium_collision_traj(num_drones, num_iters, dt):
     return X_goal
 
 
-def generate_severe_collision_traj(num_drones, num_iters, dt):
+def generate_severe_collision_traj(num_drones, num_iters, dt, nx):
     assert num_drones == 4, '[ERROR] Only 4 drones are supported for this trajectory'
-    return generate_4_figure_8_traj(num_drones, num_iters, dt, phase=[np.pi / 2, np.pi / 2, np.pi / 2, np.pi / 2])
+    return generate_4_figure_8_traj(num_drones, num_iters, dt, nx, phase=[np.pi / 2, np.pi / 2, np.pi / 2, np.pi / 2])
 
 
-def generate_4_figure_8_traj(num_drones, num_iters, dt, phase):
-    X_goal = np.zeros((num_iters, num_drones, 12))
+def generate_4_figure_8_traj(num_drones, num_iters, dt, nx, phase):
+    X_goal = np.zeros((num_iters, num_drones, nx))
 
     amplitude = 1.0  # Size of the figure 8
     center = np.array([0, 0, 1.5])  # Center point of intersection
@@ -215,7 +215,7 @@ def calculate_input_rate_of_change(all_actions, frequency):
     return input_rate_of_change
 
 
-def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, start_step=0):
+def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, start_step, nu):
     '''Calculate open-loop trajectory by simulating forward.
 
     Args:
@@ -229,6 +229,8 @@ def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, 
     Returns:
         input_traj (np.ndarray): Array of input commands for horizon steps
     '''
+    num_drones = len(teleop_vec)
+
     # Save initial state
     initial_state = sim.data
 
@@ -236,23 +238,31 @@ def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, 
 
     # Simulate forward for horizon steps
     for i in range(horizon):
-        action = np.zeros((len(teleop_vec), 4))
-        action[teleop_vec, :] = controller.select_action(stacked_obs[teleop_vec, :].flatten(), info={'current_step': i + start_step}).reshape(sum(teleop_vec), 4)
+        action = np.zeros((num_drones, nu))
+        action[teleop_vec, :] = controller.select_action(stacked_obs[teleop_vec, :].flatten(), info={'current_step': i + start_step}).reshape(sum(teleop_vec), nu)
         input_traj.append(action[teleop_vec, :])
 
+        if nu == 3:
+            action = np.hstack((action.reshape(num_drones, nu), np.zeros((num_drones, 1)))).reshape((1, num_drones, nu + 1))
+        elif nu == 4:
+            action = action.reshape(1, num_drones, nu)
+
         # Step simulation
-        sim.attitude_control(action.reshape((1, len(teleop_vec), 4)))
+        sim.attitude_control(action)
         sim.step(sim.freq // sim.control_freq)
 
         # Get next observation
         obs = sim.data.states
         rpys = []
-        for drone_idx in range(len(teleop_vec)):
+        for drone_idx in range(num_drones):
             rpy = Rotation.from_quat(obs.quat[0, drone_idx, :].flatten()).as_euler('xyz')
             rpys.append(rpy)
-        rpys = np.array(rpys).reshape((1, len(teleop_vec), 3))
+        rpys = np.array(rpys).reshape((1, num_drones, 3))
         stacked_obs = np.concatenate([obs.pos, obs.vel, rpys, obs.ang_vel], axis=-1)[0, :, :]
-        stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11]]
+        if nu == 3:
+            stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 9, 10]]
+        elif nu == 4:
+            stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11]]
 
     # Reset simulator to initial state
     sim.data = initial_state

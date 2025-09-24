@@ -6,9 +6,9 @@ MPSC_COST_HORIZON=10
 DECAY_FACTOR=0.85
 
 # TRAJ_TYPE='no_collision'
-TRAJ_TYPE='mild_collision'
+# TRAJ_TYPE='mild_collision'
 # TRAJ_TYPE='medium_collision'
-# TRAJ_TYPE='severe_collision'
+TRAJ_TYPE='severe_collision'
 
 SF_TYPE='none'
 # SF_TYPE='naive'

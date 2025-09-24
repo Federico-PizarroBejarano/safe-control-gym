@@ -10,10 +10,18 @@ from munch import munchify
 from experiments.subsys.subsys_utils import (calculate_collisions, calculate_constraint_violations,
                                              calculate_input_rate_of_change, calculate_RMSE)
 
+# import tikzplotlib
+# from matplotlib.legend import Legend
+# from matplotlib.lines import Line2D
+# Line2D._us_dashSeq = property(lambda self: self._dash_pattern[1])
+# Line2D._us_dashOffset = property(lambda self: self._dash_pattern[0])
+# Legend._ncol = property(lambda self: self._ncols)
+
+
 show_plots = False
 save_plots = True
 
-traj_types = ['no_collision', 'mild_collision', 'medium_collision', 'severe_collision']
+traj_types = ['severe_collision']
 
 ordered_approaches = [
     'none_lqr',
@@ -89,6 +97,7 @@ def plot_trajectory_2D(traj_type, approach_name, all_obs, X_goal, indices, state
     plt.legend()
     if save_plots:
         plt.savefig(f'./results/plots/{traj_type}/trajectories/{approach_name}.png', dpi=300)
+        # tikzplotlib.save(f'./results/plots/{traj_type}/latex/{approach_name}.tex', axis_height='2.2in', axis_width='2.75in', extra_axis_parameters=['yticklabels={}'])
     if show_plots:
         plt.show()
 

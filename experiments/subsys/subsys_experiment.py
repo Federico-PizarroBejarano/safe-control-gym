@@ -31,6 +31,7 @@ def run(
     traj_type='no_collision',
 ):
     num_drones = len(teleop_vec)
+    nx, nu = safety_filter.model.nx, safety_filter.model.nu
 
     # Create the simulation environment.
     sim = Sim(
@@ -46,17 +47,17 @@ def run(
     goal_len = experiment_len + safety_filter.horizon + 1
 
     if sf_type in ['naive', 'safe_swarm_basic', 'safe_swarm_advanced']:
-        safety_filter.env.X_GOAL = X_goal[:, teleop_vec, :].reshape((goal_len, sum(teleop_vec) * 12))
+        safety_filter.env.X_GOAL = X_goal[:, teleop_vec, :].reshape((goal_len, sum(teleop_vec) * nx))
     elif sf_type != 'none':
-        safety_filter.env.X_GOAL = X_goal.reshape((goal_len, num_drones * 12))
+        safety_filter.env.X_GOAL = X_goal.reshape((goal_len, num_drones * nx))
 
     if teleop_controller is not None:
-        teleop_controller.env.X_GOAL = X_goal[:, teleop_vec, :].reshape((goal_len, sum(teleop_vec) * 12))
+        teleop_controller.env.X_GOAL = X_goal[:, teleop_vec, :].reshape((goal_len, sum(teleop_vec) * nx))
     if swarm_controller is not None:
         if sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
-            swarm_controller.env.X_GOAL = X_goal.reshape((goal_len, num_drones * 12))
+            swarm_controller.env.X_GOAL = X_goal.reshape((goal_len, num_drones * nx))
         else:
-            swarm_controller.env.X_GOAL = X_goal[:, ~teleop_vec, :].reshape((goal_len, sum(~teleop_vec) * 12))
+            swarm_controller.env.X_GOAL = X_goal[:, ~teleop_vec, :].reshape((goal_len, sum(~teleop_vec) * nx))
 
     start_pos = X_goal[0, :, [0, 2, 4]].T.reshape((1, num_drones, 3))
     start_vel = X_goal[0, :, [1, 3, 5]].T.reshape((1, num_drones, 3))
@@ -85,23 +86,26 @@ def run(
             rpys.append(rpy)
         rpys = np.array(rpys).reshape((1, num_drones, 3))
         stacked_obs = np.concatenate([obs.pos, obs.vel, rpys, obs.ang_vel], axis=-1)[0, :, :]
-        stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11]]
+        if nx == 10:
+            stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 9, 10]]
+        elif nx == 12:
+            stacked_obs = stacked_obs[:, [0, 3, 1, 4, 2, 5, 6, 7, 8, 9, 10, 11]]
         all_obs.append(stacked_obs)
 
         # Compute the control command.
-        uncert_cmd = np.zeros((num_drones, 4))
-        uncert_traj = np.zeros((safety_filter.horizon, num_drones, 4))
+        uncert_cmd = np.zeros((num_drones, nu))
+        uncert_traj = np.zeros((safety_filter.horizon, num_drones, nu))
         if teleop_controller is not None:
             uncert_cmd_teleop = teleop_controller.select_action(stacked_obs[teleop_vec, :].flatten(), info={'current_step': i})
-            uncert_cmd[teleop_vec, :] = uncert_cmd_teleop.copy().reshape(sum(teleop_vec), 4)
+            uncert_cmd[teleop_vec, :] = uncert_cmd_teleop.copy().reshape(sum(teleop_vec), nu)
             if (sf_type != 'none' and isinstance(safety_filter.cost_function, PRECOMPUTED_COST)) or sf_type == 'safe_teleop_advanced':
-                lqr_trajectory = calculate_open_loop_traj(stacked_obs.copy(), teleop_controller, sim, teleop_vec, safety_filter.horizon, start_step=i)
+                lqr_trajectory = calculate_open_loop_traj(stacked_obs.copy(), teleop_controller, sim, teleop_vec, safety_filter.horizon, start_step=i, nu=nu)
                 uncert_traj[:, teleop_vec, :] = lqr_trajectory
                 assert np.linalg.norm(uncert_traj[0, teleop_vec, :].flatten() - uncert_cmd_teleop) < 1e-6, '[ERROR] LQR trajectory and uncert_cmd_teleop are not the same.'
         if swarm_controller is not None and sf_type not in ['safe_swarm_basic', 'safe_swarm_advanced']:
             uncert_cmd_swarm = swarm_controller.select_action(stacked_obs[~teleop_vec, :].flatten(), info={'current_step': i})
-            uncert_cmd[~teleop_vec, :] = uncert_cmd_swarm.copy().reshape(sum(~teleop_vec), 4)
-            uncert_traj[:, ~teleop_vec, :] = swarm_controller.v_prev.T[:, :].reshape(safety_filter.horizon, sum(~teleop_vec), 4)
+            uncert_cmd[~teleop_vec, :] = uncert_cmd_swarm.copy().reshape(sum(~teleop_vec), nu)
+            uncert_traj[:, ~teleop_vec, :] = swarm_controller.v_prev.T[:, :].reshape(safety_filter.horizon, sum(~teleop_vec), nu)
             assert np.linalg.norm(uncert_traj[0, ~teleop_vec, :].flatten() - uncert_cmd_swarm) < 1e-6, '[ERROR] Swarm trajectory and uncert_cmd_swarm are not the same.'
         uncert_cmd = uncert_cmd.flatten()
 
@@ -113,36 +117,41 @@ def run(
                 uncert_traj = uncert_traj[:, teleop_vec, :]
                 safety_filter.uncert_traj = uncert_traj
                 cert_cmd, _ = safety_filter.certify_action(
-                    stacked_obs.reshape(num_drones, -1)[teleop_vec, :].flatten(),
-                    uncert_cmd.reshape(num_drones, -1)[teleop_vec, :].flatten(),
+                    stacked_obs.reshape(num_drones, nx)[teleop_vec, :].flatten(),
+                    uncert_cmd.reshape(num_drones, nu)[teleop_vec, :].flatten(),
                     info={'current_step': i})
             else:
                 cert_cmd, _ = safety_filter.certify_action(stacked_obs.flatten(), uncert_cmd.flatten(), info={'current_step': i})
 
             if sf_type in ['naive', 'safe_swarm_basic', 'safe_swarm_advanced']:
-                full_cert_cmd = uncert_cmd.reshape(num_drones, -1).copy()
-                full_cert_cmd[teleop_vec, :] = cert_cmd.reshape(sum(teleop_vec), -1)
+                full_cert_cmd = uncert_cmd.reshape(num_drones, nu).copy()
+                full_cert_cmd[teleop_vec, :] = cert_cmd.reshape(sum(teleop_vec), nu)
                 cert_cmd = full_cert_cmd.flatten()
 
         if swarm_controller is not None and sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
             cert_traj = np.tile(swarm_controller.model.U_EQ, (swarm_controller.horizon, num_drones, 1))
-            cert_traj[:, teleop_vec, :] = safety_filter.v_prev.T[:, :].reshape(safety_filter.horizon, sum(teleop_vec), 4)
+            cert_traj[:, teleop_vec, :] = safety_filter.v_prev.T[:, :].reshape(safety_filter.horizon, sum(teleop_vec), nu)
             assert np.linalg.norm(cert_traj[0, teleop_vec, :] - full_cert_cmd[teleop_vec, :]) < 1e-6, '[ERROR] SF trajectory and cert_cmd are not the same.'
             swarm_controller.uncert_traj = cert_traj
             cert_cmd_swarm = swarm_controller.select_action(stacked_obs.flatten(), info={'current_step': i})
-            cert_cmd = cert_cmd.copy().reshape(num_drones, -1)
-            cert_cmd[~teleop_vec, :] = cert_cmd_swarm.reshape(len(teleop_vec), 4)[~teleop_vec, :]
+            cert_cmd = cert_cmd.copy().reshape(num_drones, nu)
+            cert_cmd[~teleop_vec, :] = cert_cmd_swarm.reshape(len(teleop_vec), nu)[~teleop_vec, :]
             cert_cmd = cert_cmd.flatten()
 
-        all_actions.append(cert_cmd.reshape(num_drones, -1))
-        all_corrections.append(np.linalg.norm(uncert_cmd.reshape(num_drones, -1)[teleop_vec, :] - cert_cmd.reshape(num_drones, -1)[teleop_vec, :]))
+        all_actions.append(cert_cmd.reshape(num_drones, nu))
+        all_corrections.append(np.linalg.norm(uncert_cmd.reshape(num_drones, nu)[teleop_vec, :] - cert_cmd.reshape(num_drones, nu)[teleop_vec, :]))
 
         cert_cmd_clipped = np.clip(cert_cmd.copy(),
                                    np.tile(safety_filter.input_constraint.lower_bounds, num_drones),
                                    np.tile(safety_filter.input_constraint.upper_bounds, num_drones))
 
+        if nx == 10:
+            cert_cmd_clipped = np.hstack((cert_cmd_clipped.reshape(num_drones, nu), np.zeros((num_drones, 1)))).reshape((1, num_drones, nu + 1))
+        elif nx == 12:
+            cert_cmd_clipped = cert_cmd_clipped.reshape(1, num_drones, nu)
+
         # Apply the control command.
-        sim.attitude_control(cert_cmd_clipped.reshape(1, num_drones, -1))
+        sim.attitude_control(cert_cmd_clipped)
         sim.step(sim.freq // sim.control_freq)
         if i == 2:  # First few iters are very slow, so we don't count them
             start_time = time.time()
@@ -222,7 +231,17 @@ def main():
     # Generate goal trajectory.
     frequency = config.task_config.ctrl_freq
     duration = 15.0
-    X_goal = generate_X_goal(config.traj_type, int(duration * frequency) + config.sf_config.horizon + 1, 1 / frequency)
+
+    if config.task_config.quad_type == 8:
+        nx = 10
+        nu = 3
+    elif config.task_config.quad_type == 6:
+        nx = 12
+        nu = 4
+    else:
+        raise ValueError(f'Quad type {config.task_config.quad_type} not supported.')
+
+    X_goal = generate_X_goal(config.traj_type, int(duration * frequency) + config.sf_config.horizon + 1, 1 / frequency, nx)
 
     # Create a cost function.
     cost_func = config.sf_config.cost_function
@@ -282,6 +301,10 @@ def main():
             'input_constraint': {
                 'lower_bounds': config.task_config.constraints[1].lower_bounds,
                 'upper_bounds': config.task_config.constraints[1].upper_bounds,
+            },
+            'model': {
+                'nx': nx,
+                'nu': nu,
             },
         }
         safety_filter = munchify(safety_filter)

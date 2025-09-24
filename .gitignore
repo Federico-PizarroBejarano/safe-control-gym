@@ -2,6 +2,9 @@
 temp-data/
 videos/
 
+# LaTeX
+*.tex
+
 # acados
 c_generated_code/
 acados_*
