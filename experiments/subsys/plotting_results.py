@@ -221,7 +221,8 @@ def extract_metric(data, key):
         rmse = calculate_RMSE(data['obs'], data['X_goal'][:data['experiment_len'], :, :])[~data['teleop_vec']]
         return np.mean(rmse)
     elif key == 'state_violations':
-        return np.sum(calculate_constraint_violations(data['obs'], data['state_constraints']))
+        viols = calculate_constraint_violations(data['obs'], data['state_constraints'])
+        return np.sum(viols[:, [0, 2, 3]])
     elif key == 'input_violations':
         return np.sum(calculate_constraint_violations(data['actions'], data['input_constraints']))
     elif key == 'collisions':
