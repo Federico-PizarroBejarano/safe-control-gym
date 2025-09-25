@@ -17,6 +17,7 @@ class Cost_Function(str, Enum):
 
     ONE_STEP_COST = 'one_step_cost'         # Default MPSC cost function.
     PRECOMPUTED_COST = 'precomputed_cost'   # Smooth cost based on precomputed future states
+    CONSTANT_COST = 'constant_cost'         # Naive smooth cost based on constant input assmuption.
 
 
 def compute_RPI_set(Acl,

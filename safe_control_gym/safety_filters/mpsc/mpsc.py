@@ -16,6 +16,7 @@ import numpy as np
 from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain, get_cost_weight_matrix
 from safe_control_gym.controllers.mpc.mpc_utils import reset_constraints
 from safe_control_gym.safety_filters.base_safety_filter import BaseSafetyFilter
+from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.constant_cost import CONSTANT_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.one_step_cost import ONE_STEP_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_cost_function.precomputed_cost import PRECOMPUTED_COST
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function, get_trajectory_on_horizon
@@ -94,6 +95,8 @@ class MPSC(BaseSafetyFilter, ABC):
                 self.output_dir,
                 self.horizon,
             )
+        elif cost_function == Cost_Function.CONSTANT_COST:
+            self.cost_function = CONSTANT_COST(self.env, mpsc_cost_horizon, decay_factor)
         else:
             raise NotImplementedError(f'The MPSC cost function {cost_function} has not been implemented')
 
@@ -229,16 +232,34 @@ class MPSC(BaseSafetyFilter, ABC):
 
         clipped_X_GOAL = get_trajectory_on_horizon(self.env, iteration, self.horizon + 1)
 
-        if isinstance(self.cost_function, PRECOMPUTED_COST) or self.sf_type in ['safe_teleop_advanced', 'safe_swarm_advanced']:
-            uncert_input_traj = self.uncert_traj
+        curr_teleop_action = uncertified_action.reshape((self.num_drones, self.model.nu))[self.teleop_vec, :]
+        curr_swarm_action = uncertified_action.reshape((self.num_drones, self.model.nu))[~self.teleop_vec, :]
+
+        if self.sf_type == 'safe_swarm_basic':
+            teleop_uncert_traj = np.tile(curr_teleop_action, (self.horizon, 1, 1))
+            teleop_uncert_traj[1:, :, 1:] = 0.0
+        elif self.sf_type == 'safe_swarm_advanced':
+            teleop_uncert_traj = self.teleop_uncert_traj
         else:
-            uncert_input_traj = np.tile(uncertified_action.reshape((self.num_drones, self.model.nu)), (self.horizon, 1, 1))
-            uncert_input_traj[1:, :, 1:] = 0.0
+            if isinstance(self.cost_function, ONE_STEP_COST) or isinstance(self.cost_function, CONSTANT_COST):
+                teleop_uncert_traj = np.tile(curr_teleop_action, (self.horizon, 1, 1))
+            elif isinstance(self.cost_function, PRECOMPUTED_COST):
+                teleop_uncert_traj = self.teleop_uncert_traj
+            else:
+                NotImplementedError('Cost function not implemented for acados.')
+
+        if self.sf_type == 'safe_teleop_basic':
+            swarm_uncert_traj = np.tile(curr_swarm_action, (self.horizon, 1, 1))
+            swarm_uncert_traj[1:, :, 1:] = 0.0
+        elif self.sf_type == 'safe_teleop_advanced':
+            swarm_uncert_traj = self.swarm_uncert_traj
+        else:
+            swarm_uncert_traj = np.tile(self.model.U_EQ, (self.horizon, sum(~self.teleop_vec), 1))
 
         for stage in range(self.horizon):
-            action = uncert_input_traj[stage, :, :]
-            if self.sf_type not in ['safe_teleop_basic', 'safe_teleop_advanced']:
-                action[~self.teleop_vec, :] = self.model.U_EQ
+            action = np.zeros((self.num_drones, self.model.nu))
+            action[self.teleop_vec, :] = teleop_uncert_traj[stage, :, :]
+            action[~self.teleop_vec, :] = swarm_uncert_traj[stage, :, :]
             self.ocp_solver.cost_set(stage, 'yref', np.concatenate((clipped_X_GOAL[stage, :], action.flatten())))
 
         self.ocp_solver.set(self.horizon, 'yref', clipped_X_GOAL[-1, :])

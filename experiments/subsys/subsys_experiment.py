@@ -94,28 +94,28 @@ def run(
 
         # Compute the control command.
         uncert_cmd = np.zeros((num_drones, nu))
-        uncert_traj = np.zeros((safety_filter.horizon, num_drones, nu))
+        teleop_uncert_traj = np.zeros((safety_filter.horizon, sum(teleop_vec), nu))
+        swarm_uncert_traj = np.zeros((safety_filter.horizon, sum(~teleop_vec), nu))
         if teleop_controller is not None:
             uncert_cmd_teleop = teleop_controller.select_action(stacked_obs[teleop_vec, :].flatten(), info={'current_step': i})
             uncert_cmd[teleop_vec, :] = uncert_cmd_teleop.copy().reshape(sum(teleop_vec), nu)
             if (sf_type != 'none' and isinstance(safety_filter.cost_function, PRECOMPUTED_COST)) or sf_type == 'safe_teleop_advanced':
-                lqr_trajectory = calculate_open_loop_traj(stacked_obs.copy(), teleop_controller, sim, teleop_vec, safety_filter.horizon, start_step=i, nu=nu)
-                uncert_traj[:, teleop_vec, :] = lqr_trajectory
-                assert np.linalg.norm(uncert_traj[0, teleop_vec, :].flatten() - uncert_cmd_teleop) < 1e-6, '[ERROR] LQR trajectory and uncert_cmd_teleop are not the same.'
+                teleop_uncert_traj = calculate_open_loop_traj(stacked_obs.copy(), teleop_controller, sim, teleop_vec, safety_filter.horizon, start_step=i, nu=nu)
+                assert np.linalg.norm(teleop_uncert_traj[0, :, :].flatten() - uncert_cmd_teleop) < 1e-6, '[ERROR] LQR trajectory and uncert_cmd_teleop are not the same.'
+                safety_filter.teleop_uncert_traj = teleop_uncert_traj
         if swarm_controller is not None and sf_type not in ['safe_swarm_basic', 'safe_swarm_advanced']:
             uncert_cmd_swarm = swarm_controller.select_action(stacked_obs[~teleop_vec, :].flatten(), info={'current_step': i})
             uncert_cmd[~teleop_vec, :] = uncert_cmd_swarm.copy().reshape(sum(~teleop_vec), nu)
-            uncert_traj[:, ~teleop_vec, :] = swarm_controller.v_prev.T[:, :].reshape(safety_filter.horizon, sum(~teleop_vec), nu)
-            assert np.linalg.norm(uncert_traj[0, ~teleop_vec, :].flatten() - uncert_cmd_swarm) < 1e-6, '[ERROR] Swarm trajectory and uncert_cmd_swarm are not the same.'
+            if sf_type == 'safe_teleop_advanced':
+                swarm_uncert_traj = swarm_controller.v_prev.T[:, :].reshape(safety_filter.horizon, sum(~teleop_vec), nu)
+                assert np.linalg.norm(swarm_uncert_traj[0, :, :].flatten() - uncert_cmd_swarm) < 1e-6, '[ERROR] Swarm trajectory and uncert_cmd_swarm are not the same.'
+                safety_filter.swarm_uncert_traj = swarm_uncert_traj
         uncert_cmd = uncert_cmd.flatten()
 
         if sf_type == 'none' or sum(teleop_vec) == 0:
             cert_cmd = uncert_cmd
         else:
-            safety_filter.uncert_traj = uncert_traj
             if sf_type in ['naive', 'safe_swarm_basic', 'safe_swarm_advanced']:
-                uncert_traj = uncert_traj[:, teleop_vec, :]
-                safety_filter.uncert_traj = uncert_traj
                 cert_cmd, _ = safety_filter.certify_action(
                     stacked_obs.reshape(num_drones, nx)[teleop_vec, :].flatten(),
                     uncert_cmd.reshape(num_drones, nu)[teleop_vec, :].flatten(),
@@ -129,10 +129,10 @@ def run(
                 cert_cmd = full_cert_cmd.flatten()
 
         if swarm_controller is not None and sf_type in ['safe_swarm_basic', 'safe_swarm_advanced']:
-            cert_traj = np.tile(swarm_controller.model.U_EQ, (swarm_controller.horizon, num_drones, 1))
-            cert_traj[:, teleop_vec, :] = safety_filter.v_prev.T[:, :].reshape(safety_filter.horizon, sum(teleop_vec), nu)
-            assert np.linalg.norm(cert_traj[0, teleop_vec, :] - full_cert_cmd[teleop_vec, :]) < 1e-6, '[ERROR] SF trajectory and cert_cmd are not the same.'
-            swarm_controller.uncert_traj = cert_traj
+            cert_traj = np.tile(swarm_controller.model.U_EQ, (swarm_controller.horizon, sum(teleop_vec), 1))
+            cert_traj[:, :, :] = safety_filter.v_prev.T[:, :].reshape(safety_filter.horizon, sum(teleop_vec), nu)
+            assert np.linalg.norm(cert_traj[0, :, :] - full_cert_cmd[teleop_vec, :]) < 1e-6, '[ERROR] SF trajectory and cert_cmd are not the same.'
+            swarm_controller.teleop_uncert_traj = cert_traj
             cert_cmd_swarm = swarm_controller.select_action(stacked_obs.flatten(), info={'current_step': i})
             cert_cmd = cert_cmd.copy().reshape(num_drones, nu)
             cert_cmd[~teleop_vec, :] = cert_cmd_swarm.reshape(len(teleop_vec), nu)[~teleop_vec, :]
