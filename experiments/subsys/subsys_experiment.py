@@ -245,7 +245,11 @@ def main():
 
     # Create a cost function.
     cost_func = config.sf_config.cost_function
+    mpsc_cost_horizon = config.sf_config.mpsc_cost_horizon
+    decay_factor = config.sf_config.decay_factor
     del config.sf_config.cost_function
+    del config.sf_config.mpsc_cost_horizon
+    del config.sf_config.decay_factor
 
     # Create an environment
     env_func = partial(make,
@@ -274,7 +278,9 @@ def main():
                                   teleop_vec=teleop_vec,
                                   sf_type=sf_type,
                                   mpc_mode=True,
-                                  cost_function='one_step_cost',
+                                  cost_function='precomputed_cost',
+                                  mpsc_cost_horizon=20,
+                                  decay_factor=1.0,
                                   **config.sf_config,
                                   )
         else:
@@ -285,6 +291,8 @@ def main():
                                   sf_type='ours',
                                   mpc_mode=True,
                                   cost_function='one_step_cost',
+                                  mpsc_cost_horizon=mpsc_cost_horizon,
+                                  decay_factor=decay_factor,
                                   **config.sf_config,
                                   )
         mpc_controller.reset()
@@ -316,6 +324,8 @@ def main():
                                  teleop_vec=np.array([True] * sum(teleop_vec)),
                                  sf_type='naive',
                                  cost_function=cost_func,
+                                 mpsc_cost_horizon=mpsc_cost_horizon,
+                                 decay_factor=decay_factor,
                                  **config.sf_config)
         else:
             safety_filter = make(config.safety_filter,
@@ -324,6 +334,8 @@ def main():
                                  teleop_vec=teleop_vec,
                                  sf_type=sf_type,
                                  cost_function=cost_func,
+                                 mpsc_cost_horizon=mpsc_cost_horizon,
+                                 decay_factor=decay_factor,
                                  **config.sf_config)
 
         safety_filter.reset()
