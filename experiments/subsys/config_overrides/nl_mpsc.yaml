@@ -13,6 +13,7 @@ sf_config:
   cost_function: one_step_cost
   mpsc_cost_horizon: 5
   decay_factor: 0.85
+  mpc_to_sf_ratio: 0.05
 
   # Softening
   soften_constraints: True

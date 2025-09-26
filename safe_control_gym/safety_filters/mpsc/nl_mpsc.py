@@ -42,6 +42,7 @@ class NL_MPSC(MPSC):
                  true_teleop_vec: list = None,
                  sf_type: str = 'none',
                  mpc_mode: bool = False,
+                 mpc_to_sf_ratio: float = 0.1,
                  **kwargs
                  ):
         '''Initialize the MPSC.
@@ -65,6 +66,7 @@ class NL_MPSC(MPSC):
             true_teleop_vec (list): The true safety filter vector.
             sf_type (str): The safety filter type.
             mpc_mode (bool): Whether to use MPC mode or not.
+            mpc_to_sf_ratio (float): The ratio of the MPC cost to the SF cost.
         '''
 
         self.model_bias = None
@@ -75,6 +77,7 @@ class NL_MPSC(MPSC):
         self.true_teleop_vec = true_teleop_vec
         self.sf_type = sf_type
         self.mpc_mode = mpc_mode
+        self.mpc_to_sf_ratio = mpc_to_sf_ratio
 
         super().__init__(env_func, horizon, q_mpc, r_mpc, warmstart, cost_function, mpsc_cost_horizon, decay_factor, **kwargs)
 
@@ -241,8 +244,8 @@ class NL_MPSC(MPSC):
                     Q_mpc.append(self.Q)
                     R_mpc.append(self.R)
                 R_sf.append(np.zeros((self.model.nu, self.model.nu)))
-        W_mpc = block_diag(*Q_mpc, *R_mpc)
-        W_sf = block_diag(np.zeros((self.model.nx * self.num_drones, self.model.nx * self.num_drones)), *R_sf)
+        W_mpc = (self.mpc_to_sf_ratio ** 0.5) * block_diag(*Q_mpc, *R_mpc)
+        W_sf = (self.mpc_to_sf_ratio ** (-0.5)) * block_diag(np.zeros((self.model.nx * self.num_drones, self.model.nx * self.num_drones)), *R_sf)
         ocp.cost.W = W_mpc + W_sf
         ocp.cost.W_e = (W_mpc + W_sf)[:nx, :nx]
         ocp.cost.Vx = np.zeros((ny, nx))

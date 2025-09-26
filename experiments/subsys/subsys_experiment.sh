@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# MPSC_COST='one_step_cost'
-MPSC_COST='precomputed_cost'
+MPSC_COST='one_step_cost'
+# MPSC_COST='precomputed_cost'
 MPSC_COST_HORIZON=10
 DECAY_FACTOR=0.85
 
