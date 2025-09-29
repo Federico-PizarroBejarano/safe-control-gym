@@ -226,7 +226,7 @@ def extract_metric(data, key):
     elif key == 'input_violations':
         return np.sum(calculate_constraint_violations(data['actions'], data['input_constraints']))
     elif key == 'collisions':
-        return np.sum(calculate_collisions(data['obs'], data['min_collision_distance']))
+        return np.sum(calculate_collisions(data['obs'], data['min_collision_distance'])) // 2
     elif key == 'rate_of_change_of_inputs':
         return np.mean(calculate_input_rate_of_change(data['actions'], data['frequency']))
     elif key == 'mean_corrections':
