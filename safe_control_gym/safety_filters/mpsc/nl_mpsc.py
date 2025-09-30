@@ -326,7 +326,7 @@ class NL_MPSC(MPSC):
 
         for i in range(self.horizon):
             for j in range(self.p * self.num_drones):
-                tighten_by = (self.max_w * i) if j < self.n * 2 else 0
+                tighten_by = (self.max_w * i) if (j % self.p < self.n * 2) else 0
                 g[i, j] = (self.l_xu[j % self.p] - tighten_by)
             g[i, :] += np.tile((self.L_x @ self.X_mid) + (self.L_u @ self.U_mid), self.num_drones)
             ocp_solver.constraints_set(i, 'ug', g[i, :])
