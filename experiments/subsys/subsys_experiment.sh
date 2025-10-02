@@ -11,7 +11,9 @@ DECAY_FACTOR=0.9
 # TRAJ_TYPE='medium_collision'
 TRAJ_TYPE='severe_collision'
 
-SF_TYPE='none'
+SF_TYPE='none_lqr'
+# SF_TYPE='none_mpc'
+# SF_TYPE='none'
 # SF_TYPE='naive'
 # SF_TYPE='safe_teleop_basic'
 # SF_TYPE='safe_teleop_advanced'

@@ -1,11 +1,16 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+from safe_control_gym.controllers.lqr.lqr_utils import compute_lqr_gain, get_cost_weight_matrix
+
 
 def generate_X_goal(traj_type, num_iters, dt, nx):
     num_drones = 4
     if traj_type == 'no_collision':
-        start_pos = np.array([[0.5, 0.5, 0.5], [0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, -0.5, 0.5]])
+        start_pos = np.array([[0.5, 0.5, 0.5],
+                              [0.5, -0.5, 0.5],
+                              [-0.5, 0.5, 0.5],
+                              [-0.5, -0.5, 0.5]])
         return generate_no_collision_traj(start_pos, num_iters, dt, nx)
     elif traj_type == 'mild_collision':
         return generate_mild_collision_traj(num_drones, num_iters, dt, nx)
@@ -195,13 +200,13 @@ def calculate_constraint_violations(all_values, constraint_bounds):
     return constraint_violations.reshape((num_drones, -1))
 
 
-def calculate_collisions(all_obs, min_collision_distance):
+def calculate_collisions(all_obs, min_collision_distance, pos_indices=[0, 2, 4]):
     num_drones = all_obs.shape[1]
     collision_matrix = np.zeros((num_drones, num_drones))
     for timestep in range(len(all_obs)):
         for d1 in range(num_drones):
             for d2 in range(d1 + 1, num_drones):
-                if np.linalg.norm(all_obs[timestep, d1, [0, 2, 4]] - all_obs[timestep, d2, [0, 2, 4]]) < min_collision_distance:
+                if np.linalg.norm(all_obs[timestep, d1, pos_indices] - all_obs[timestep, d2, pos_indices]) < min_collision_distance:
                     collision_matrix[d1, d2] += 1
                     collision_matrix[d2, d1] += 1
     return collision_matrix
@@ -210,8 +215,8 @@ def calculate_collisions(all_obs, min_collision_distance):
 def calculate_input_rate_of_change(all_actions, frequency):
     num_drones = all_actions.shape[1]
     input_rate_of_change = np.zeros((num_drones))
-    for i in range(num_drones):
-        input_rate_of_change[i] = np.linalg.norm(np.diff(all_actions[:, i, :], axis=0), 'fro') * frequency
+    for drone_idx in range(num_drones):
+        input_rate_of_change[drone_idx] = np.linalg.norm(np.diff(all_actions[:, drone_idx, :], axis=0), 'fro') * frequency
     return input_rate_of_change
 
 
@@ -245,7 +250,7 @@ def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, 
         if nu == 3:
             action = np.hstack((action.reshape(num_drones, nu), np.zeros((num_drones, 1)))).reshape((1, num_drones, nu + 1))
         elif nu == 4:
-            action = action.reshape(1, num_drones, nu)
+            action = action.reshape((1, num_drones, nu))
 
         # Step simulation
         sim.attitude_control(action)
@@ -268,3 +273,59 @@ def calculate_open_loop_traj(stacked_obs, controller, sim, teleop_vec, horizon, 
     sim.data = initial_state
 
     return np.array(input_traj)
+
+
+def generate_lqr_gains(num_trials, model, start_q_lqr, start_r_lqr):
+    start_q_lqr = np.array(start_q_lqr)
+    start_r_lqr = np.array(start_r_lqr)
+
+    min_q = start_q_lqr / 10.0
+    max_q = start_q_lqr * 10.0
+    min_r = start_r_lqr / 10.0
+    max_r = start_r_lqr * 10.0
+
+    lqr_gains = []
+    q_lqr = start_q_lqr.copy()
+    r_lqr = start_r_lqr.copy()
+    for _ in range(num_trials):
+        # Generate gain matrix
+        Q = get_cost_weight_matrix(q_lqr, model.nx)
+        R = get_cost_weight_matrix(r_lqr, model.nu)
+        gain = compute_lqr_gain(model, model.X_EQ, model.U_EQ, Q, R, True)
+        lqr_gains.append(gain)
+
+        # Generate random numbers in log space for logarithmic distribution
+        q_lqr = np.exp(np.log(min_q) + np.multiply(np.log(max_q) - np.log(min_q), np.random.rand(*q_lqr.shape)))
+        r_lqr = np.exp(np.log(min_r) + np.multiply(np.log(max_r) - np.log(min_r), np.random.rand(*r_lqr.shape)))
+
+    np.save('./parameters/lqr_gains.npy', np.array(lqr_gains))
+
+
+def generate_starting_poses(num_trials, num_drones, min_collision_distance):
+    min_position, max_position = np.array([-1, -1, 0.01]), np.array([1, 1, 3])
+    min_velocity, max_velocity = np.array([-2, -2, -2]), np.array([2, 2, 2])
+
+    starting_position = np.array([[1.0, 0.0, 1.5],
+                                  [-0.0, -1.0, 1.5],
+                                  [0.0, 1.0, 1.5],
+                                  [-1.0, -0.0, 1.5]])
+    starting_velocity = np.array([[0.0, -0.75, -1.5],
+                                  [0.75, -0.0, -1.5],
+                                  [-0.75, 0.0, -1.5],
+                                  [-0.0, 0.75, -1.5]])
+    positions = [starting_position]
+    velocities = [starting_velocity]
+    for _ in range(num_trials - 1):
+        new_pos = starting_position.copy() + (0.2 * np.random.rand(*starting_position.shape) - 0.1)
+        new_vel = starting_velocity.copy() + (0.2 * np.random.rand(*starting_velocity.shape) - 0.1)
+        new_pos = np.clip(new_pos, np.tile(min_position, (num_drones, 1)), np.tile(max_position, (num_drones, 1)))
+        new_vel = np.clip(new_vel, np.tile(min_velocity, (num_drones, 1)), np.tile(max_velocity, (num_drones, 1)))
+        positions.append(new_pos)
+        velocities.append(new_vel)
+
+    np.save('./parameters/starting_positions.npy', np.array(positions))
+    np.save('./parameters/starting_velocities.npy', np.array(velocities))
+
+
+if __name__ == '__main__':
+    generate_starting_poses(num_trials=100, num_drones=4, min_collision_distance=0.15)

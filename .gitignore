@@ -1,6 +1,7 @@
 # Project-specific temporary files
 temp-data/
 videos/
+multi_trial/
 
 # LaTeX
 *.tex

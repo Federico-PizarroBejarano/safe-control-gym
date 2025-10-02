@@ -187,18 +187,20 @@ def create_video(frames, fps, name, traj_type):
     out.release()
 
 
-def load_all_approaches(traj_type):
+def load_all_approaches(traj_type, run_multi_trial):
     '''Loads the results of every experiment.
 
     Returns:
         all_approaches (dict): A dictionary containing all the results.
+        run_multi_trial (bool): Whether to run the multi-trial experiments.
     '''
 
     all_approaches = {}
 
     for approach in ordered_approaches:
-        with open(f'./results/experiments/{traj_type}/{approach}.pkl', 'rb') as f:
-            all_approaches[approach] = munchify(pickle.load(f))
+        with open(f'./results/experiments/{traj_type}/{f"multi_trial/{approach}" if run_multi_trial else approach}.pkl', 'rb') as f:
+            all_results = pickle.load(f)
+            all_approaches[approach] = [munchify(result) for result in all_results]
 
     return all_approaches
 
@@ -254,23 +256,38 @@ def plot_all_results(traj_type, all_results, key):
 
     for approach in ordered_approaches:
         exp_data = all_results[approach]
-        data.append(extract_metric(exp_data, key))
+        approach_data = []
+        for result in exp_data:
+            approach_data.append(extract_metric(result, key))
+        data.append(approach_data)
 
     ylabel = all_labels[key]
     ax.set_ylabel(ylabel, weight='bold', fontsize=45, labelpad=10)
+    colors = plt.cm.viridis(np.linspace(0, 0.8, len(ordered_approaches)))  # Using viridis colormap from 0 to 0.8 for better visibility
 
-    x = np.arange(1, len(ordered_approaches) + 1)
-    ax.set_xticks(x, [all_approach_labels[approach] for approach in ordered_approaches], weight='bold', fontsize=15, rotation=30, ha='right')
+    if len(data[0]) == 1:
+        x = np.arange(1, len(ordered_approaches) + 1)
+        ax.set_xticks(x, [all_approach_labels[approach] for approach in ordered_approaches], weight='bold', fontsize=15, rotation=30, ha='right')
 
-    colors = plt.cm.viridis(np.linspace(0, 0.8, len(x)))  # Using viridis colormap from 0 to 0.8 for better visibility
-    bars = ax.bar(x, data, width=0.75, color=colors)
+        bars = ax.bar(x, [np.mean(datum) for datum in data], width=0.75, color=colors)
 
-    # Add value labels on top of each bar
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width() / 2., height,
-                f'{height:.3f}',
-                ha='center', va='bottom')
+        # Add value labels on top of each bar
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2., height,
+                    f'{height:.3f}',
+                    ha='center', va='bottom')
+    else:
+        box_plot = ax.boxplot(data, patch_artist=True, medianprops=dict(color='black', linewidth=1.5))
+
+        # Set the x-ticks after creating the boxplot
+        ax.set_xticklabels([all_approach_labels[approach] for approach in ordered_approaches],
+                           weight='bold', fontsize=15, rotation=30, ha='right')
+
+        # Color each box with the viridis colors
+        for patch, color in zip(box_plot['boxes'], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.7)
 
     fig.tight_layout()
     ax.set_ylim(ymin=0)
@@ -284,8 +301,9 @@ def plot_all_results(traj_type, all_results, key):
 
 
 if __name__ == '__main__':
+    run_multi_trial = False
     for traj_type in traj_types:
-        all_results = load_all_approaches(traj_type)
+        all_results = load_all_approaches(traj_type, run_multi_trial)
 
         # Plot metrics
         plot_all_results(traj_type, all_results, 'RMSE_teleop')
@@ -301,4 +319,5 @@ if __name__ == '__main__':
         # Plot trajectories
         for approach in ordered_approaches:
             exp_data = all_results[approach]
-            plot_trajectory_2D(traj_type, approach, exp_data['obs'], exp_data['X_goal'], [0, 2], exp_data['state_constraints'])
+            for trial in range(len(exp_data)):
+                plot_trajectory_2D(traj_type, approach, exp_data[trial]['obs'], exp_data[trial]['X_goal'], [0, 2], exp_data[trial]['state_constraints'])
