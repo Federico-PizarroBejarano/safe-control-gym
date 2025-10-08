@@ -64,7 +64,6 @@ def run(
     all_obs = []
     all_actions = []
     all_corrections = []
-    start_time = time.time()
     for step_idx in range(experiment_len):
         # Get the current state.
         obs = sim.data.states
