@@ -14,3 +14,7 @@ use_terminal_set: False
 cost_function: one_step_cost
 mpsc_cost_horizon: 5
 decay_factor: 0.85
+
+max_w: 0.002
+soften_constraints: True
+slack_cost: 250

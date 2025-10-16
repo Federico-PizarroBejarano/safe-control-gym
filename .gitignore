@@ -2,6 +2,10 @@
 results/
 temp-data/
 
+# Experiments
+experiments/mpsc/models/rl_models/
+experiments/adversarial/models/rl_models/
+
 # acados
 c_generated_code/
 acados_*
