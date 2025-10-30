@@ -44,6 +44,7 @@ class PPO(BaseController):
         self.penalize_sf_diff = False
         self.sf_penalty = 1
         self.use_safe_reset = False
+        self.use_adv_reward = True
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
         # Task.
         if self.training:
@@ -213,6 +214,7 @@ class PPO(BaseController):
         '''Runs evaluation with current policy.'''
         self.agent.eval()
         self.obs_normalizer.set_read_only()
+        self.use_adv_reward = True
         if env is None:
             env = self.env
         else:
@@ -312,6 +314,8 @@ class PPO(BaseController):
                 rew = np.exp(rew)
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
+            if self.use_adv_reward:
+                rew = self.adversarial_reward(obs, next_obs, action, info)
             mask = 1 - done.astype(float)
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
@@ -435,3 +439,164 @@ class PPO(BaseController):
                     self.safety_filter.ocp_solver.reset()
 
         return obs, info
+
+    def adversarial_reward(self, obs, next_obs, action, info):
+        '''Computes the adversarial reward.
+
+        Args:
+            obs (ndarray): The observation at this timestep.
+            next_obs (ndarray): The next observation after taking the action.
+            action (ndarray): The action taken at this timestep.
+            info (dict): The info at this timestep.
+
+        Returns:
+            rew (ndarray): The adversarial reward (shape: (batch_size,))
+        '''
+        # Get batch size from next_obs
+        batch_size = next_obs.shape[0] if len(next_obs.shape) > 1 else 1
+
+        # Initialize adversarial reward array
+        adv_rew = np.zeros(batch_size, dtype=np.float32)
+
+        # For cartpole: next_obs is [x, x_dot, theta, theta_dot]
+        # For quadrotor_2D: next_obs is [x, x_dot, z, z_dot, theta, theta_dot]
+        # For quadrotor_3D: next_obs is [x, y, z, x_dot, y_dot, z_dot, phi, theta, psi, p, q, r]
+
+        for i in range(batch_size):
+            # Extract state for this batch element
+            state = next_obs[i] if batch_size > 1 else next_obs
+
+            # Get constraint violation info if available
+            violation = 0.0
+            if 'n' in info and i < len(info['n']):
+                episode_info = info['n'][i]
+                if isinstance(episode_info, dict) and 'constraint_violation' in episode_info:
+                    violation = float(episode_info['constraint_violation'])
+
+            # Reward components for breaking the system:
+
+            # 1. Heavily reward constraint violations (main goal)
+            violation_reward = 10000.0 * violation
+
+            if violation > 1:
+                violation_reward *= (violation ** 2)  # Exponential scaling for larger violations
+
+            # 2. Reward for high angular velocity (unstable/dangerous)
+            # For cartpole: theta_dot is at index 3
+            # For quadrotor: angular velocities are at indices 5, 7, 9
+            if len(state) == 4:  # Cartpole
+                x = state[0]
+                x_dot = state[1]
+                theta = state[2]
+                theta_dot = state[3]
+                # Reward for large angle
+                angle_reward = 5000.0 * abs(theta)
+                # Reward for high angular velocity
+                velocity_reward = 3000.0 * abs(theta_dot)
+                # Reward for position extremes (push cart to limits)
+                position_reward = 1000.0 * (abs(x) ** 2)
+                # Reward for high cart velocity
+                cart_velocity_reward = 500.0 * (abs(x_dot) ** 2)
+                # BONUS: Combine angle and angular velocity for maximum chaos
+                chaos_bonus = 2000.0 * abs(theta) * abs(theta_dot)
+
+            else:  # Quadrotor or other system
+                if len(state) >= 6:
+                    # Position
+                    x, y, z = state[0], state[1], state[2]
+                    # Orientation
+                    phi, theta, psi = state[3], state[4], state[5]
+                    # Angular velocities
+                    if len(state) >= 9:
+                        p, q, r = state[6], state[7], state[8]
+                    else:
+                        p = q = r = 0
+
+                    # Exponentially reward extreme orientations
+                    angle_reward = 5000.0 * (abs(phi) ** 3 + abs(theta) ** 3 + abs(psi) ** 3)
+
+                    # Exponentially reward high angular velocities
+                    velocity_reward = 3000.0 * (abs(p) ** 2 + abs(q) ** 2 + abs(r) ** 2)
+
+                    # Reward extreme positions
+                    position_reward = 1000.0 * (abs(x) ** 2 + abs(y) ** 2 + abs(z) ** 2)
+
+                    # Combined chaos (unstable flight)
+                    chaos_bonus = 2000.0 * (abs(phi) * abs(p) + abs(theta) * abs(q))
+
+                    cart_velocity_reward = 0.0
+                else:
+                    angle_reward = velocity_reward = position_reward = 0.0
+                    chaos_bonus = cart_velocity_reward = 0.0
+
+            # 3. Reward for being close to constraint boundaries
+            # Typical cartpole constraint: |theta| < 0.2 rad
+            boundary_proximity = 0.0
+            if len(state) == 4:  # Cartpole
+                theta = state[2]
+                theta_limit = 0.2  # typical constraint
+                # Exponential reward as we approach boundary
+                proximity_ratio = abs(theta) / theta_limit
+                if proximity_ratio > 0.5:
+                    # Exponential growth near boundary
+                    boundary_proximity = 3000.0 * (proximity_ratio ** 4)
+
+                # HUGE bonus for exceeding the boundary
+                if abs(theta) > theta_limit:
+                    boundary_proximity += 8000.0 * (abs(theta) - theta_limit) ** 2
+
+            # 4. Reward for MAXIMUM state changes (chaos)
+            if i < len(obs):
+                prev_state = obs[i] if batch_size > 1 else obs
+                state_change = np.linalg.norm(state - prev_state)
+                # Quadratic reward for large changes
+                change_reward = 1000.0 * (state_change ** 2)
+            else:
+                change_reward = 0.0
+
+            # 5. MAXIMUM reward for aggressive actions
+            act = action[i] if batch_size > 1 else action
+            action_magnitude = np.linalg.norm(act)
+            # Exponential reward for extreme actions
+            action_reward = 2000.0 * (action_magnitude ** 3)
+
+            # 6. PENALTY for safe, stable behavior (negative reward)
+            # We want to punish the agent for being safe
+            stability_penalty = 0.0
+            if len(state) == 4:  # Cartpole
+                theta = state[2]
+                theta_dot = state[3]
+                # If angle is small and angular velocity is low, penalize heavily
+                if abs(theta) < 0.05 and abs(theta_dot) < 0.1:
+                    stability_penalty = -5000.0  # Large negative reward for stability
+
+            # 7. BONUS for sustained dangerous behavior
+            # Reward cumulative danger over the episode
+            danger_accumulation = 0.0
+            if 'n' in info and i < len(info['n']):
+                episode_info = info['n'][i]
+                if isinstance(episode_info, dict):
+                    # Track episode step to give increasing rewards for sustained chaos
+                    if 'current_step' in episode_info:
+                        step = episode_info['current_step']
+                        # Reward for surviving longer in dangerous state
+                        if len(state) == 4 and abs(state[2]) > 0.1:
+                            danger_accumulation = 500.0 * step * abs(state[2])
+
+            # 8. CATASTROPHIC FAILURE BONUS
+            # If system has truly failed (episode terminated), give massive bonus
+            termination_bonus = 0.0
+            if 'n' in info and i < len(info['n']):
+                episode_info = info['n'][i]
+                if isinstance(episode_info, dict) and 'terminal_info' in episode_info:
+                    terminal_info = episode_info['terminal_info']
+                    # Check if terminated due to constraint violation (not time limit)
+                    if not terminal_info.get('TimeLimit.truncated', False):
+                        termination_bonus = 50000.0  # MASSIVE bonus for causing failure
+
+            adv_rew[i] = (violation_reward + angle_reward + velocity_reward + boundary_proximity + chaos_bonus + change_reward + action_reward + position_reward + cart_velocity_reward + danger_accumulation + stability_penalty + termination_bonus)
+
+            # Add small epsilon to ensure non-zero reward
+            adv_rew[i] += 1e-3
+
+        return adv_rew

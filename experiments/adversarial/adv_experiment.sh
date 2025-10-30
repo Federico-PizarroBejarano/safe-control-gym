@@ -6,7 +6,7 @@ ALGO='ppo'
 SAFETY_FILTER='nl_mpsc'
 MPSC_COST='one_step_cost'
 # MPSC_COST='precomputed_cost'
-MPC_COST_HORIZON=1
+MPSC_COST_HORIZON=1
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
