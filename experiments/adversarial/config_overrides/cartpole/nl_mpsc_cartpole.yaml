@@ -35,8 +35,4 @@ sf_config:
   soften_constraints: True
   slack_cost: 300
 
-  # Safety filter training
-  filter_train_actions: True
-  penalize_sf_diff: True
-  sf_penalty: 72
-  use_safe_reset: True
+  max_w: 0.001
