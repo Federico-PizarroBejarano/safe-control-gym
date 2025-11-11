@@ -9,10 +9,10 @@ sf_config:
     # - 0.001
     # - 10
     # - 0.5
-    - 2
-    - 0.1
-    - 1000
-    - 50
+    - 200
+    - 10
+    - 100000
+    - 5000
   # MPC parameters
   use_acados: True
   horizon: 30
