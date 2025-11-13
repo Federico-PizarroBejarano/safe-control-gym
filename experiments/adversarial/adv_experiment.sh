@@ -4,9 +4,9 @@ SYS='cartpole'
 TASK='track'
 ALGO='ppo'
 SAFETY_FILTER='nl_mpsc'
-MPSC_COST='one_step_cost'
-# MPSC_COST='precomputed_cost'
-MPSC_COST_HORIZON=1
+# MPSC_COST='one_step_cost'
+MPSC_COST='precomputed_cost'
+MPSC_COST_HORIZON=10
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS

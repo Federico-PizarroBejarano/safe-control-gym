@@ -8,6 +8,7 @@ import numpy as np
 
 from safe_control_gym.envs.benchmark_env import Environment, Task
 from safe_control_gym.experiments.base_experiment import BaseExperiment
+from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
@@ -63,6 +64,8 @@ def run(plot=True, curr_path='.'):
                          **config.sf_config)
     safety_filter.reset()
     ctrl.reset()
+    if config.sf_config.cost_function == Cost_Function.PRECOMPUTED_COST:
+        safety_filter.cost_function.uncertified_controller = ctrl
 
     # Run with safety filter
     experiment = BaseExperiment(env, ctrl, safety_filter=safety_filter)

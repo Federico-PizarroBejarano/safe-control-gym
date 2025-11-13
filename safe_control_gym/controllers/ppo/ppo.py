@@ -498,7 +498,7 @@ class PPO(BaseController):
             # Base proximity: encourage large angle/tilt and angular rates.
             if s.shape[0] == 4:  # cartpole: [x, x_dot, theta, theta_dot]
                 x, xdot, th, thdot = s
-                prox = 1000.0 * abs(th) + 100.0 * abs(thdot)  # + 10.0 * abs(x) + 25.0 * abs(xdot)
+                prox = 1000.0 * abs(th) + 100.0 * abs(thdot) + 25.0 * abs(xdot)  # + 10.0 * abs(x)
                 delta = np.linalg.norm(s - s_prev)                 # encourage state change inbetween steps
                 theta_lim = 0.2                                    # soft boundary shaping near theta limit
                 try:                                               # what does this actually do?
