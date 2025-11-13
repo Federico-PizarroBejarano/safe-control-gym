@@ -45,6 +45,10 @@ class PPO(BaseController):
         self.sf_penalty = 1
         self.use_safe_reset = False
         self.use_adv_reward = True
+        self.adv_reward_temperature = kwargs.get('adv_reward_temperature', 50.0)
+        self.sf_idle_floor = kwargs.get('sf_idle_floor', 0.0)
+        self._sf_idle_penalty_weight = kwargs.get('sf_idle_penalty_weight', 0.0)
+        self._sf_idle_penalty = 0.0
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
         # Task.
         if self.training:
@@ -306,6 +310,13 @@ class PPO(BaseController):
                 elif not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
+                if success and np.linalg.norm(physical_action) < self.sf_idle_floor:
+                    self._sf_idle_penalty = self._sf_idle_penalty_weight
+                else:
+                    self._sf_idle_penalty = 0.0
+            else:
+                self._sf_idle_penalty = 0.0
+
             action = action_np
             # action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
@@ -322,6 +333,18 @@ class PPO(BaseController):
             rew = self.reward_normalizer(rew, done)
             if self.use_adv_reward:
                 rew = self.adversarial_reward(obs, next_obs, action, info)
+                adv_stats = {}
+                raw_stats = getattr(self, '_adv_reward_raw_stats', None)
+                scaled_stats = getattr(self, '_adv_reward_scaled_stats', None)
+                if raw_stats:
+                    adv_stats.update({f'raw_{k}': raw_stats[k] for k in ['mean', 'min', 'max']})
+                if scaled_stats:
+                    adv_stats.update({f'scaled_{k}': scaled_stats[k] for k in ['mean', 'min', 'max']})
+                if adv_stats:
+                    adv_stats['temperature'] = float(self.adv_reward_temperature)
+                self._adv_reward_last_stats = adv_stats
+            else:
+                self._adv_reward_last_stats = {}
             mask = 1 - done.astype(float)
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
@@ -356,6 +379,8 @@ class PPO(BaseController):
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         results = self.agent.update(rollouts, self.device)
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
+        if getattr(self, '_adv_reward_last_stats', None):
+            results.update({f'adv_reward_{k}': v for k, v in self._adv_reward_last_stats.items()})
         return results
 
     def log_step(self,
@@ -414,6 +439,9 @@ class PPO(BaseController):
                 },
                 step,
                 prefix='stat_eval')
+        adv_keys = [k for k in results.keys() if k.startswith('adv_reward_')]
+        if adv_keys:
+            self.logger.add_scalars({k: results[k] for k in adv_keys}, step, prefix='adv_reward')
         # Print summary table
         self.logger.dump_scalars()
 
@@ -456,10 +484,12 @@ class PPO(BaseController):
         B = next_obs_b.shape[0]
 
         adv_rew = np.zeros(B, dtype=np.float32)
+        raw_rew = np.zeros(B, dtype=np.float32)
 
         # Per-env infos (VecEnv packs them in info['n'])
         infos = info.get('n', [info] * B) if isinstance(info, dict) else [dict()] * B
 
+        temperature = getattr(self, 'adv_reward_temperature', 50.0)
         for i in range(B):
             s_prev = obs_b[i]
             s = next_obs_b[i]
@@ -468,17 +498,15 @@ class PPO(BaseController):
             # Base proximity: encourage large angle/tilt and angular rates.
             if s.shape[0] == 4:  # cartpole: [x, x_dot, theta, theta_dot]
                 x, xdot, th, thdot = s
-                prox = 10000.0 * abs(th) + 1000.0 * abs(thdot) + 100.0 * abs(x) + 250.0 * abs(xdot)
-                # encourage state change (chaos)
-                delta = np.linalg.norm(s - s_prev)
-                # soft boundary shaping near theta limit
-                theta_lim = 0.2
-                try:
+                prox = 1000.0 * abs(th) + 100.0 * abs(thdot)  # + 10.0 * abs(x) + 25.0 * abs(xdot)
+                delta = np.linalg.norm(s - s_prev)                 # encourage state change inbetween steps
+                theta_lim = 0.2                                    # soft boundary shaping near theta limit
+                try:                                               # what does this actually do?
                     theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[2])  # type: ignore
                 except Exception:
                     pass
                 ratio = min(abs(th) / max(theta_lim, 1e-3), 3.0)
-                boundary_bonus = 5000.0 * (ratio ** 2)
+                boundary_bonus = 2.0 * (ratio ** 2)
             else:
                 # generic fallback (e.g., quadrotor)
                 prox = 0.25 * np.linalg.norm(s)
@@ -486,7 +514,9 @@ class PPO(BaseController):
                 boundary_bonus = 0.0
 
             # Aggressive action bonus
-            act_bonus = 56.5 * np.linalg.norm(a)
+            act_bonus = 5.65 * np.linalg.norm(a)  # encourage large actions <= might not be that good, go over fans paper again!
+
+            idle_penalty = getattr(self, '_sf_idle_penalty', 0.0)  # penalty for staying idle
 
             # Actual constraint violation if provided
             vio = 0.0
@@ -494,19 +524,32 @@ class PPO(BaseController):
                 vio = float(infos[i].get('constraint_violation', 0.0))
             except Exception:
                 vio = 0.0
-            vio_bonus = 200.0 * vio  # bounded
+            vio_bonus = 0.5 * vio  # bounded
 
             # Penalize hard terminations to avoid ultra-short episodes
             term_pen = 0.0
             try:
                 ti = infos[i].get('terminal_info', {})
                 if ti and not ti.get('TimeLimit.truncated', False):
-                    term_pen = -1000.0
+                    term_pen = -100.0
             except Exception:
                 pass
 
-            # Combine and clip for stability
-            r = prox + boundary_bonus + delta + act_bonus + vio_bonus + term_pen
-            adv_rew[i] = float(np.clip(r, -100.0, 100.0))
+            # Combine terms and record raw shaping value before squashing
+            r = prox + boundary_bonus + delta + act_bonus + vio_bonus + term_pen - idle_penalty
+            raw_rew[i] = float(r)
+            scaled = 100.0 * np.tanh(r / max(temperature, 1e-6))
+            adv_rew[i] = float(scaled)
+
+        self._adv_reward_raw_stats = {
+            'mean': float(np.mean(raw_rew)),
+            'min': float(np.min(raw_rew)),
+            'max': float(np.max(raw_rew)),
+        }
+        self._adv_reward_scaled_stats = {
+            'mean': float(np.mean(adv_rew)),
+            'min': float(np.min(adv_rew)),
+            'max': float(np.max(adv_rew)),
+        }
 
         return adv_rew
