@@ -1,0 +1,246 @@
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/munch/__init__.py:24: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+pybullet build time: Jan 29 2025 23:16:28
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/gymnasium/spaces/box.py:130: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  gym.logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/gymnasium/spaces/box.py:130: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  gym.logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+rm -f libacados_ocp_solver_cartpole.so
+rm -f acados_solver_cartpole.o
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o acados_solver_cartpole.o acados_solver_cartpole.c
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o cartpole_model/cartpole_expl_ode_fun.o cartpole_model/cartpole_expl_ode_fun.c
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o cartpole_model/cartpole_expl_vde_forw.o cartpole_model/cartpole_expl_vde_forw.c
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o cartpole_model/cartpole_expl_vde_adj.o cartpole_model/cartpole_expl_vde_adj.c
+cc -shared acados_solver_cartpole.o cartpole_model/cartpole_expl_ode_fun.o cartpole_model/cartpole_expl_vde_forw.o cartpole_model/cartpole_expl_vde_adj.o -o libacados_ocp_solver_cartpole.so -L/home/admin05/acados/lib -lacados -lhpipm -lblasfeo -lm \
+-L -l
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/torch/nn/functional.py:1956: UserWarning: nn.functional.tanh is deprecated. Use torch.tanh instead.
+  warnings.warn("nn.functional.tanh is deprecated. Use torch.tanh instead.")
+Fields cost.[zl_0, zu_0, Zl_0, Zu_0] are not provided.
+Using entries [zl, zu, Zl, Zu] at initial node for slack penalties.
+
+acados was compiled without OpenMP.
+Checkpoint | ./models/cartpole_adv_v5/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return 0.191 +/- 0.003
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 1.28     |
+|    adv_reward_raw_mean  | 0.819    |
+|    adv_reward_raw_min   | 0.448    |
+|    adv_reward_scaled... | 0.00257  |
+|    adv_reward_scaled... | 0.00164  |
+|    adv_reward_scaled... | 0.000895 |
+|    adv_reward_squash... | 0.00257  |
+|    adv_reward_squash... | 0.00164  |
+|    adv_reward_squash... | 0.000895 |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.058    |
+|    entropy_loss         | -0.927   |
+|    policy_loss          | 0.0175   |
+|    value_loss           | 0.000159 |
+| stat/                   |          |
+|    constraint_violation | 1.15e+03 |
+|    ep_constraint_vio... | 14.9     |
+|    ep_length            | 30.2     |
+|    ep_return            | 10.2     |
+|    ep_reward            | 0.363    |
+|    step_time            | 0.76     |
+| stat_eval/              |          |
+|    constraint_violation | 65.3     |
+|    ep_length            | 150      |
+|    ep_return            | 0.191    |
+|    ep_reward            | 0.00128  |
+|    mse                  | 485      |
+|    step_time            | 5.36     |
+| time/                   |          |
+|    progress             | 0.02     |
+|    step                 | 2e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v5/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return 0.193 +/- 0.003
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 1.35     |
+|    adv_reward_raw_mean  | 0.956    |
+|    adv_reward_raw_min   | 0.792    |
+|    adv_reward_scaled... | 0.0027   |
+|    adv_reward_scaled... | 0.00191  |
+|    adv_reward_scaled... | 0.00158  |
+|    adv_reward_squash... | 0.0027   |
+|    adv_reward_squash... | 0.00191  |
+|    adv_reward_squash... | 0.00158  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.0524   |
+|    entropy_loss         | -0.927   |
+|    policy_loss          | 0.043    |
+|    value_loss           | 0.000329 |
+| stat/                   |          |
+|    constraint_violation | 2.4e+03  |
+|    ep_constraint_vio... | 11.3     |
+|    ep_length            | 15.1     |
+|    ep_return            | 6.83     |
+|    ep_reward            | 0.452    |
+|    step_time            | 0.687    |
+| stat_eval/              |          |
+|    constraint_violation | 72.9     |
+|    ep_length            | 150      |
+|    ep_return            | 0.193    |
+|    ep_reward            | 0.00129  |
+|    mse                  | 510      |
+|    step_time            | 6.12     |
+| time/                   |          |
+|    progress             | 0.04     |
+|    step                 | 4e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v5/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return 0.194 +/- 0.003
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 1.38     |
+|    adv_reward_raw_mean  | 0.87     |
+|    adv_reward_raw_min   | 0.53     |
+|    adv_reward_scaled... | 0.00276  |
+|    adv_reward_scaled... | 0.00174  |
+|    adv_reward_scaled... | 0.00106  |
+|    adv_reward_squash... | 0.00276  |
+|    adv_reward_squash... | 0.00174  |
+|    adv_reward_squash... | 0.00106  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.06     |
+|    entropy_loss         | -0.927   |
+|    policy_loss          | 0.0671   |
+|    value_loss           | 8.52e-05 |
+| stat/                   |          |
+|    constraint_violation | 3.74e+03 |
+|    ep_constraint_vio... | 16.7     |
+|    ep_length            | 30       |
+|    ep_return            | 9.98     |
+|    ep_reward            | 0.433    |
+|    step_time            | 0.779    |
+| stat_eval/              |          |
+|    constraint_violation | 62.8     |
+|    ep_length            | 150      |
+|    ep_return            | 0.194    |
+|    ep_reward            | 0.0013   |
+|    mse                  | 482      |
+|    step_time            | 5.13     |
+| time/                   |          |
+|    progress             | 0.06     |
+|    step                 | 6e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v5/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return 0.196 +/- 0.001
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 2.82     |
+|    adv_reward_raw_mean  | 1.56     |
+|    adv_reward_raw_min   | 0.656    |
+|    adv_reward_scaled... | 0.00563  |
+|    adv_reward_scaled... | 0.00312  |
+|    adv_reward_scaled... | 0.00131  |
+|    adv_reward_squash... | 0.00563  |
+|    adv_reward_squash... | 0.00312  |
+|    adv_reward_squash... | 0.00131  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.188    |
+|    entropy_loss         | -0.927   |
+|    policy_loss          | 0.0166   |
+|    value_loss           | 0.000294 |
+| stat/                   |          |
+|    constraint_violation | 5.04e+03 |
+|    ep_constraint_vio... | 16.1     |
+|    ep_length            | 27.5     |
+|    ep_return            | 9.34     |
+|    ep_reward            | 0.444    |
+|    step_time            | 0.653    |
+| stat_eval/              |          |
+|    constraint_violation | 78.2     |
+|    ep_length            | 150      |
+|    ep_return            | 0.196    |
+|    ep_reward            | 0.00131  |
+|    mse                  | 528      |
+|    step_time            | 5.6      |
+| time/                   |          |
+|    progress             | 0.08     |
+|    step                 | 8e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v5/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return 0.193 +/- 0.007
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.95     |
+|    adv_reward_raw_mean  | 0.831    |
+|    adv_reward_raw_min   | 0.672    |
+|    adv_reward_scaled... | 0.0019   |
+|    adv_reward_scaled... | 0.00166  |
+|    adv_reward_scaled... | 0.00134  |
+|    adv_reward_squash... | 0.0019   |
+|    adv_reward_squash... | 0.00166  |
+|    adv_reward_squash... | 0.00134  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.099    |
+|    entropy_loss         | -0.926   |
+|    policy_loss          | 0.283    |
+|    value_loss           | 0.000209 |
+| stat/                   |          |
+|    constraint_violation | 6.34e+03 |
+|    ep_constraint_vio... | 13.5     |
+|    ep_length            | 19.6     |
+|    ep_return            | 9.18     |
+|    ep_reward            | 0.484    |
+|    step_time            | 0.674    |
+| stat_eval/              |          |
+|    constraint_violation | 81.5     |
+|    ep_length            | 150      |
+|    ep_return            | 0.193    |
+|    ep_reward            | 0.00129  |
+|    mse                  | 523      |
+|    step_time            | 4.82     |
+| time/                   |          |
+|    progress             | 0.1      |
+|    step                 | 1e+04    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v5/model_latest.pt
+Traceback (most recent call last):
+  File "/home/admin05/miniconda3/envs/safe/lib/python3.10/xml/etree/ElementTree.py", line 757, in _get_writer
+    write = file_or_filename.write
+AttributeError: 'str' object has no attribute 'write'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/admin05/safe-control-gym/experiments/adversarial/train_rl.py", line 87, in <module>
+    train()
+  File "/home/admin05/safe-control-gym/experiments/adversarial/train_rl.py", line 61, in train
+    ctrl.learn()
+  File "/home/admin05/safe-control-gym/safe_control_gym/controllers/ppo/ppo.py", line 182, in learn
+    eval_results = self.run(env=self.eval_env, n_episodes=self.eval_batch_size)
+  File "/home/admin05/safe-control-gym/safe_control_gym/controllers/ppo/ppo.py", line 284, in run
+    obs, info = self.env_reset(env, True)
+  File "/home/admin05/safe-control-gym/safe_control_gym/controllers/ppo/ppo.py", line 504, in env_reset
+    obs, info = env.reset()
+  File "/home/admin05/safe-control-gym/safe_control_gym/envs/env_wrappers/record_episode_statistics.py", line 63, in reset
+    return self.env.reset(**kwargs)
+  File "/home/admin05/safe-control-gym/safe_control_gym/envs/gym_control/cartpole.py", line 300, in reset
+    override_urdf_tree.write(self.override_path)
+  File "/home/admin05/miniconda3/envs/safe/lib/python3.10/xml/etree/ElementTree.py", line 731, in write
+    with _get_writer(file_or_filename, encoding) as (write, declared_encoding):
+  File "/home/admin05/miniconda3/envs/safe/lib/python3.10/contextlib.py", line 135, in __enter__
+    return next(self.gen)
+  File "/home/admin05/miniconda3/envs/safe/lib/python3.10/xml/etree/ElementTree.py", line 762, in _get_writer
+    with open(file_or_filename, "w", encoding=encoding,
+FileNotFoundError: [Errno 2] No such file or directory: './models/cartpole_adv_v5/pid-44560_id-4_cartpole.urdf'

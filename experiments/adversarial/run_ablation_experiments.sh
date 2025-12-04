@@ -1,0 +1,58 @@
+#!/bin/bash
+
+SYS='cartpole'
+TASK='track'
+ALGO='ppo'
+SAFETY_FILTER='nl_mpsc'
+OUTPUT_DIR='./ablation'
+
+# Ablation experiment configurations
+# Format: "experiment_name:kv_override1:kv_override2:..."
+EXPERIMENTS=(
+    "full_reward"
+    "correction_only:algo_config.adv_use_theta_reward=False:algo_config.adv_use_velocity_reward=False:algo_config.adv_use_oscillation_reward=False:algo_config.adv_use_stability_penalty=False"
+    "state_only:algo_config.adv_use_correction_reward=False:algo_config.adv_use_correction_ratio=False:algo_config.adv_use_correction_bonus=False:algo_config.adv_use_no_correction_penalty=False"
+    "no_correction_mag:algo_config.adv_use_correction_reward=False"
+    "no_correction_ratio:algo_config.adv_use_correction_ratio=False"
+    "no_correction_bonus:algo_config.adv_use_correction_bonus=False"
+    "no_correction_penalty:algo_config.adv_use_no_correction_penalty=False"
+    "no_theta:algo_config.adv_use_theta_reward=False"
+    "no_velocity:algo_config.adv_use_velocity_reward=False"
+    "no_oscillation:algo_config.adv_use_oscillation_reward=False"
+    "no_stability_penalty:algo_config.adv_use_stability_penalty=False"
+    "no_cart_penalty:algo_config.adv_use_cart_penalty=False"
+    "w_correction_10:algo_config.adv_w_correction=10.0"
+    "w_correction_50:algo_config.adv_w_correction=50.0"
+    "temp_5:algo_config.adv_reward_temperature=5.0"
+    "temp_30:algo_config.adv_reward_temperature=30.0"
+    "no_safe_reset:algo_config.use_safe_reset=False"
+)
+
+for SEED in 42 62 821; do
+    for EXP in "${EXPERIMENTS[@]}"; do
+        # Parse experiment name and overrides
+        IFS=':' read -ra PARTS <<< "$EXP"
+        EXP_NAME="${PARTS[0]}"
+
+        # Build kv_overrides string
+        KV_OVERRIDES=""
+        for ((i=1; i<${#PARTS[@]}; i++)); do
+            KV_OVERRIDES="$KV_OVERRIDES ${PARTS[$i]}"
+        done
+
+        echo "Training: ${EXP_NAME} (seed=${SEED})"
+
+        python3 ./train_rl.py \
+            --algo ${ALGO} \
+            --task ${SYS} \
+            --safety_filter ${SAFETY_FILTER} \
+            --overrides \
+                ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
+                ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
+                ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
+            --output_dir ${OUTPUT_DIR}/${EXP_NAME}/seed_${SEED} \
+            --seed ${SEED} \
+            --kv_overrides \
+                ${KV_OVERRIDES}
+    done
+done

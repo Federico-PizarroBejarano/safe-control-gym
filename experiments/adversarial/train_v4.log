@@ -1,0 +1,1194 @@
+nohup: ignoring input
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/munch/__init__.py:24: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+pybullet build time: Jan 29 2025 23:16:28
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/gymnasium/spaces/box.py:130: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  gym.logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/gymnasium/spaces/box.py:130: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  gym.logger.warn(f"Box bound precision lowered by casting to {self.dtype}")
+rm -f libacados_ocp_solver_cartpole.so
+rm -f acados_solver_cartpole.o
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o acados_solver_cartpole.o acados_solver_cartpole.c
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o cartpole_model/cartpole_expl_ode_fun.o cartpole_model/cartpole_expl_ode_fun.c
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o cartpole_model/cartpole_expl_vde_forw.o cartpole_model/cartpole_expl_vde_forw.c
+cc -fPIC -std=c99   -O2 -I/home/admin05/acados/include -I/home/admin05/acados/include/acados -I/home/admin05/acados/include/blasfeo/include -I/home/admin05/acados/include/hpipm/include  -c -o cartpole_model/cartpole_expl_vde_adj.o cartpole_model/cartpole_expl_vde_adj.c
+cc -shared acados_solver_cartpole.o cartpole_model/cartpole_expl_ode_fun.o cartpole_model/cartpole_expl_vde_forw.o cartpole_model/cartpole_expl_vde_adj.o -o libacados_ocp_solver_cartpole.so -L/home/admin05/acados/lib -lacados -lhpipm -lblasfeo -lm \
+-L -l
+/home/admin05/miniconda3/envs/safe/lib/python3.10/site-packages/torch/nn/functional.py:1956: UserWarning: nn.functional.tanh is deprecated. Use torch.tanh instead.
+  warnings.warn("nn.functional.tanh is deprecated. Use torch.tanh instead.")
+Fields cost.[zl_0, zu_0, Zl_0, Zu_0] are not provided.
+Using entries [zl, zu, Zl, Zu] at initial node for slack penalties.
+
+acados was compiled without OpenMP.
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -103.384 +/- 16.742
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.813    |
+|    adv_reward_raw_mean  | -500     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00163  |
+|    adv_reward_scaled... | -0.481   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00163  |
+|    adv_reward_squash... | -0.481   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.125    |
+|    entropy_loss         | -0.92    |
+|    policy_loss          | 0.191    |
+|    value_loss           | 8.82     |
+| stat/                   |          |
+|    constraint_violation | 1.18e+03 |
+|    ep_constraint_vio... | 9.7      |
+|    ep_length            | 12.3     |
+|    ep_return            | 5.08     |
+|    ep_reward            | 0.427    |
+|    step_time            | 0.672    |
+| stat_eval/              |          |
+|    constraint_violation | 107      |
+|    ep_length            | 150      |
+|    ep_return            | -103     |
+|    ep_reward            | -0.689   |
+|    mse                  | 658      |
+|    step_time            | 4.65     |
+| time/                   |          |
+|    progress             | 0.02     |
+|    step                 | 2e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -112.168 +/- 8.795
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.697    |
+|    adv_reward_raw_mean  | -750     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00139  |
+|    adv_reward_scaled... | -0.723   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00139  |
+|    adv_reward_squash... | -0.723   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.269    |
+|    entropy_loss         | -0.92    |
+|    policy_loss          | -0.0415  |
+|    value_loss           | 59.4     |
+| stat/                   |          |
+|    constraint_violation | 2.56e+03 |
+|    ep_constraint_vio... | 9.1      |
+|    ep_length            | 10.9     |
+|    ep_return            | 3.83     |
+|    ep_reward            | 0.355    |
+|    step_time            | 0.97     |
+| stat_eval/              |          |
+|    constraint_violation | 116      |
+|    ep_length            | 150      |
+|    ep_return            | -112     |
+|    ep_reward            | -0.748   |
+|    mse                  | 712      |
+|    step_time            | 5.21     |
+| time/                   |          |
+|    progress             | 0.04     |
+|    step                 | 4e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -116.898 +/- 12.344
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 2.17     |
+|    adv_reward_raw_mean  | 1.59     |
+|    adv_reward_raw_min   | 1        |
+|    adv_reward_scaled... | 0.00433  |
+|    adv_reward_scaled... | 0.00317  |
+|    adv_reward_scaled... | 0.002    |
+|    adv_reward_squash... | 0.00433  |
+|    adv_reward_squash... | 0.00317  |
+|    adv_reward_squash... | 0.002    |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.639    |
+|    entropy_loss         | -0.917   |
+|    policy_loss          | 0.0268   |
+|    value_loss           | 34.4     |
+| stat/                   |          |
+|    constraint_violation | 4.15e+03 |
+|    ep_constraint_vio... | 18.5     |
+|    ep_length            | 23       |
+|    ep_return            | 4.66     |
+|    ep_reward            | 0.288    |
+|    step_time            | 0.755    |
+| stat_eval/              |          |
+|    constraint_violation | 121      |
+|    ep_length            | 150      |
+|    ep_return            | -117     |
+|    ep_reward            | -0.779   |
+|    mse                  | 712      |
+|    step_time            | 4.94     |
+| time/                   |          |
+|    progress             | 0.06     |
+|    step                 | 6e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -115.355 +/- 14.584
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.864    |
+|    adv_reward_raw_mean  | -750     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00173  |
+|    adv_reward_scaled... | -0.723   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00173  |
+|    adv_reward_squash... | -0.723   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.529    |
+|    entropy_loss         | -0.917   |
+|    policy_loss          | -0.00681 |
+|    value_loss           | 23.4     |
+| stat/                   |          |
+|    constraint_violation | 5.65e+03 |
+|    ep_constraint_vio... | 7.9      |
+|    ep_length            | 8.9      |
+|    ep_return            | 2.12     |
+|    ep_reward            | 0.234    |
+|    step_time            | 0.705    |
+| stat_eval/              |          |
+|    constraint_violation | 120      |
+|    ep_length            | 150      |
+|    ep_return            | -115     |
+|    ep_reward            | -0.769   |
+|    mse                  | 685      |
+|    step_time            | 4.85     |
+| time/                   |          |
+|    progress             | 0.08     |
+|    step                 | 8e+03    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -120.180 +/- 4.316
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.635    |
+|    adv_reward_raw_mean  | -500     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00127  |
+|    adv_reward_scaled... | -0.481   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00127  |
+|    adv_reward_squash... | -0.481   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.168    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.106    |
+|    value_loss           | 34.4     |
+| stat/                   |          |
+|    constraint_violation | 7.15e+03 |
+|    ep_constraint_vio... | 7.9      |
+|    ep_length            | 8.5      |
+|    ep_return            | 2.43     |
+|    ep_reward            | 0.275    |
+|    step_time            | 0.672    |
+| stat_eval/              |          |
+|    constraint_violation | 125      |
+|    ep_length            | 150      |
+|    ep_return            | -120     |
+|    ep_reward            | -0.801   |
+|    mse                  | 731      |
+|    step_time            | 4.91     |
+| time/                   |          |
+|    progress             | 0.1      |
+|    step                 | 1e+04    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -121.917 +/- 3.321
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 1.83     |
+|    adv_reward_raw_mean  | 1.28     |
+|    adv_reward_raw_min   | 0.709    |
+|    adv_reward_scaled... | 0.00366  |
+|    adv_reward_scaled... | 0.00256  |
+|    adv_reward_scaled... | 0.00142  |
+|    adv_reward_squash... | 0.00366  |
+|    adv_reward_squash... | 0.00256  |
+|    adv_reward_squash... | 0.00142  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.219    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.133    |
+|    value_loss           | 25.1     |
+| stat/                   |          |
+|    constraint_violation | 8.67e+03 |
+|    ep_constraint_vio... | 16.2     |
+|    ep_length            | 23.7     |
+|    ep_return            | 4.48     |
+|    ep_reward            | 0.296    |
+|    step_time            | 0.706    |
+| stat_eval/              |          |
+|    constraint_violation | 126      |
+|    ep_length            | 150      |
+|    ep_return            | -122     |
+|    ep_reward            | -0.813   |
+|    mse                  | 708      |
+|    step_time            | 4.91     |
+| time/                   |          |
+|    progress             | 0.12     |
+|    step                 | 1.2e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -115.741 +/- 10.407
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | -1e+03   |
+|    adv_reward_raw_mean  | -1e+03   |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.615    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.294    |
+|    value_loss           | 28.5     |
+| stat/                   |          |
+|    constraint_violation | 1.02e+04 |
+|    ep_constraint_vio... | 7.2      |
+|    ep_length            | 9.8      |
+|    ep_return            | 2.86     |
+|    ep_reward            | 0.298    |
+|    step_time            | 0.692    |
+| stat_eval/              |          |
+|    constraint_violation | 120      |
+|    ep_length            | 150      |
+|    ep_return            | -116     |
+|    ep_reward            | -0.772   |
+|    mse                  | 655      |
+|    step_time            | 6.12     |
+| time/                   |          |
+|    progress             | 0.14     |
+|    step                 | 1.4e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -117.188 +/- 8.492
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | -1e+03   |
+|    adv_reward_raw_mean  | -1e+03   |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.597    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.00131  |
+|    value_loss           | 38.3     |
+| stat/                   |          |
+|    constraint_violation | 1.17e+04 |
+|    ep_constraint_vio... | 8.4      |
+|    ep_length            | 11.6     |
+|    ep_return            | 3.7      |
+|    ep_reward            | 0.322    |
+|    step_time            | 0.712    |
+| stat_eval/              |          |
+|    constraint_violation | 122      |
+|    ep_length            | 150      |
+|    ep_return            | -117     |
+|    ep_reward            | -0.781   |
+|    mse                  | 690      |
+|    step_time            | 5.17     |
+| time/                   |          |
+|    progress             | 0.16     |
+|    step                 | 1.6e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -117.189 +/- 5.377
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 3.7      |
+|    adv_reward_raw_mean  | 2.45     |
+|    adv_reward_raw_min   | 1.16     |
+|    adv_reward_scaled... | 0.0074   |
+|    adv_reward_scaled... | 0.00491  |
+|    adv_reward_scaled... | 0.00231  |
+|    adv_reward_squash... | 0.0074   |
+|    adv_reward_squash... | 0.00491  |
+|    adv_reward_squash... | 0.00231  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.876    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | -0.0124  |
+|    value_loss           | 9.09     |
+| stat/                   |          |
+|    constraint_violation | 1.34e+04 |
+|    ep_constraint_vio... | 19.1     |
+|    ep_length            | 25.1     |
+|    ep_return            | 5.46     |
+|    ep_reward            | 0.289    |
+|    step_time            | 0.879    |
+| stat_eval/              |          |
+|    constraint_violation | 122      |
+|    ep_length            | 150      |
+|    ep_return            | -117     |
+|    ep_reward            | -0.781   |
+|    mse                  | 717      |
+|    step_time            | 8        |
+| time/                   |          |
+|    progress             | 0.18     |
+|    step                 | 1.8e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -116.225 +/- 11.188
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.485    |
+|    adv_reward_raw_mean  | -750     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00097  |
+|    adv_reward_scaled... | -0.723   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00097  |
+|    adv_reward_squash... | -0.723   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.668    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.00853  |
+|    value_loss           | 25.8     |
+| stat/                   |          |
+|    constraint_violation | 1.48e+04 |
+|    ep_constraint_vio... | 8.6      |
+|    ep_length            | 9.7      |
+|    ep_return            | 2.86     |
+|    ep_reward            | 0.283    |
+|    step_time            | 0.706    |
+| stat_eval/              |          |
+|    constraint_violation | 121      |
+|    ep_length            | 150      |
+|    ep_return            | -116     |
+|    ep_reward            | -0.775   |
+|    mse                  | 694      |
+|    step_time            | 4.69     |
+| time/                   |          |
+|    progress             | 0.2      |
+|    step                 | 2e+04    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -117.864 +/- 6.269
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | -1e+03   |
+|    adv_reward_raw_mean  | -1e+03   |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.584    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0521   |
+|    value_loss           | 39.1     |
+| stat/                   |          |
+|    constraint_violation | 1.63e+04 |
+|    ep_constraint_vio... | 7.7      |
+|    ep_length            | 9.1      |
+|    ep_return            | 2.93     |
+|    ep_reward            | 0.321    |
+|    step_time            | 0.731    |
+| stat_eval/              |          |
+|    constraint_violation | 122      |
+|    ep_length            | 150      |
+|    ep_return            | -118     |
+|    ep_reward            | -0.786   |
+|    mse                  | 673      |
+|    step_time            | 4.42     |
+| time/                   |          |
+|    progress             | 0.22     |
+|    step                 | 2.2e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -116.803 +/- 13.216
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 4.18     |
+|    adv_reward_raw_mean  | 1.83     |
+|    adv_reward_raw_min   | 0.577    |
+|    adv_reward_scaled... | 0.00837  |
+|    adv_reward_scaled... | 0.00367  |
+|    adv_reward_scaled... | 0.00115  |
+|    adv_reward_squash... | 0.00837  |
+|    adv_reward_squash... | 0.00367  |
+|    adv_reward_squash... | 0.00115  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.873    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | -0.0101  |
+|    value_loss           | 15.9     |
+| stat/                   |          |
+|    constraint_violation | 1.79e+04 |
+|    ep_constraint_vio... | 19.4     |
+|    ep_length            | 25       |
+|    ep_return            | 4.71     |
+|    ep_reward            | 0.247    |
+|    step_time            | 0.711    |
+| stat_eval/              |          |
+|    constraint_violation | 121      |
+|    ep_length            | 150      |
+|    ep_return            | -117     |
+|    ep_reward            | -0.779   |
+|    mse                  | 697      |
+|    step_time            | 4.37     |
+| time/                   |          |
+|    progress             | 0.24     |
+|    step                 | 2.4e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -117.092 +/- 11.646
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.726    |
+|    adv_reward_raw_mean  | -500     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00145  |
+|    adv_reward_scaled... | -0.481   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00145  |
+|    adv_reward_squash... | -0.481   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.652    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0387   |
+|    value_loss           | 21       |
+| stat/                   |          |
+|    constraint_violation | 1.95e+04 |
+|    ep_constraint_vio... | 7.1      |
+|    ep_length            | 9.7      |
+|    ep_return            | 3.23     |
+|    ep_reward            | 0.339    |
+|    step_time            | 0.662    |
+| stat_eval/              |          |
+|    constraint_violation | 122      |
+|    ep_length            | 150      |
+|    ep_return            | -117     |
+|    ep_reward            | -0.781   |
+|    mse                  | 685      |
+|    step_time            | 4.77     |
+| time/                   |          |
+|    progress             | 0.26     |
+|    step                 | 2.6e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -118.540 +/- 7.235
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.582    |
+|    adv_reward_raw_mean  | -750     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00116  |
+|    adv_reward_scaled... | -0.723   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00116  |
+|    adv_reward_squash... | -0.723   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.58     |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.172    |
+|    value_loss           | 42.9     |
+| stat/                   |          |
+|    constraint_violation | 2.1e+04  |
+|    ep_constraint_vio... | 7.7      |
+|    ep_length            | 9.3      |
+|    ep_return            | 2.33     |
+|    ep_reward            | 0.249    |
+|    step_time            | 0.639    |
+| stat_eval/              |          |
+|    constraint_violation | 123      |
+|    ep_length            | 150      |
+|    ep_return            | -119     |
+|    ep_reward            | -0.79    |
+|    mse                  | 689      |
+|    step_time            | 4.6      |
+| time/                   |          |
+|    progress             | 0.28     |
+|    step                 | 2.8e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -115.066 +/- 10.405
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 1.72     |
+|    adv_reward_raw_mean  | 1.37     |
+|    adv_reward_raw_min   | 0.822    |
+|    adv_reward_scaled... | 0.00344  |
+|    adv_reward_scaled... | 0.00273  |
+|    adv_reward_scaled... | 0.00164  |
+|    adv_reward_squash... | 0.00344  |
+|    adv_reward_squash... | 0.00273  |
+|    adv_reward_squash... | 0.00164  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.236    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.00273  |
+|    value_loss           | 14.4     |
+| stat/                   |          |
+|    constraint_violation | 2.26e+04 |
+|    ep_constraint_vio... | 18.7     |
+|    ep_length            | 24.8     |
+|    ep_return            | 3.54     |
+|    ep_reward            | 0.233    |
+|    step_time            | 0.729    |
+| stat_eval/              |          |
+|    constraint_violation | 119      |
+|    ep_length            | 150      |
+|    ep_return            | -115     |
+|    ep_reward            | -0.767   |
+|    mse                  | 682      |
+|    step_time            | 4.61     |
+| time/                   |          |
+|    progress             | 0.3      |
+|    step                 | 3e+04    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -120.760 +/- 3.884
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | -1e+03   |
+|    adv_reward_raw_mean  | -1e+03   |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.707    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0933   |
+|    value_loss           | 16.5     |
+| stat/                   |          |
+|    constraint_violation | 2.42e+04 |
+|    ep_constraint_vio... | 7.2      |
+|    ep_length            | 9.2      |
+|    ep_return            | 2.81     |
+|    ep_reward            | 0.317    |
+|    step_time            | 0.731    |
+| stat_eval/              |          |
+|    constraint_violation | 125      |
+|    ep_length            | 150      |
+|    ep_return            | -121     |
+|    ep_reward            | -0.805   |
+|    mse                  | 697      |
+|    step_time            | 5.03     |
+| time/                   |          |
+|    progress             | 0.32     |
+|    step                 | 3.2e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -116.610 +/- 5.088
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | -1e+03   |
+|    adv_reward_raw_mean  | -1e+03   |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.588    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0384   |
+|    value_loss           | 39.9     |
+| stat/                   |          |
+|    constraint_violation | 2.57e+04 |
+|    ep_constraint_vio... | 8.6      |
+|    ep_length            | 10.5     |
+|    ep_return            | 3.09     |
+|    ep_reward            | 0.297    |
+|    step_time            | 0.62     |
+| stat_eval/              |          |
+|    constraint_violation | 121      |
+|    ep_length            | 150      |
+|    ep_return            | -117     |
+|    ep_reward            | -0.777   |
+|    mse                  | 717      |
+|    step_time            | 4.39     |
+| time/                   |          |
+|    progress             | 0.34     |
+|    step                 | 3.4e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -112.847 +/- 10.043
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 2.49     |
+|    adv_reward_raw_mean  | 1.62     |
+|    adv_reward_raw_min   | 0.921    |
+|    adv_reward_scaled... | 0.00499  |
+|    adv_reward_scaled... | 0.00323  |
+|    adv_reward_scaled... | 0.00184  |
+|    adv_reward_squash... | 0.00499  |
+|    adv_reward_squash... | 0.00323  |
+|    adv_reward_squash... | 0.00184  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.884    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | -0.00245 |
+|    value_loss           | 7.68     |
+| stat/                   |          |
+|    constraint_violation | 2.73e+04 |
+|    ep_constraint_vio... | 18.7     |
+|    ep_length            | 23.1     |
+|    ep_return            | 4.95     |
+|    ep_reward            | 0.297    |
+|    step_time            | 0.648    |
+| stat_eval/              |          |
+|    constraint_violation | 117      |
+|    ep_length            | 150      |
+|    ep_return            | -113     |
+|    ep_reward            | -0.752   |
+|    mse                  | 673      |
+|    step_time            | 4.32     |
+| time/                   |          |
+|    progress             | 0.36     |
+|    step                 | 3.6e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -117.768 +/- 6.627
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.9      |
+|    adv_reward_raw_mean  | -750     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.0018   |
+|    adv_reward_scaled... | -0.723   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.0018   |
+|    adv_reward_squash... | -0.723   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.677    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.00716  |
+|    value_loss           | 32.2     |
+| stat/                   |          |
+|    constraint_violation | 2.88e+04 |
+|    ep_constraint_vio... | 7.7      |
+|    ep_length            | 12       |
+|    ep_return            | 3.19     |
+|    ep_reward            | 0.269    |
+|    step_time            | 0.642    |
+| stat_eval/              |          |
+|    constraint_violation | 122      |
+|    ep_length            | 150      |
+|    ep_return            | -118     |
+|    ep_reward            | -0.785   |
+|    mse                  | 697      |
+|    step_time            | 4.96     |
+| time/                   |          |
+|    progress             | 0.38     |
+|    step                 | 3.8e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -121.339 +/- 4.576
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.691    |
+|    adv_reward_raw_mean  | -750     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00138  |
+|    adv_reward_scaled... | -0.723   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00138  |
+|    adv_reward_squash... | -0.723   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.556    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.267    |
+|    value_loss           | 39.3     |
+| stat/                   |          |
+|    constraint_violation | 3.03e+04 |
+|    ep_constraint_vio... | 8.5      |
+|    ep_length            | 8.9      |
+|    ep_return            | 2.75     |
+|    ep_reward            | 0.304    |
+|    step_time            | 0.643    |
+| stat_eval/              |          |
+|    constraint_violation | 126      |
+|    ep_length            | 150      |
+|    ep_return            | -121     |
+|    ep_reward            | -0.809   |
+|    mse                  | 719      |
+|    step_time            | 4.64     |
+| time/                   |          |
+|    progress             | 0.4      |
+|    step                 | 4e+04    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -114.101 +/- 9.909
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 2.24     |
+|    adv_reward_raw_mean  | 1.43     |
+|    adv_reward_raw_min   | 0.886    |
+|    adv_reward_scaled... | 0.00448  |
+|    adv_reward_scaled... | 0.00286  |
+|    adv_reward_scaled... | 0.00177  |
+|    adv_reward_squash... | 0.00448  |
+|    adv_reward_squash... | 0.00286  |
+|    adv_reward_squash... | 0.00177  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.88     |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | -0.0209  |
+|    value_loss           | 2.34     |
+| stat/                   |          |
+|    constraint_violation | 3.19e+04 |
+|    ep_constraint_vio... | 17.9     |
+|    ep_length            | 23.6     |
+|    ep_return            | 4.54     |
+|    ep_reward            | 0.245    |
+|    step_time            | 0.768    |
+| stat_eval/              |          |
+|    constraint_violation | 118      |
+|    ep_length            | 150      |
+|    ep_return            | -114     |
+|    ep_reward            | -0.761   |
+|    mse                  | 633      |
+|    step_time            | 5.7      |
+| time/                   |          |
+|    progress             | 0.42     |
+|    step                 | 4.2e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -117.093 +/- 10.826
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.708    |
+|    adv_reward_raw_mean  | -750     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00142  |
+|    adv_reward_scaled... | -0.723   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00142  |
+|    adv_reward_squash... | -0.723   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.515    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0558   |
+|    value_loss           | 24.9     |
+| stat/                   |          |
+|    constraint_violation | 3.34e+04 |
+|    ep_constraint_vio... | 9.5      |
+|    ep_length            | 12.4     |
+|    ep_return            | 2.71     |
+|    ep_reward            | 0.221    |
+|    step_time            | 1.2      |
+| stat_eval/              |          |
+|    constraint_violation | 122      |
+|    ep_length            | 150      |
+|    ep_return            | -117     |
+|    ep_reward            | -0.781   |
+|    mse                  | 696      |
+|    step_time            | 6.14     |
+| time/                   |          |
+|    progress             | 0.44     |
+|    step                 | 4.4e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -115.742 +/- 5.551
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.873    |
+|    adv_reward_raw_mean  | -500     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00175  |
+|    adv_reward_scaled... | -0.481   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00175  |
+|    adv_reward_squash... | -0.481   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.133    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.00113  |
+|    value_loss           | 32.6     |
+| stat/                   |          |
+|    constraint_violation | 3.49e+04 |
+|    ep_constraint_vio... | 7.6      |
+|    ep_length            | 8.9      |
+|    ep_return            | 2.42     |
+|    ep_reward            | 0.271    |
+|    step_time            | 1.25     |
+| stat_eval/              |          |
+|    constraint_violation | 120      |
+|    ep_length            | 150      |
+|    ep_return            | -116     |
+|    ep_reward            | -0.772   |
+|    mse                  | 695      |
+|    step_time            | 8.61     |
+| time/                   |          |
+|    progress             | 0.46     |
+|    step                 | 4.6e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -121.820 +/- 6.447
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 3.07     |
+|    adv_reward_raw_mean  | 1.74     |
+|    adv_reward_raw_min   | 1.12     |
+|    adv_reward_scaled... | 0.00614  |
+|    adv_reward_scaled... | 0.00347  |
+|    adv_reward_scaled... | 0.00223  |
+|    adv_reward_squash... | 0.00614  |
+|    adv_reward_squash... | 0.00347  |
+|    adv_reward_squash... | 0.00223  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.979    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0335   |
+|    value_loss           | 3.69     |
+| stat/                   |          |
+|    constraint_violation | 3.65e+04 |
+|    ep_constraint_vio... | 20.4     |
+|    ep_length            | 23.3     |
+|    ep_return            | 4.38     |
+|    ep_reward            | 0.246    |
+|    step_time            | 0.726    |
+| stat_eval/              |          |
+|    constraint_violation | 126      |
+|    ep_length            | 150      |
+|    ep_return            | -122     |
+|    ep_reward            | -0.812   |
+|    mse                  | 739      |
+|    step_time            | 6.02     |
+| time/                   |          |
+|    progress             | 0.48     |
+|    step                 | 4.8e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -121.339 +/- 6.365
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.725    |
+|    adv_reward_raw_mean  | -500     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00145  |
+|    adv_reward_scaled... | -0.481   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00145  |
+|    adv_reward_squash... | -0.481   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.642    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0837   |
+|    value_loss           | 34.3     |
+| stat/                   |          |
+|    constraint_violation | 3.8e+04  |
+|    ep_constraint_vio... | 7.1      |
+|    ep_length            | 8.3      |
+|    ep_return            | 2.02     |
+|    ep_reward            | 0.239    |
+|    step_time            | 0.999    |
+| stat_eval/              |          |
+|    constraint_violation | 126      |
+|    ep_length            | 150      |
+|    ep_return            | -121     |
+|    ep_reward            | -0.809   |
+|    mse                  | 733      |
+|    step_time            | 5.78     |
+| time/                   |          |
+|    progress             | 0.5      |
+|    step                 | 5e+04    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -119.504 +/- 7.131
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.794    |
+|    adv_reward_raw_mean  | -500     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00159  |
+|    adv_reward_scaled... | -0.481   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00159  |
+|    adv_reward_squash... | -0.481   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.658    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.0391   |
+|    value_loss           | 34.1     |
+| stat/                   |          |
+|    constraint_violation | 3.96e+04 |
+|    ep_constraint_vio... | 8.8      |
+|    ep_length            | 10.8     |
+|    ep_return            | 2.58     |
+|    ep_reward            | 0.244    |
+|    step_time            | 0.705    |
+| stat_eval/              |          |
+|    constraint_violation | 124      |
+|    ep_length            | 150      |
+|    ep_return            | -120     |
+|    ep_reward            | -0.797   |
+|    mse                  | 733      |
+|    step_time            | 5.95     |
+| time/                   |          |
+|    progress             | 0.52     |
+|    step                 | 5.2e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -120.470 +/- 6.686
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 3        |
+|    adv_reward_raw_mean  | 1.54     |
+|    adv_reward_raw_min   | 0.542    |
+|    adv_reward_scaled... | 0.00601  |
+|    adv_reward_scaled... | 0.00309  |
+|    adv_reward_scaled... | 0.00108  |
+|    adv_reward_squash... | 0.00601  |
+|    adv_reward_squash... | 0.00309  |
+|    adv_reward_squash... | 0.00108  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.954    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | -0.0117  |
+|    value_loss           | 4.31     |
+| stat/                   |          |
+|    constraint_violation | 4.12e+04 |
+|    ep_constraint_vio... | 19.4     |
+|    ep_length            | 22.6     |
+|    ep_return            | 4.04     |
+|    ep_reward            | 0.241    |
+|    step_time            | 0.807    |
+| stat_eval/              |          |
+|    constraint_violation | 125      |
+|    ep_length            | 150      |
+|    ep_return            | -120     |
+|    ep_reward            | -0.803   |
+|    mse                  | 733      |
+|    step_time            | 5.4      |
+| time/                   |          |
+|    progress             | 0.54     |
+|    step                 | 5.4e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -122.014 +/- 5.647
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 0.746    |
+|    adv_reward_raw_mean  | -500     |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | 0.00149  |
+|    adv_reward_scaled... | -0.481   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | 0.00149  |
+|    adv_reward_squash... | -0.481   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.578    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.545    |
+|    value_loss           | 110      |
+| stat/                   |          |
+|    constraint_violation | 4.27e+04 |
+|    ep_constraint_vio... | 7.7      |
+|    ep_length            | 11.1     |
+|    ep_return            | 2.27     |
+|    ep_reward            | 0.231    |
+|    step_time            | 0.71     |
+| stat_eval/              |          |
+|    constraint_violation | 127      |
+|    ep_length            | 150      |
+|    ep_return            | -122     |
+|    ep_reward            | -0.813   |
+|    mse                  | 709      |
+|    step_time            | 6.43     |
+| time/                   |          |
+|    progress             | 0.56     |
+|    step                 | 5.6e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -122.304 +/- 4.910
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | -1e+03   |
+|    adv_reward_raw_mean  | -1e+03   |
+|    adv_reward_raw_min   | -1e+03   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_scaled... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_squash... | -0.964   |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.0999   |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.111    |
+|    value_loss           | 14.5     |
+| stat/                   |          |
+|    constraint_violation | 4.42e+04 |
+|    ep_constraint_vio... | 7.6      |
+|    ep_length            | 9.2      |
+|    ep_return            | 2.36     |
+|    ep_reward            | 0.259    |
+|    step_time            | 0.694    |
+| stat_eval/              |          |
+|    constraint_violation | 127      |
+|    ep_length            | 150      |
+|    ep_return            | -122     |
+|    ep_reward            | -0.815   |
+|    mse                  | 738      |
+|    step_time            | 5.39     |
+| time/                   |          |
+|    progress             | 0.58     |
+|    step                 | 5.8e+04  |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -115.452 +/- 10.409
+
+--------------------------------------
+| adv_reward/             |          |
+|    adv_reward_raw_max   | 2.8      |
+|    adv_reward_raw_mean  | 2.12     |
+|    adv_reward_raw_min   | 1.04     |
+|    adv_reward_scaled... | 0.0056   |
+|    adv_reward_scaled... | 0.00424  |
+|    adv_reward_scaled... | 0.00208  |
+|    adv_reward_squash... | 0.0056   |
+|    adv_reward_squash... | 0.00424  |
+|    adv_reward_squash... | 0.00208  |
+|    adv_reward_temper... | 500      |
+| loss/                   |          |
+|    approx_kl            | 0.256    |
+|    entropy_loss         | -0.916   |
+|    policy_loss          | 0.00156  |
+|    value_loss           | 16.6     |
+| stat/                   |          |
+|    constraint_violation | 4.58e+04 |
+|    ep_constraint_vio... | 17.7     |
+|    ep_length            | 24       |
+|    ep_return            | 3.75     |
+|    ep_reward            | 0.271    |
+|    step_time            | 0.667    |
+| stat_eval/              |          |
+|    constraint_violation | 120      |
+|    ep_length            | 150      |
+|    ep_return            | -115     |
+|    ep_reward            | -0.77    |
+|    mse                  | 649      |
+|    step_time            | 4.47     |
+| time/                   |          |
+|    progress             | 0.6      |
+|    step                 | 6e+04    |
+--------------------------------------
+
+Checkpoint | ./models/cartpole_adv_v4/model_latest.pt
+Eval | ep_lengths 150.00 +/- 0.00 | ep_return -117.865 +/- 6.560

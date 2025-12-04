@@ -46,6 +46,9 @@ class PPO(BaseController):
         self.use_safe_reset = False
         self.use_adv_reward = True
         self.adv_reward_temperature = kwargs.get('adv_reward_temperature', 50.0)
+        self.adv_reward_scale = kwargs.get('adv_reward_scale', 100.0)
+        self.adv_reward_exponential = kwargs.get('adv_reward_exponential', True)
+        self.adv_correction_weight = kwargs.get('adv_correction_weight', 1.0)
         self.sf_idle_floor = kwargs.get('sf_idle_floor', 0.0)
         self._sf_idle_penalty_weight = kwargs.get('sf_idle_penalty_weight', 0.0)
         self._sf_idle_penalty = 0.0
@@ -236,11 +239,14 @@ class PPO(BaseController):
         total_return = 0
         start = time.time()
         while len(ep_returns) < n_episodes:
+            prev_obs = obs
             action = self.select_action(obs=obs, info=info)
 
             # Adding safety filter
+            physical_action = None
+            certified_action = None
+            success = False
             if self.safety_filter is not None:
-                success = False
                 physical_action = env.denormalize_action(action)
                 unextended_obs = np.squeeze(obs)[:env.symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
@@ -250,20 +256,27 @@ class PPO(BaseController):
                     self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
-            obs, rew, done, info = env.step(action)
+            next_obs, rew, done, info = env.step(action)
+            if self.use_adv_reward:
+                uncert_act = physical_action if self.safety_filter is not None else None
+                cert_act = certified_action if (self.safety_filter is not None and success) else None
+                rew = self.adversarial_reward(prev_obs, next_obs, action, info,
+                                              uncert_action=uncert_act, cert_action=cert_act)
             total_return += rew
 
             if render:
                 env.render()
                 frames.append(env.render('rgb_array'))
             if verbose:
-                print(f'obs {obs} | act {action}')
+                print(f'obs {next_obs} | act {action}')
             if done:
                 assert 'episode' in info
                 ep_returns.append(total_return)
                 ep_lengths.append(info['episode']['l'])
                 obs, info = self.env_reset(env, True)
                 total_return = 0
+            else:
+                obs = next_obs
             obs = self.obs_normalizer(obs)
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
@@ -325,14 +338,19 @@ class PPO(BaseController):
                 next_obs, info = self.env_reset(self.env, self.use_safe_reset)
                 info['n'][0]['terminal_info'] = prev_info['terminal_info']
                 info['n'][0]['terminal_observation'] = prev_info['terminal_observation']
-            if self.penalize_sf_diff and success:
-                rew = np.log(rew)
-                rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
-                rew = np.exp(rew)
+            # if self.penalize_sf_diff and success:
+            #     rew = np.log(rew)
+            #     rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
+            #     rew = np.exp(rew)
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             if self.use_adv_reward:
-                rew = self.adversarial_reward(obs, next_obs, action, info)
+                # Pass uncertified and certified actions to adversarial reward
+                uncert_act = physical_action if self.safety_filter is not None else None
+                cert_act = certified_action if (self.safety_filter is not None and success) else None
+                rew = self.adversarial_reward(obs, next_obs, action, info,
+                                              uncert_action=uncert_act,
+                                              cert_action=cert_act)
                 adv_stats = {}
                 raw_stats = getattr(self, '_adv_reward_raw_stats', None)
                 scaled_stats = getattr(self, '_adv_reward_scaled_stats', None)
@@ -474,82 +492,138 @@ class PPO(BaseController):
 
         return obs, info
 
-    def adversarial_reward(self, obs, next_obs, action, info):
-        '''Adversarial reward shaped to push the system toward constraint boundaries,
-        batch-safe and numerically stable. Returns shape (batch,).'''
-        # Ensure 2D shapes
+    def adversarial_reward(self, obs, next_obs, action, info, uncert_action=None, cert_action=None):
+        '''Adversarial reward function for training agents that cause safety filter chattering.
+
+        The goal is to maximize how much the safety filter has to correct agent actions
+        while staying within constraints (not escaping).
+
+        Configurable reward components (set via algo_config):
+            - adv_reward_temperature: Scaling for normalization (default: 15.0)
+            - adv_use_correction_reward: Enable correction-based rewards (default: True)
+            - adv_use_correction_ratio: Enable correction ratio rewards (default: True)
+            - adv_use_correction_bonus: Enable tiered correction bonuses (default: True)
+            - adv_use_no_correction_penalty: Penalize no corrections (default: True)
+            - adv_use_theta_reward: Reward high theta angles (default: True)
+            - adv_use_velocity_reward: Reward angular velocity (default: True)
+            - adv_use_oscillation_reward: Reward direction changes (default: True)
+            - adv_use_cart_penalty: Penalize cart position (default: True)
+            - adv_use_stability_penalty: Penalize being too stable (default: True)
+
+        Returns shape (batch,).
+        '''
         next_obs_b = np.atleast_2d(next_obs)
         obs_b = np.atleast_2d(obs)
-        act_b = np.atleast_2d(action)
         B = next_obs_b.shape[0]
 
         adv_rew = np.zeros(B, dtype=np.float32)
         raw_rew = np.zeros(B, dtype=np.float32)
-
-        # Per-env infos (VecEnv packs them in info['n'])
         infos = info.get('n', [info] * B) if isinstance(info, dict) else [dict()] * B
 
-        temperature = getattr(self, 'adv_reward_temperature', 50.0)
+        # Config
+        temperature = getattr(self, 'adv_reward_temperature', 15.0)
+        use_correction_reward = getattr(self, 'adv_use_correction_reward', True)
+        use_correction_ratio = getattr(self, 'adv_use_correction_ratio', True)
+        use_correction_bonus = getattr(self, 'adv_use_correction_bonus', True)
+        use_no_correction_penalty = getattr(self, 'adv_use_no_correction_penalty', True)
+        use_theta_reward = getattr(self, 'adv_use_theta_reward', True)
+        use_velocity_reward = getattr(self, 'adv_use_velocity_reward', True)
+        use_oscillation_reward = getattr(self, 'adv_use_oscillation_reward', True)
+        use_cart_penalty = getattr(self, 'adv_use_cart_penalty', True)
+        use_stability_penalty = getattr(self, 'adv_use_stability_penalty', True)
+
+        # Weights
+        w_correction = getattr(self, 'adv_w_correction', 25.0)
+        w_correction_ratio = getattr(self, 'adv_w_correction_ratio', 40.0)
+        w_correction_bonus = getattr(self, 'adv_w_correction_bonus', 20.0)
+        w_no_correction_penalty = getattr(self, 'adv_w_no_correction_penalty', 15.0)
+        w_theta = getattr(self, 'adv_w_theta', 15.0)
+        w_velocity = getattr(self, 'adv_w_velocity', 8.0)
+        w_oscillation = getattr(self, 'adv_w_oscillation', 10.0)
+        w_cart_penalty = getattr(self, 'adv_w_cart_penalty', 5.0)
+        w_stability_penalty = getattr(self, 'adv_w_stability_penalty', 10.0)
+        w_termination_penalty = getattr(self, 'adv_w_termination_penalty', 100.0)
+
         for i in range(B):
             s_prev = obs_b[i]
             s = next_obs_b[i]
-            a = act_b[i]
 
-            # Base proximity: encourage large angle/tilt and angular rates.
-            if s.shape[0] == 4:  # cartpole: [x, x_dot, theta, theta_dot]
-                x, xdot, th, thdot = s
-                prox = 1000.0 * abs(th) + 100.0 * abs(thdot) + 25.0 * abs(xdot)  # + 10.0 * abs(x)
-                delta = np.linalg.norm(s - s_prev)                 # encourage state change inbetween steps
-                theta_lim = 0.2                                    # soft boundary shaping near theta limit
-                try:                                               # what does this actually do?
-                    theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[2])  # type: ignore
+            if s.shape[0] >= 4:  # cartpole: [x, x_dot, theta, theta_dot, ...]
+                x, _, th, thdot = s[0], s[1], s[2], s[3]
+                _, thdot_prev = s_prev[2], s_prev[3]
+
+                # Get theta constraint limit
+                theta_lim = 0.2
+                try:
+                    theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[2])
                 except Exception:
                     pass
-                ratio = min(abs(th) / max(theta_lim, 1e-3), 3.0)
-                boundary_bonus = 2.0 * (ratio ** 2)
+                theta_ratio = abs(th) / max(theta_lim, 1e-6)
+
+                # Check termination
+                terminated = False
+                try:
+                    ti = infos[i].get('terminal_info', {})
+                    if ti and not ti.get('TimeLimit.truncated', False):
+                        terminated = True
+                except Exception:
+                    pass
+
+                if terminated:
+                    r = -w_termination_penalty
+                else:
+                    r = 0.0
+
+                    # Correction rewards
+                    if uncert_action is not None and cert_action is not None:
+                        uncert_mag = float(np.linalg.norm(np.atleast_1d(uncert_action)))
+                        correction = float(np.linalg.norm(np.atleast_1d(uncert_action) - np.atleast_1d(cert_action)))
+
+                        if use_correction_reward:
+                            r += w_correction * correction
+
+                        if use_correction_ratio and uncert_mag > 0.1:
+                            r += w_correction_ratio * (correction / uncert_mag)
+
+                        if use_correction_bonus:
+                            if correction > 1.0:
+                                r += w_correction_bonus
+                            if correction > 2.0:
+                                r += w_correction_bonus
+
+                        if use_no_correction_penalty and correction < 0.1:
+                            r -= w_no_correction_penalty
+
+                    elif uncert_action is not None:
+                        r += 5.0 * float(np.linalg.norm(np.atleast_1d(uncert_action)))
+
+                    # State rewards
+                    if use_theta_reward:
+                        r += w_theta * theta_ratio
+
+                    if use_velocity_reward:
+                        r += w_velocity * min(abs(thdot), 2.0)
+
+                    if use_oscillation_reward:
+                        if np.sign(thdot) != np.sign(thdot_prev) and thdot_prev != 0:
+                            r += w_oscillation
+
+                    # Penalties
+                    if use_cart_penalty and abs(x) > 1.5:
+                        r -= w_cart_penalty * (abs(x) - 1.5)
+
+                    if use_stability_penalty:
+                        if theta_ratio < 0.2 and abs(thdot) < 0.5:
+                            r -= w_stability_penalty
+
             else:
-                # generic fallback (e.g., quadrotor)
-                prox = 0.25 * np.linalg.norm(s)
-                delta = 0.5 * np.linalg.norm(s - s_prev)
-                boundary_bonus = 0.0
+                r = 0.25 * np.linalg.norm(s) + 0.5 * np.linalg.norm(s - s_prev)
 
-            # Aggressive action bonus
-            act_bonus = 5.65 * np.linalg.norm(a)  # encourage large actions <= might not be that good, go over fans paper again!
-
-            idle_penalty = getattr(self, '_sf_idle_penalty', 0.0)  # penalty for staying idle
-
-            # Actual constraint violation if provided
-            vio = 0.0
-            try:
-                vio = float(infos[i].get('constraint_violation', 0.0))
-            except Exception:
-                vio = 0.0
-            vio_bonus = 0.5 * vio  # bounded
-
-            # Penalize hard terminations to avoid ultra-short episodes
-            term_pen = 0.0
-            try:
-                ti = infos[i].get('terminal_info', {})
-                if ti and not ti.get('TimeLimit.truncated', False):
-                    term_pen = -100.0
-            except Exception:
-                pass
-
-            # Combine terms and record raw shaping value before squashing
-            r = prox + boundary_bonus + delta + act_bonus + vio_bonus + term_pen - idle_penalty
             raw_rew[i] = float(r)
-            scaled = 100.0 * np.tanh(r / max(temperature, 1e-6))
+            scaled = temperature * np.log(1.0 + np.exp(r / max(temperature, 1e-6)))
             adv_rew[i] = float(scaled)
 
-        self._adv_reward_raw_stats = {
-            'mean': float(np.mean(raw_rew)),
-            'min': float(np.min(raw_rew)),
-            'max': float(np.max(raw_rew)),
-        }
-        self._adv_reward_scaled_stats = {
-            'mean': float(np.mean(adv_rew)),
-            'min': float(np.min(adv_rew)),
-            'max': float(np.max(adv_rew)),
-        }
+        self._adv_reward_raw_stats = {'mean': float(np.mean(raw_rew)), 'min': float(np.min(raw_rew)), 'max': float(np.max(raw_rew))}
+        self._adv_reward_scaled_stats = {'mean': float(np.mean(adv_rew)), 'min': float(np.min(adv_rew)), 'max': float(np.max(adv_rew))}
 
         return adv_rew
