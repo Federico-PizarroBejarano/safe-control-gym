@@ -24,9 +24,9 @@ sf_config:
     prior_prop_rand_info: null
 
   # Cost function
-  cost_function: learned_cost
-  mpsc_cost_horizon: 5
-  decay_factor: 1
+  cost_function: precomputed_cost
+  mpsc_cost_horizon: 6
+  decay_factor: 0.85
 
   # Softening
   soften_constraints: True
