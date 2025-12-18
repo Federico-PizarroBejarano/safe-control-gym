@@ -5,6 +5,7 @@ temp/
 
 # Experiments
 experiments/mpsc/models/rl_models/
+experiments/adversarial/models/rl_models/
 experiments/adversarial/ablation/
 experiments/adversarial/plots/
 

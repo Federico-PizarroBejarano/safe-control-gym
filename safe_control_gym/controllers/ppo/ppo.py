@@ -37,7 +37,7 @@ class PPO(BaseController):
                  training=True,
                  checkpoint_path='model_latest.pt',
                  output_dir='temp',
-                 use_gpu=True,
+                 use_gpu=False,
                  seed=0,
                  **kwargs):
         # Safety filter training
@@ -268,7 +268,6 @@ class PPO(BaseController):
                 ep_lengths.append(info['episode']['l'])
                 obs, info = self.env_reset(env, True)
                 total_return = 0
-
             obs = self.obs_normalizer(next_obs)
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)

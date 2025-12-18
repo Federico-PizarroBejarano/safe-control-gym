@@ -30,7 +30,7 @@ sf_config:
 
   # Softening
   soften_constraints: True
-  slack_cost: 300
+  slack_cost: 250
 
   # Constraint tightening rate
   max_w: 0.002
