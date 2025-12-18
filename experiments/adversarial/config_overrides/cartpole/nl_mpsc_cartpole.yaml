@@ -12,10 +12,10 @@ sf_config:
 
   # MPC parameters
   use_acados: True
-  horizon: 30
+  horizon: 20
   warmstart: True
   integration_algo: rk4
-  use_terminal_set: True
+  use_terminal_set: False
 
   # Prior info
   prior_info:
@@ -24,12 +24,13 @@ sf_config:
     prior_prop_rand_info: null
 
   # Cost function
-  cost_function: precomputed_cost
-  mpsc_cost_horizon: 6
+  cost_function: one_step_cost
+  mpsc_cost_horizon: 1
   decay_factor: 0.85
 
   # Softening
   soften_constraints: True
   slack_cost: 300
 
-  max_w: [0.002, 0.002, 0.01, 0.002, 0.0]
+  # Constraint tightening rate
+  max_w: 0.002

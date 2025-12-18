@@ -40,18 +40,16 @@ class PPO(BaseController):
                  use_gpu=True,
                  seed=0,
                  **kwargs):
-        self.filter_train_actions = True
+        # Safety filter training
+        self.filter_train_actions = False
         self.penalize_sf_diff = False
         self.sf_penalty = 1
         self.use_safe_reset = False
-        self.use_adv_reward = True
-        self.adv_reward_temperature = kwargs.get('adv_reward_temperature', 50.0)
-        self.adv_reward_scale = kwargs.get('adv_reward_scale', 100.0)
-        self.adv_reward_exponential = kwargs.get('adv_reward_exponential', True)
-        self.adv_correction_weight = kwargs.get('adv_correction_weight', 1.0)
-        self.sf_idle_floor = kwargs.get('sf_idle_floor', 0.0)
-        self._sf_idle_penalty_weight = kwargs.get('sf_idle_penalty_weight', 0.0)
-        self._sf_idle_penalty = 0.0
+
+        # Adversarial reward
+        self.use_adv_reward = False
+        self.adv_reward_temperature = 0.0
+
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
         # Task.
         if self.training:
@@ -221,7 +219,6 @@ class PPO(BaseController):
         '''Runs evaluation with current policy.'''
         self.agent.eval()
         self.obs_normalizer.set_read_only()
-        self.use_adv_reward = True
         if env is None:
             env = self.env
         else:
@@ -239,13 +236,11 @@ class PPO(BaseController):
         total_return = 0
         start = time.time()
         while len(ep_returns) < n_episodes:
-            prev_obs = obs
             action = self.select_action(obs=obs, info=info)
 
             # Adding safety filter
             physical_action = None
             certified_action = None
-            success = False
             if self.safety_filter is not None:
                 physical_action = env.denormalize_action(action)
                 unextended_obs = np.squeeze(obs)[:env.symbolic.nx]
@@ -257,11 +252,9 @@ class PPO(BaseController):
 
             action = np.atleast_2d(np.squeeze([action]))
             next_obs, rew, done, info = env.step(action)
-            if self.use_adv_reward:
-                uncert_act = physical_action if self.safety_filter is not None else None
-                cert_act = certified_action if (self.safety_filter is not None and success) else None
-                rew = self.adversarial_reward(prev_obs, next_obs, action, info,
-                                              uncert_action=uncert_act, cert_action=cert_act)
+            if self.use_adv_reward and not done:
+                rew = self.adversarial_reward(obs, next_obs, action, info,
+                                              uncert_action=physical_action, cert_action=certified_action)
             total_return += rew
 
             if render:
@@ -275,9 +268,8 @@ class PPO(BaseController):
                 ep_lengths.append(info['episode']['l'])
                 obs, info = self.env_reset(env, True)
                 total_return = 0
-            else:
-                obs = next_obs
-            obs = self.obs_normalizer(obs)
+
+            obs = self.obs_normalizer(next_obs)
         # Collect evaluation results.
         ep_lengths = np.asarray(ep_lengths)
         ep_returns = np.asarray(ep_returns)
@@ -307,59 +299,41 @@ class PPO(BaseController):
                 action, v, logp = self.agent.ac.step(torch.FloatTensor(obs).to(self.device))
                 unsafe_action = action
 
-            action_np = np.array(action, copy=False).reshape(self.rollout_batch_size, -1)
-
             # Adding safety filter
+            physical_action = None
+            certified_action = None
             success = False
             if self.safety_filter is not None and (self.filter_train_actions is True or self.penalize_sf_diff is True):
-                uncertified = action_np[0, :].copy()
-                # physical_action = self.env.envs[0].denormalize_action(action)
-                physical_action = self.env.envs[0].denormalize_action(uncertified)
+                physical_action = self.env.envs[0].denormalize_action(action)
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if success and self.filter_train_actions is True:
-                    # action = self.env.envs[0].normalize_action(certified_action)
-                    action_np[0, :] = self.env.envs[0].normalize_action(np.atleast_1d(certified_action))
+                    action = self.env.envs[0].normalize_action(certified_action)
                 elif not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
-                if success and np.linalg.norm(physical_action) < self.sf_idle_floor:
-                    self._sf_idle_penalty = self._sf_idle_penalty_weight
-                else:
-                    self._sf_idle_penalty = 0.0
-            else:
-                self._sf_idle_penalty = 0.0
-
-            action = action_np
-            # action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
+            action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
             if done[0] and self.use_safe_reset:
                 prev_info = info['n'][0]
                 next_obs, info = self.env_reset(self.env, self.use_safe_reset)
                 info['n'][0]['terminal_info'] = prev_info['terminal_info']
                 info['n'][0]['terminal_observation'] = prev_info['terminal_observation']
-            # if self.penalize_sf_diff and success:
-            #     rew = np.log(rew)
-            #     rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
-            #     rew = np.exp(rew)
+            if self.penalize_sf_diff and success:
+                rew = np.log(rew)
+                rew -= self.sf_penalty * np.linalg.norm(physical_action - certified_action)
+                rew = np.exp(rew)
             next_obs = self.obs_normalizer(next_obs)
             rew = self.reward_normalizer(rew, done)
             if self.use_adv_reward:
                 # Pass uncertified and certified actions to adversarial reward
-                uncert_act = physical_action if self.safety_filter is not None else None
-                cert_act = certified_action if (self.safety_filter is not None and success) else None
                 rew = self.adversarial_reward(obs, next_obs, action, info,
-                                              uncert_action=uncert_act,
-                                              cert_action=cert_act)
+                                              uncert_action=physical_action,
+                                              cert_action=certified_action)
                 adv_stats = {}
-                raw_stats = getattr(self, '_adv_reward_raw_stats', None)
-                scaled_stats = getattr(self, '_adv_reward_scaled_stats', None)
-                if raw_stats:
-                    adv_stats.update({f'raw_{k}': raw_stats[k] for k in ['mean', 'min', 'max']})
-                if scaled_stats:
-                    adv_stats.update({f'scaled_{k}': scaled_stats[k] for k in ['mean', 'min', 'max']})
-                if adv_stats:
-                    adv_stats['temperature'] = float(self.adv_reward_temperature)
+                adv_stats.update({f'raw_{k}': self._adv_reward_raw_stats[k] for k in ['mean', 'min', 'max']})
+                adv_stats.update({f'scaled_{k}': self._adv_reward_scaled_stats[k] for k in ['mean', 'min', 'max']})
+                adv_stats['temperature'] = float(self.adv_reward_temperature)
                 self._adv_reward_last_stats = adv_stats
             else:
                 self._adv_reward_last_stats = {}
@@ -397,8 +371,7 @@ class PPO(BaseController):
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         results = self.agent.update(rollouts, self.device)
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
-        if getattr(self, '_adv_reward_last_stats', None):
-            results.update({f'adv_reward_{k}': v for k, v in self._adv_reward_last_stats.items()})
+        results.update({f'adv_reward_{k}': v for k, v in self._adv_reward_last_stats.items()})
         return results
 
     def log_step(self,

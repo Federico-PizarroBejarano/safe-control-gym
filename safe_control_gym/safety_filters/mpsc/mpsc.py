@@ -166,24 +166,6 @@ class MPSC(BaseSafetyFilter, ABC):
             action, feasible = self.solve_casadi_optimization(obs, uncertified_action, iteration)
         return action, feasible
 
-    def _extract_state_vector(self, state_like):
-        '''Return a state vector with the expected dimension.
-
-        Args:
-            state_like (array-like): Input state or reference trajectory slice.
-
-        Returns:
-            ndarray: Vector trimmed/padded to match self.model.nx.
-        '''
-        state_vec = np.asarray(state_like, dtype=float).reshape(-1)
-        if state_vec.size > self.model.nx:
-            state_vec = state_vec[:self.model.nx]
-        elif state_vec.size < self.model.nx:
-            padded = np.zeros(self.model.nx, dtype=state_vec.dtype)
-            padded[:state_vec.size] = state_vec
-            state_vec = padded
-        return state_vec
-
     def solve_casadi_optimization(self,
                                   obs,
                                   uncertified_action,
@@ -328,11 +310,8 @@ class MPSC(BaseSafetyFilter, ABC):
         else:
             self.kinf += 1
             if (self.kinf <= self.horizon - 1 and self.z_prev is not None and self.v_prev is not None):
-                # action = np.squeeze(self.v_prev[:, self.kinf]) + \
-                #     np.squeeze(self.lqr_gain @ (current_state.reshape((self.model.nx, 1)) - self.z_prev[:, self.kinf].reshape((self.model.nx, 1))))
-                current_state_vec = self._extract_state_vector(current_state).reshape((self.model.nx, 1))
-                reference_vec = self._extract_state_vector(self.z_prev[:, self.kinf]).reshape((self.model.nx, 1))
-                action = np.squeeze(self.v_prev[:, self.kinf]) + np.squeeze(self.lqr_gain @ (current_state_vec - reference_vec))
+                action = np.squeeze(self.v_prev[:, self.kinf]) + \
+                    np.squeeze(self.lqr_gain @ (current_state.reshape((self.model.nx, 1)) - self.z_prev[:, self.kinf].reshape((self.model.nx, 1))))
                 if self.integration_algo == 'LTI':
                     action = np.squeeze(action) + np.squeeze(self.U_EQ)
                 action = np.squeeze(action)
@@ -342,10 +321,7 @@ class MPSC(BaseSafetyFilter, ABC):
                     success = False
                 certified_action = clipped_action
             else:
-                # action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
-                current_state_vec = self._extract_state_vector(current_state)
-                x_delta = current_state_vec - self._extract_state_vector(self.X_EQ)
-                action = np.squeeze(self.lqr_gain @ x_delta.reshape((self.model.nx, 1)))
+                action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
                 if self.integration_algo == 'LTI':
                     action += np.squeeze(self.U_EQ)
                 clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)

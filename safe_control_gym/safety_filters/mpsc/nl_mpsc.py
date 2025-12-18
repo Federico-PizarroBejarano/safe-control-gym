@@ -48,9 +48,7 @@ class NL_MPSC(MPSC):
             decay_factor (float): How much to discount future costs.
             soften_constraints (bool): Whether to soften the constraints or not.
             slack_cost (float): The slack cost for the constraints.
-            max_w (float or list): The constraint tightening rate per horizon step. Can be a scalar
-                (applied uniformly to all state constraints) or an array of length (n_states + n_inputs)
-                for per-variable tightening rates. Only state constraints are tightened (input rates ignored).
+            max_w (float): The maximum weight for the constraints.
         '''
 
         super().__init__(
@@ -88,15 +86,6 @@ class NL_MPSC(MPSC):
         self.L_x = np.vstack((L_x, np.zeros((p_u, self.n))))
         self.L_u = np.vstack((np.zeros((p_x, self.m)), L_u))
         self.l_xu = np.concatenate([l_x, l_u])
-
-        # Convert max_w to array of length p/2 (one per variable: n states + m inputs)
-        n_vars = self.p // 2  # Number of constrained variables (states + inputs)
-        if np.isscalar(self.max_w):
-            self.max_w = np.full(n_vars, self.max_w)
-        else:
-            self.max_w = np.array(self.max_w)
-            if len(self.max_w) != n_vars:
-                raise ValueError(f'max_w must be a scalar or array of length {n_vars} (p/2), got {len(self.max_w)}')
 
         self.setup_optimizer()
 
@@ -224,9 +213,7 @@ class NL_MPSC(MPSC):
 
         for i in range(self.horizon):
             for j in range(self.p):
-                var_idx = j // 2  # Which variable this constraint belongs to (upper/lower pairs)
-                is_state = var_idx < self.n  # Only tighten state constraints
-                tighten_by = (self.max_w[var_idx] * i) if is_state else 0
+                tighten_by = (self.max_w * i) if j < self.n * 2 else 0
                 g[i, j] = (self.l_xu[j] - tighten_by)
             g[i, :] += (self.L_x @ self.X_mid) + (self.L_u @ self.U_mid)
             ocp_solver.constraints_set(i, 'ug', g[i, :])
