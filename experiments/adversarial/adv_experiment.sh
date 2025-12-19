@@ -7,6 +7,7 @@ SAFETY_FILTER='nl_mpsc'
 # MPSC_COST='one_step_cost'
 MPSC_COST='precomputed_cost'
 MPSC_COST_HORIZON=10
+DECAY_FACTOR=0.85
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -26,4 +27,5 @@ python3 ./adv_experiment.py \
     --kv_overrides \
         task_config.randomized_init=False \
         sf_config.cost_function=${MPSC_COST} \
-        sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON}
+        sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
+        sf_config.decay_factor=${DECAY_FACTOR}

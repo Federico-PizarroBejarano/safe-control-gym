@@ -43,36 +43,30 @@ algo_config:
   # Safety filter training
   filter_train_actions: True
   penalize_sf_diff: False
+  sf_penalty: 1
   use_safe_reset: True
 
   # Adversarial reward config
   use_adv_reward: True
-  adv_reward_temperature: 15.0
 
   # Correction-based rewards
-  adv_use_correction_reward: True
-  adv_w_correction: 30.0
+  adv_use_correction_reward: False
+  adv_w_correction: 3.0
   adv_use_correction_ratio: True
-  adv_w_correction_ratio: 40.0
-  adv_use_correction_bonus: True
-  adv_correction_bonus_tier1: 1.0
-  adv_correction_bonus_tier2: 2.0
-  adv_correction_bonus_tier3: 5.0
-  adv_use_no_correction_penalty: True
-  adv_no_correction_penalty: -3.0
+  adv_w_correction_ratio: 4.0
 
   # State-based rewards
   adv_use_theta_reward: True
   adv_w_theta: 5.0
   adv_use_velocity_reward: True
   adv_w_velocity: 3.0
-  adv_use_oscillation_reward: True
+  adv_use_oscillation_reward: False
   adv_w_oscillation: 2.0
 
-  # Penalties
-  adv_use_cart_penalty: True
-  adv_w_cart: 2.0
-  adv_cart_threshold: 0.8
-  adv_use_stability_penalty: True
-  adv_stability_threshold: 0.1
-  adv_stability_penalty: -5.0
+  # Termination penalty
+  adv_use_termination_penalty: True
+  adv_w_termination_penalty: 10.0
+
+  # Constraint violation reward
+  adv_use_constraint_violation_reward: True
+  adv_w_constraint_violation_reward: 10.0

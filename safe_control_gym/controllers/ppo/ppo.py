@@ -253,7 +253,7 @@ class PPO(BaseController):
             action = np.atleast_2d(np.squeeze([action]))
             next_obs, rew, done, info = env.step(action)
             if self.use_adv_reward and not done:
-                rew = self.adversarial_reward(obs, next_obs, action, info,
+                rew = self.adversarial_reward(obs, next_obs, info,
                                               uncert_action=physical_action, cert_action=certified_action)
             total_return += rew
 
@@ -326,16 +326,9 @@ class PPO(BaseController):
             rew = self.reward_normalizer(rew, done)
             if self.use_adv_reward:
                 # Pass uncertified and certified actions to adversarial reward
-                rew = self.adversarial_reward(obs, next_obs, action, info,
+                rew = self.adversarial_reward(obs, next_obs, info['n'][0],
                                               uncert_action=physical_action,
                                               cert_action=certified_action)
-                adv_stats = {}
-                adv_stats.update({f'raw_{k}': self._adv_reward_raw_stats[k] for k in ['mean', 'min', 'max']})
-                adv_stats.update({f'scaled_{k}': self._adv_reward_scaled_stats[k] for k in ['mean', 'min', 'max']})
-                adv_stats['temperature'] = float(self.adv_reward_temperature)
-                self._adv_reward_last_stats = adv_stats
-            else:
-                self._adv_reward_last_stats = {}
             mask = 1 - done.astype(float)
             # Time truncation is not the same as true termination.
             terminal_v = np.zeros_like(v)
@@ -370,7 +363,6 @@ class PPO(BaseController):
         rollouts.adv = (adv - adv.mean()) / (adv.std() + 1e-6)
         results = self.agent.update(rollouts, self.device)
         results.update({'step': self.total_steps, 'elapsed_time': time.time() - start})
-        results.update({f'adv_reward_{k}': v for k, v in self._adv_reward_last_stats.items()})
         return results
 
     def log_step(self,
@@ -464,7 +456,7 @@ class PPO(BaseController):
 
         return obs, info
 
-    def adversarial_reward(self, obs, next_obs, action, info, uncert_action=None, cert_action=None):
+    def adversarial_reward(self, obs, next_obs, info, uncert_action=None, cert_action=None):
         '''Adversarial reward function for training agents that cause safety filter chattering.
 
         The goal is to maximize how much the safety filter has to correct agent actions
@@ -474,8 +466,6 @@ class PPO(BaseController):
             - adv_reward_temperature: Scaling for normalization (default: 15.0)
             - adv_use_correction_reward: Enable correction-based rewards (default: True)
             - adv_use_correction_ratio: Enable correction ratio rewards (default: True)
-            - adv_use_correction_bonus: Enable tiered correction bonuses (default: True)
-            - adv_use_no_correction_penalty: Penalize no corrections (default: True)
             - adv_use_theta_reward: Reward high theta angles (default: True)
             - adv_use_velocity_reward: Reward angular velocity (default: True)
             - adv_use_oscillation_reward: Reward direction changes (default: True)
@@ -484,118 +474,66 @@ class PPO(BaseController):
 
         Returns shape (batch,).
         '''
-        next_obs_b = np.atleast_2d(next_obs)
-        obs_b = np.atleast_2d(obs)
-        B = next_obs_b.shape[0]
-
-        adv_rew = np.zeros(B, dtype=np.float32)
-        raw_rew = np.zeros(B, dtype=np.float32)
-        infos = info.get('n', [info] * B) if isinstance(info, dict) else [dict()] * B
+        obs, next_obs = np.squeeze(obs), np.squeeze(next_obs)
 
         # Config
-        temperature = getattr(self, 'adv_reward_temperature', 15.0)
-        use_correction_reward = getattr(self, 'adv_use_correction_reward', True)
-        use_correction_ratio = getattr(self, 'adv_use_correction_ratio', True)
-        use_correction_bonus = getattr(self, 'adv_use_correction_bonus', True)
-        use_no_correction_penalty = getattr(self, 'adv_use_no_correction_penalty', True)
-        use_theta_reward = getattr(self, 'adv_use_theta_reward', True)
-        use_velocity_reward = getattr(self, 'adv_use_velocity_reward', True)
-        use_oscillation_reward = getattr(self, 'adv_use_oscillation_reward', True)
-        use_cart_penalty = getattr(self, 'adv_use_cart_penalty', True)
-        use_stability_penalty = getattr(self, 'adv_use_stability_penalty', True)
+        use_termination_penalty = self.adv_use_termination_penalty
+        use_correction_reward = self.adv_use_correction_reward
+        use_correction_ratio = self.adv_use_correction_ratio
+        use_theta_reward = self.adv_use_theta_reward
+        use_velocity_reward = self.adv_use_velocity_reward
+        use_oscillation_reward = self.adv_use_oscillation_reward
+        use_constraint_violation_reward = self.adv_use_constraint_violation_reward
 
         # Weights
-        w_correction = getattr(self, 'adv_w_correction', 25.0)
-        w_correction_ratio = getattr(self, 'adv_w_correction_ratio', 40.0)
-        w_correction_bonus = getattr(self, 'adv_w_correction_bonus', 20.0)
-        w_no_correction_penalty = getattr(self, 'adv_w_no_correction_penalty', 15.0)
-        w_theta = getattr(self, 'adv_w_theta', 15.0)
-        w_velocity = getattr(self, 'adv_w_velocity', 8.0)
-        w_oscillation = getattr(self, 'adv_w_oscillation', 10.0)
-        w_cart_penalty = getattr(self, 'adv_w_cart_penalty', 5.0)
-        w_stability_penalty = getattr(self, 'adv_w_stability_penalty', 10.0)
-        w_termination_penalty = getattr(self, 'adv_w_termination_penalty', 100.0)
+        w_termination_penalty = self.adv_w_termination_penalty
+        w_correction = self.adv_w_correction
+        w_correction_ratio = self.adv_w_correction_ratio
+        w_theta = self.adv_w_theta
+        w_velocity = self.adv_w_velocity
+        w_oscillation = self.adv_w_oscillation
+        w_constraint_violation_reward = self.adv_w_constraint_violation_reward
 
-        for i in range(B):
-            s_prev = obs_b[i]
-            s = next_obs_b[i]
+        th, thdot = next_obs[2], next_obs[3]
+        thdot_prev = obs[3]
 
-            if s.shape[0] >= 4:  # cartpole: [x, x_dot, theta, theta_dot, ...]
-                x, _, th, thdot = s[0], s[1], s[2], s[3]
-                _, thdot_prev = s_prev[2], s_prev[3]
+        # Get theta constraint limit
+        theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[2])
+        theta_ratio = abs(th) / max(theta_lim, 1e-6)
 
-                # Get theta constraint limit
-                theta_lim = 0.2
-                try:
-                    theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[2])
-                except Exception:
-                    pass
-                theta_ratio = abs(th) / max(theta_lim, 1e-6)
+        # Check termination
+        terminated = False
+        ti = info.get('terminal_info', {})
+        if ti and not ti.get('TimeLimit.truncated', False):
+            terminated = True
 
-                # Check termination
-                terminated = False
-                try:
-                    ti = infos[i].get('terminal_info', {})
-                    if ti and not ti.get('TimeLimit.truncated', False):
-                        terminated = True
-                except Exception:
-                    pass
+        rew = 0.0
 
-                if terminated:
-                    r = -w_termination_penalty
-                else:
-                    r = 0.0
+        if terminated and use_termination_penalty:
+            rew = -w_termination_penalty
+        else:
+            # Correction rewards
+            if uncert_action is not None and cert_action is not None:
+                uncert_mag = float(np.linalg.norm(np.atleast_1d(uncert_action)))
+                correction = float(np.linalg.norm(np.atleast_1d(uncert_action) - np.atleast_1d(cert_action)))
 
-                    # Correction rewards
-                    if uncert_action is not None and cert_action is not None:
-                        uncert_mag = float(np.linalg.norm(np.atleast_1d(uncert_action)))
-                        correction = float(np.linalg.norm(np.atleast_1d(uncert_action) - np.atleast_1d(cert_action)))
+                if use_correction_reward:
+                    rew += w_correction * correction
+                elif use_correction_ratio and uncert_mag > 0.1:
+                    rew += w_correction_ratio * (correction / uncert_mag)
 
-                        if use_correction_reward:
-                            r += w_correction * correction
+            # State rewards
+            if use_theta_reward:
+                rew += w_theta * theta_ratio
+            if use_velocity_reward:
+                rew += w_velocity * min(abs(thdot), 2.0)
+            if use_oscillation_reward:
+                if np.sign(thdot) != np.sign(thdot_prev) and thdot_prev != 0:
+                    rew += w_oscillation
 
-                        if use_correction_ratio and uncert_mag > 0.1:
-                            r += w_correction_ratio * (correction / uncert_mag)
+            # Constraint violation reward
+            if use_constraint_violation_reward and 'constraint_violation' in info and info['constraint_violation'] > 0:
+                rew += w_constraint_violation_reward
 
-                        if use_correction_bonus:
-                            if correction > 1.0:
-                                r += w_correction_bonus
-                            if correction > 2.0:
-                                r += w_correction_bonus
-
-                        if use_no_correction_penalty and correction < 0.1:
-                            r -= w_no_correction_penalty
-
-                    elif uncert_action is not None:
-                        r += 5.0 * float(np.linalg.norm(np.atleast_1d(uncert_action)))
-
-                    # State rewards
-                    if use_theta_reward:
-                        r += w_theta * theta_ratio
-
-                    if use_velocity_reward:
-                        r += w_velocity * min(abs(thdot), 2.0)
-
-                    if use_oscillation_reward:
-                        if np.sign(thdot) != np.sign(thdot_prev) and thdot_prev != 0:
-                            r += w_oscillation
-
-                    # Penalties
-                    if use_cart_penalty and abs(x) > 1.5:
-                        r -= w_cart_penalty * (abs(x) - 1.5)
-
-                    if use_stability_penalty:
-                        if theta_ratio < 0.2 and abs(thdot) < 0.5:
-                            r -= w_stability_penalty
-
-            else:
-                r = 0.25 * np.linalg.norm(s) + 0.5 * np.linalg.norm(s - s_prev)
-
-            raw_rew[i] = float(r)
-            scaled = temperature * np.log(1.0 + np.exp(r / max(temperature, 1e-6)))
-            adv_rew[i] = float(scaled)
-
-        self._adv_reward_raw_stats = {'mean': float(np.mean(raw_rew)), 'min': float(np.min(raw_rew)), 'max': float(np.max(raw_rew))}
-        self._adv_reward_scaled_stats = {'mean': float(np.mean(adv_rew)), 'min': float(np.min(adv_rew)), 'max': float(np.max(adv_rew))}
-
-        return adv_rew
+        rew = 1 - np.exp(-rew)
+        return rew

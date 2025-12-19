@@ -47,7 +47,7 @@ def run(plot=True, curr_path='.'):
         model_dir = os.path.dirname(os.path.abspath(__file__)) + '/models'
         task = 'stab' if config.task_config.task == Task.STABILIZATION else 'track'
         # ctrl.load(os.path.join(model_dir, f'{config.algo}_model_{system}_{task}.pt')) # example ppo
-        ctrl.load(os.path.join(model_dir, f'rl_models/{system}/{task}/{config.algo}/model_latest.pt'))  # latest trained model
+        ctrl.load(os.path.join(model_dir, f'rl_models/{system}/{task}/adv_constr/model_latest.pt'))  # latest trained model
 
     # Run without safety filter
     experiment = BaseExperiment(env, ctrl)
