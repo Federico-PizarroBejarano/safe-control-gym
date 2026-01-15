@@ -40,10 +40,13 @@ class PPO(BaseController):
                  use_gpu=True,
                  seed=0,
                  **kwargs):
+        # Safety filter training
         self.filter_train_actions = True
         self.penalize_sf_diff = False
         self.sf_penalty = 1
         self.use_safe_reset = False
+
+        # Adversarial reward
         self.use_adv_reward = True
         self.adv_reward_temperature = kwargs.get('adv_reward_temperature', 50.0)
         self.adv_reward_scale = kwargs.get('adv_reward_scale', 100.0)
@@ -52,6 +55,7 @@ class PPO(BaseController):
         self.sf_idle_floor = kwargs.get('sf_idle_floor', 0.0)
         self._sf_idle_penalty_weight = kwargs.get('sf_idle_penalty_weight', 0.0)
         self._sf_idle_penalty = 0.0
+
         super().__init__(env_func, training, checkpoint_path, output_dir, use_gpu, seed, **kwargs)
         # Task.
         if self.training:
@@ -498,6 +502,10 @@ class PPO(BaseController):
         The goal is to maximize how much the safety filter has to correct agent actions
         while staying within constraints (not escaping).
 
+        Cartpole and quadrotor_2D:
+            - Cartpole state: [x, x_dot, theta, theta_dot]
+            - Quadrotor 2D state: [x, x_dot, z, z_dot, theta, theta_dot]
+
         Configurable reward components (set via algo_config):
             - adv_reward_temperature: Scaling for normalization (default: 15.0)
             - adv_use_correction_reward: Enable correction-based rewards (default: True)
@@ -507,8 +515,10 @@ class PPO(BaseController):
             - adv_use_theta_reward: Reward high theta angles (default: True)
             - adv_use_velocity_reward: Reward angular velocity (default: True)
             - adv_use_oscillation_reward: Reward direction changes (default: True)
-            - adv_use_cart_penalty: Penalize cart position (default: True)
+            - adv_use_cart_penalty: Penalize cart position (default: True) [cartpole only]
             - adv_use_stability_penalty: Penalize being too stable (default: True)
+            - adv_use_altitude_penalty: Penalize low altitude (default: True) [quadrotor only]
+            - adv_use_position_reward: Reward large position deviations (default: True) [quadrotor only]
 
         Returns shape (batch,).
         '''
@@ -519,6 +529,10 @@ class PPO(BaseController):
         adv_rew = np.zeros(B, dtype=np.float32)
         raw_rew = np.zeros(B, dtype=np.float32)
         infos = info.get('n', [info] * B) if isinstance(info, dict) else [dict()] * B
+
+        # Detect environment type
+        env_name = getattr(self.env.envs[0], 'NAME', 'unknown') if hasattr(self.env, 'envs') else 'unknown'
+        is_quadrotor = (env_name == 'quadrotor')
 
         # Config
         temperature = getattr(self, 'adv_reward_temperature', 15.0)
@@ -531,48 +545,53 @@ class PPO(BaseController):
         use_oscillation_reward = getattr(self, 'adv_use_oscillation_reward', True)
         use_cart_penalty = getattr(self, 'adv_use_cart_penalty', True)
         use_stability_penalty = getattr(self, 'adv_use_stability_penalty', True)
+        # Quadrotor-specific config
+        use_altitude_penalty = getattr(self, 'adv_use_altitude_penalty', True)
+        use_position_reward = getattr(self, 'adv_use_position_reward', True)
 
         # Weights
         w_correction = getattr(self, 'adv_w_correction', 25.0)
         w_correction_ratio = getattr(self, 'adv_w_correction_ratio', 40.0)
-        w_correction_bonus = getattr(self, 'adv_w_correction_bonus', 20.0)
-        w_no_correction_penalty = getattr(self, 'adv_w_no_correction_penalty', 15.0)
-        w_theta = getattr(self, 'adv_w_theta', 15.0)
-        w_velocity = getattr(self, 'adv_w_velocity', 8.0)
-        w_oscillation = getattr(self, 'adv_w_oscillation', 10.0)
+        w_theta = getattr(self, 'adv_w_theta', 10.0)
+        w_velocity = getattr(self, 'adv_w_velocity', 5.0)
+        w_oscillation = getattr(self, 'adv_w_oscillation', 3.0)
         w_cart_penalty = getattr(self, 'adv_w_cart_penalty', 5.0)
-        w_stability_penalty = getattr(self, 'adv_w_stability_penalty', 10.0)
         w_termination_penalty = getattr(self, 'adv_w_termination_penalty', 100.0)
+        # Quadrotor-specific weights
+        w_altitude = getattr(self, 'adv_w_altitude', 5.0)
+        altitude_threshold = getattr(self, 'adv_altitude_threshold', 0.3)
+        w_position = getattr(self, 'adv_w_position', 3.0)
 
         for i in range(B):
             s_prev = obs_b[i]
             s = next_obs_b[i]
 
-            if s.shape[0] >= 4:  # cartpole: [x, x_dot, theta, theta_dot, ...]
-                x, _, th, thdot = s[0], s[1], s[2], s[3]
-                _, thdot_prev = s_prev[2], s_prev[3]
+            # Check termination
+            terminated = False
+            try:
+                ti = infos[i].get('terminal_info', {})
+                if ti and not ti.get('TimeLimit.truncated', False):
+                    terminated = True
+            except Exception:
+                pass
 
-                # Get theta constraint limit
-                theta_lim = 0.2
-                try:
-                    theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[2])
-                except Exception:
-                    pass
-                theta_ratio = abs(th) / max(theta_lim, 1e-6)
+            if terminated:
+                r = -w_termination_penalty
+            else:
+                r = 0.0
 
-                # Check termination
-                terminated = False
-                try:
-                    ti = infos[i].get('terminal_info', {})
-                    if ti and not ti.get('TimeLimit.truncated', False):
-                        terminated = True
-                except Exception:
-                    pass
+                if is_quadrotor and s.shape[0] >= 6:
+                    # Quadrotor 2D state: [x, x_dot, z, z_dot, theta, theta_dot]
+                    x, z, th, thdot = s[0], s[2], s[4], s[5]
+                    thdot_prev = s_prev[5]
 
-                if terminated:
-                    r = -w_termination_penalty
-                else:
-                    r = 0.0
+                    # Get theta constraint limit (typically index 4 for quadrotor)
+                    theta_lim = 0.25
+                    try:
+                        theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[4])
+                    except Exception:
+                        pass
+                    theta_ratio = abs(th) / max(theta_lim, 1e-6)
 
                     # Correction rewards
                     if uncert_action is not None and cert_action is not None:
@@ -586,18 +605,94 @@ class PPO(BaseController):
                             r += w_correction_ratio * (correction / uncert_mag)
 
                         if use_correction_bonus:
-                            if correction > 1.0:
-                                r += w_correction_bonus
-                            if correction > 2.0:
-                                r += w_correction_bonus
+                            bonus_t1 = getattr(self, 'adv_correction_bonus_tier1', 1.0)
+                            bonus_t2 = getattr(self, 'adv_correction_bonus_tier2', 2.0)
+                            bonus_t3 = getattr(self, 'adv_correction_bonus_tier3', 5.0)
+                            if correction > 0.05:
+                                r += bonus_t1
+                            if correction > 0.1:
+                                r += bonus_t2
+                            if correction > 0.2:
+                                r += bonus_t3
 
-                        if use_no_correction_penalty and correction < 0.1:
-                            r -= w_no_correction_penalty
+                        if use_no_correction_penalty and correction < 0.01:
+                            penalty = getattr(self, 'adv_no_correction_penalty', -3.0)
+                            r += penalty
 
                     elif uncert_action is not None:
                         r += 5.0 * float(np.linalg.norm(np.atleast_1d(uncert_action)))
 
-                    # State rewards
+                    # State rewards for quadrotor
+                    if use_theta_reward:
+                        r += w_theta * theta_ratio
+
+                    if use_velocity_reward:
+                        # Reward angular velocity for quadrotor
+                        r += w_velocity * min(abs(thdot), 2.0)
+
+                    if use_oscillation_reward:
+                        if np.sign(thdot) != np.sign(thdot_prev) and thdot_prev != 0:
+                            r += w_oscillation
+
+                    # Quadrotor-specific rewards
+                    if use_position_reward:
+                        # Reward large position deviations
+                        position_deviation = np.sqrt(x**2 + (z - 1.0)**2)  # Distance from hover point
+                        r += w_position * min(position_deviation, 2.0)
+
+                    # Quadrotor-specific penalties
+                    if use_altitude_penalty and z < altitude_threshold:
+                        # Penalize low altitude (dangerous)
+                        r -= w_altitude * (altitude_threshold - z)
+
+                    if use_stability_penalty:
+                        if theta_ratio < 0.2 and abs(thdot) < 0.3:
+                            penalty = getattr(self, 'adv_stability_penalty', -8.0)
+                            r += penalty
+
+                elif s.shape[0] >= 4:
+                    # Cartpole state: [x, x_dot, theta, theta_dot, ...]
+                    x, _, th, thdot = s[0], s[1], s[2], s[3]
+                    thdot_prev = s_prev[3]
+
+                    # Get theta constraint limit
+                    theta_lim = 0.2
+                    try:
+                        theta_lim = float(self.env.envs[0].constraints.constraints[0].upper_bounds[2])
+                    except Exception:
+                        pass
+                    theta_ratio = abs(th) / max(theta_lim, 1e-6)
+
+                    # Correction rewards
+                    if uncert_action is not None and cert_action is not None:
+                        uncert_mag = float(np.linalg.norm(np.atleast_1d(uncert_action)))
+                        correction = float(np.linalg.norm(np.atleast_1d(uncert_action) - np.atleast_1d(cert_action)))
+
+                        if use_correction_reward:
+                            r += w_correction * correction
+
+                        if use_correction_ratio and uncert_mag > 0.1:
+                            r += w_correction_ratio * (correction / uncert_mag)
+
+                        if use_correction_bonus:
+                            bonus_t1 = getattr(self, 'adv_correction_bonus_tier1', 1.0)
+                            bonus_t2 = getattr(self, 'adv_correction_bonus_tier2', 2.0)
+                            bonus_t3 = getattr(self, 'adv_correction_bonus_tier3', 5.0)
+                            if correction > 1.0:
+                                r += bonus_t1
+                            if correction > 2.0:
+                                r += bonus_t2
+                            if correction > 3.0:
+                                r += bonus_t3
+
+                        if use_no_correction_penalty and correction < 0.1:
+                            penalty = getattr(self, 'adv_no_correction_penalty', -3.0)
+                            r += penalty
+
+                    elif uncert_action is not None:
+                        r += 5.0 * float(np.linalg.norm(np.atleast_1d(uncert_action)))
+
+                    # State rewards for cartpole
                     if use_theta_reward:
                         r += w_theta * theta_ratio
 
@@ -608,16 +703,19 @@ class PPO(BaseController):
                         if np.sign(thdot) != np.sign(thdot_prev) and thdot_prev != 0:
                             r += w_oscillation
 
-                    # Penalties
-                    if use_cart_penalty and abs(x) > 1.5:
-                        r -= w_cart_penalty * (abs(x) - 1.5)
+                    # Cartpole-specific penalties
+                    if use_cart_penalty:
+                        cart_threshold = getattr(self, 'adv_cart_threshold', 0.8)
+                        if abs(x) > cart_threshold:
+                            r -= w_cart_penalty * (abs(x) - cart_threshold)
 
                     if use_stability_penalty:
                         if theta_ratio < 0.2 and abs(thdot) < 0.5:
-                            r -= w_stability_penalty
+                            penalty = getattr(self, 'adv_stability_penalty', -5.0)
+                            r += penalty
 
-            else:
-                r = 0.25 * np.linalg.norm(s) + 0.5 * np.linalg.norm(s - s_prev)
+                else:
+                    r = 0.25 * np.linalg.norm(s) + 0.5 * np.linalg.norm(s - s_prev)
 
             raw_rew[i] = float(r)
             scaled = temperature * np.log(1.0 + np.exp(r / max(temperature, 1e-6)))

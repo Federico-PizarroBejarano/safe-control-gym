@@ -1,0 +1,40 @@
+safety_filter: nl_mpsc
+sf_config:
+  r_lin:
+    - 20.0
+
+  q_lin:
+    - 0.001
+    - 0.05
+    - 0.0005
+    - 25
+    - 0.00001
+    - 0.5
+
+  # MPC parameters
+  use_acados: True
+  horizon: 20
+  warmstart: True
+  integration_algo: rk4
+  use_terminal_set: True
+
+  # Prior info
+  prior_info:
+    prior_prop: null
+    randomize_prior_prop: False
+    prior_prop_rand_info: null
+
+  # Learning disturbance bounds
+  n_samples: 6000
+
+  # Cost function
+  cost_function: one_step_cost
+  mpsc_cost_horizon: 8
+  decay_factor: 0.85
+
+  # Softening
+  soften_constraints: True
+  slack_cost: 1000
+
+  # Disturbance bounds for quadrotor 2D (scalar value)
+  max_w: 0.01

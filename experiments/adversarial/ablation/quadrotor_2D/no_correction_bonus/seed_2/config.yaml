@@ -1,0 +1,208 @@
+algo: ppo
+algo_config:
+  activation: tanh
+  actor_lr: 0.001
+  adv_altitude_threshold: 0.3
+  adv_cart_threshold: 0.0
+  adv_correction_bonus_tier1: 1.0
+  adv_correction_bonus_tier2: 2.0
+  adv_correction_bonus_tier3: 5.0
+  adv_no_correction_penalty: -3.0
+  adv_reward_exponential: false
+  adv_reward_scale: 1.0
+  adv_reward_temperature: 15.0
+  adv_stability_penalty: -8.0
+  adv_stability_threshold: 0.15
+  adv_training: true
+  adv_use_altitude_penalty: true
+  adv_use_cart_penalty: false
+  adv_use_correction_bonus: false
+  adv_use_correction_ratio: true
+  adv_use_correction_reward: true
+  adv_use_no_correction_penalty: true
+  adv_use_oscillation_reward: true
+  adv_use_position_reward: true
+  adv_use_stability_penalty: true
+  adv_use_theta_reward: true
+  adv_use_velocity_reward: true
+  adv_w_altitude: 5.0
+  adv_w_cart: 0.0
+  adv_w_correction: 30.0
+  adv_w_correction_ratio: 40.0
+  adv_w_oscillation: 3.0
+  adv_w_position: 3.0
+  adv_w_theta: 8.0
+  adv_w_velocity: 4.0
+  clip_obs: 10.0
+  clip_param: 0.2
+  clip_reward: 10.0
+  critic_lr: 0.001
+  deque_size: 10
+  entropy_coef: 0.01
+  eval_batch_size: 10
+  eval_interval: 10000
+  eval_save_best: true
+  filter_train_actions: true
+  gae_lambda: 0.95
+  gamma: 0.99
+  hidden_dim: 128
+  log_interval: 10000
+  max_env_steps: 500000
+  max_grad_norm: 0.5
+  mini_batch_size: 250
+  norm_obs: false
+  norm_reward: false
+  num_checkpoints: 0
+  num_workers: 1
+  opt_epochs: 20
+  rollout_batch_size: 1
+  rollout_steps: 1000
+  save_interval: 0
+  target_kl: 0.01
+  tensorboard: false
+  training: true
+  use_clipped_value: false
+  use_gae: true
+  use_safe_reset: true
+device: cpu
+kv_overrides:
+- algo_config.adv_use_correction_bonus=False
+output_dir: ./ablation/quadrotor_2D/no_correction_bonus/seed_2
+overrides:
+- ./config_overrides/quadrotor_2D/ppo_quadrotor_2D.yaml
+- ./config_overrides/quadrotor_2D/quadrotor_2D_track.yaml
+- ./config_overrides/quadrotor_2D/nl_mpsc_quadrotor_2D.yaml
+restore: null
+safety_filter: nl_mpsc
+seed: 2
+sf_config:
+  cost_function: one_step_cost
+  decay_factor: 0.85
+  horizon: 20
+  integration_algo: rk4
+  max_w: 0.01
+  mpsc_cost_horizon: 8
+  n_samples: 6000
+  prior_info:
+    prior_prop: null
+    prior_prop_rand_info: null
+    randomize_prior_prop: false
+  q_lin:
+  - 0.001
+  - 0.05
+  - 0.0005
+  - 25
+  - 1.0e-05
+  - 0.5
+  r_lin:
+  - 20.0
+  slack_cost: 1000
+  soften_constraints: true
+  use_acados: true
+  use_terminal_set: true
+  warmstart: true
+tag: temp
+task: quadrotor
+task_config:
+  adversary_disturbance: null
+  adversary_disturbance_offset: 0.0
+  adversary_disturbance_scale: 0.01
+  constraint_penalty: -1
+  constraints:
+  - constrained_variable: state
+    constraint_form: default_constraint
+    lower_bounds:
+    - -2.5
+    - -2
+    - 0.1
+    - -2
+    - -0.25
+    - -2
+    upper_bounds:
+    - 2.5
+    - 2
+    - 2.5
+    - 2
+    - 0.25
+    - 2
+  - constrained_variable: input
+    constraint_form: default_constraint
+    lower_bounds:
+    - 0.06
+    - 0.06
+    upper_bounds:
+    - 0.29
+    - 0.29
+  cost: rl_reward
+  ctrl_freq: 50
+  disturbances: null
+  done_on_out_of_bound: true
+  done_on_violation: false
+  episode_len_sec: 10
+  gui: false
+  inertial_prop:
+    Iyy: 1.4e-05
+    M: 0.027
+  inertial_prop_randomization_info: null
+  init_state:
+    init_theta: 0
+    init_theta_dot: 0
+    init_x: 0
+    init_x_dot: 0
+    init_z: 1
+    init_z_dot: 0
+  init_state_randomization_info:
+    init_theta:
+      distrib: uniform
+      high: 0.15
+      low: -0.15
+    init_theta_dot:
+      distrib: uniform
+      high: 0.5
+      low: -0.5
+    init_x:
+      distrib: uniform
+      high: 1.5
+      low: -1.5
+    init_x_dot:
+      distrib: uniform
+      high: 0.5
+      low: -0.5
+    init_z:
+      distrib: uniform
+      high: 1.5
+      low: 0.5
+    init_z_dot:
+      distrib: uniform
+      high: 0.5
+      low: -0.5
+  norm_act_scale: 0.1
+  normalized_rl_action_space: true
+  obs_goal_horizon: 1
+  physics: pyb
+  pyb_freq: 1000
+  quad_type: 2
+  randomized_inertial_prop: false
+  randomized_init: true
+  rew_act_weight: 0.01
+  rew_exponential: true
+  rew_state_weight:
+  - 1
+  - 0.01
+  - 1
+  - 0.01
+  - 0.01
+  - 0.01
+  seed: 42
+  task: traj_tracking
+  task_info:
+    num_cycles: 1
+    trajectory_plane: xz
+    trajectory_position_offset:
+    - 0
+    - 1
+    trajectory_scale: 0.8
+    trajectory_type: figure8
+  use_constraint_penalty: false
+  verbose: false
+use_gpu: false

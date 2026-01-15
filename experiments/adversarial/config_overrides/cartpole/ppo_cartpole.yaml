@@ -27,7 +27,7 @@ algo_config:
   # runner args
   max_env_steps: 100000
   num_workers: 1
-  rollout_batch_size: 4
+  rollout_batch_size: 1
   rollout_steps: 100
   deque_size: 10
   eval_batch_size: 10
@@ -42,7 +42,12 @@ algo_config:
 
   # Safety filter training
   filter_train_actions: True
+  penalize_sf_diff: False
+  sf_penalty: 1
   use_safe_reset: True
+
+  # Adversarial reward config
+  use_adv_reward: True
 
   # Adversarial reward config
   adv_reward_temperature: 15.0

@@ -1,34 +1,58 @@
 #!/bin/bash
 
-SYS='cartpole'
-TASK='track'
-ALGO='ppo'
+# Usage: ./run_ablation_experiments.sh [system] [task] [algo]
+# Example: ./run_ablation_experiments.sh quadrotor_2D track ppo
+
+SYS=${1:-'cartpole'}
+TASK=${2:-'track'}
+ALGO=${3:-'ppo'}
 SAFETY_FILTER='nl_mpsc'
 OUTPUT_DIR='./ablation'
+
+# Determine system name for task registration
+if [ "$SYS" == 'cartpole' ]; then
+    SYS_NAME=$SYS
+else
+    SYS_NAME='quadrotor'
+fi
+
+echo "Running ablation experiments for:"
+echo "  System: $SYS"
+echo "  Task: $TASK"
+echo "  Algorithm: $ALGO"
+echo ""
 
 # Ablation experiment configurations
 # Format: "experiment_name:kv_override1:kv_override2:..."
 EXPERIMENTS=(
-    "full_reward"
-    "correction_only:algo_config.adv_use_theta_reward=False:algo_config.adv_use_velocity_reward=False:algo_config.adv_use_oscillation_reward=False:algo_config.adv_use_stability_penalty=False"
+    # "correction_only:algo_config.adv_use_theta_reward=False:algo_config.adv_use_velocity_reward=False:algo_config.adv_use_oscillation_reward=False:algo_config.adv_use_stability_penalty=False"
     "state_only:algo_config.adv_use_correction_reward=False:algo_config.adv_use_correction_ratio=False:algo_config.adv_use_correction_bonus=False:algo_config.adv_use_no_correction_penalty=False"
     "no_correction_mag:algo_config.adv_use_correction_reward=False"
-    "no_correction_ratio:algo_config.adv_use_correction_ratio=False"
+    # "no_correction_ratio:algo_config.adv_use_correction_ratio=False"
     "no_correction_bonus:algo_config.adv_use_correction_bonus=False"
-    "no_correction_penalty:algo_config.adv_use_no_correction_penalty=False"
-    "no_theta:algo_config.adv_use_theta_reward=False"
+    # "no_correction_penalty:algo_config.adv_use_no_correction_penalty=False"
+    # "no_theta:algo_config.adv_use_theta_reward=False"
     "no_velocity:algo_config.adv_use_velocity_reward=False"
-    "no_oscillation:algo_config.adv_use_oscillation_reward=False"
+    # "no_oscillation:algo_config.adv_use_oscillation_reward=False"
     "no_stability_penalty:algo_config.adv_use_stability_penalty=False"
-    "no_cart_penalty:algo_config.adv_use_cart_penalty=False"
+    # "no_cart_penalty:algo_config.adv_use_cart_penalty=False"  # cartpole only
     "w_correction_10:algo_config.adv_w_correction=10.0"
-    "w_correction_50:algo_config.adv_w_correction=50.0"
-    "temp_5:algo_config.adv_reward_temperature=5.0"
+    # "w_correction_50:algo_config.adv_w_correction=50.0"
+    # "temp_5:algo_config.adv_reward_temperature=5.0"
     "temp_30:algo_config.adv_reward_temperature=30.0"
-    "no_safe_reset:algo_config.use_safe_reset=False"
+    "temp_500:algo_config.adv_reward_temperature=500.0"
+    # "no_safe_reset:algo_config.use_safe_reset=False"
 )
 
-for SEED in 42 62 821; do
+# Add quadrotor-specific ablations if running quadrotor
+if [ "$SYS" == 'quadrotor_2D' ]; then
+    EXPERIMENTS+=(
+        "no_altitude_penalty:algo_config.adv_use_altitude_penalty=False"
+        "no_position_reward:algo_config.adv_use_position_reward=False"
+    )
+fi
+
+for SEED in 2; do
     for EXP in "${EXPERIMENTS[@]}"; do
         # Parse experiment name and overrides
         IFS=':' read -ra PARTS <<< "$EXP"
@@ -44,15 +68,14 @@ for SEED in 42 62 821; do
 
         python3 ./train_rl.py \
             --algo ${ALGO} \
-            --task ${SYS} \
+            --task ${SYS_NAME} \
             --safety_filter ${SAFETY_FILTER} \
             --overrides \
                 ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
                 ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
                 ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
-            --output_dir ${OUTPUT_DIR}/${EXP_NAME}/seed_${SEED} \
+            --output_dir ${OUTPUT_DIR}/${SYS}/${EXP_NAME}/seed_${SEED} \
             --seed ${SEED} \
-            --kv_overrides \
-                ${KV_OVERRIDES}
+            --kv_overrides ${KV_OVERRIDES}
     done
 done
