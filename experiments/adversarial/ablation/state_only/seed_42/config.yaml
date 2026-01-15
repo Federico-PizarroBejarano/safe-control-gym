@@ -74,8 +74,8 @@ restore: null
 safety_filter: nl_mpsc
 seed: 42
 sf_config:
-  cost_function: learned_cost
-  decay_factor: 1
+  cost_function: one_step_cost
+  decay_factor: 0.85
   horizon: 30
   integration_algo: rk4
   max_w:
@@ -84,7 +84,7 @@ sf_config:
   - 0.01
   - 0.002
   - 0.0
-  mpsc_cost_horizon: 5
+  mpsc_cost_horizon: 6
   prior_info:
     prior_prop: null
     prior_prop_rand_info: null
