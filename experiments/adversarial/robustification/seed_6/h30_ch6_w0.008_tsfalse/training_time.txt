@@ -1,0 +1,1 @@
+Total training time: 591.9301726818085

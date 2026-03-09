@@ -50,6 +50,13 @@ poetry.lock
 # Testing
 .pytest_cache/
 
+# Logs
+*.log
+
+# Experiment artifacts
+training_time.txt
+experiments/*/**/config.yaml
+
 # Editors
 .vscode/
 .cursor/

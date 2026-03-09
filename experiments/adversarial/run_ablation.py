@@ -1,24 +1,31 @@
+#!/usr/bin/env python3
 '''Run ablation experiments for adversarial reward function.
 
 This script:
 1. Loads trained models from ablation/<system>/<experiment>/seed_<N>/
 2. Runs evaluation with safety filter
-3. Logs phase plots (theta vs theta_dot) for analysis
+3. Computes comprehensive robustification metrics (violation rate, corrections, control effort, etc.)
+4. Logs phase plots (theta vs theta_dot) for analysis
 
 Supports both cartpole and quadrotor_2D environments.
 '''
 
 import os
 import sys
+import time
 from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
+from robustification_metrics import compute_robustification_metrics
 
 from safe_control_gym.experiments.base_experiment import BaseExperiment
 from safe_control_gym.safety_filters.mpsc.mpsc_utils import Cost_Function
 from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
+
+# Import robustification metrics function
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # =============================================================================
 # EXPERIMENT CONFIGURATIONS
@@ -165,12 +172,20 @@ def evaluate_and_plot(exp_name, model_path, seed, save_dir, system='cartpole'):
 
     # Run evaluation with safety filter
     experiment = BaseExperiment(env, ctrl, safety_filter=safety_filter)
+    t0 = time.perf_counter()
     cert_results, cert_metrics = experiment.run_evaluation(n_episodes=1)
+    cert_elapsed = time.perf_counter() - t0
+    cert_steps = sum(len(o) for o in cert_results['obs'])
+    cert_time_per_step = cert_elapsed / max(cert_steps, 1)
 
     # Run evaluation without safety filter for comparison
     ctrl.reset()
     experiment_uncert = BaseExperiment(env, ctrl)
+    t1 = time.perf_counter()
     uncert_results, uncert_metrics = experiment_uncert.run_evaluation(n_episodes=1)
+    uncert_elapsed = time.perf_counter() - t1
+    uncert_steps = sum(len(o) for o in uncert_results['obs'])
+    uncert_time_per_step = uncert_elapsed / max(uncert_steps, 1)
 
     ctrl.close()
     safety_filter.close()
@@ -186,11 +201,48 @@ def evaluate_and_plot(exp_name, model_path, seed, save_dir, system='cartpole'):
     # Get constraint value
     theta_constraint = config.task_config['constraints'][0].upper_bounds[sys_config['constraint_theta_idx']]
 
+    # Compute robustification metrics
+    robust_metrics = compute_robustification_metrics(
+        cert_results,
+        uncert_results,
+        mpsc_results,
+        config,
+        system=system,
+        info={
+            'cert_compute_time_total': cert_elapsed,
+            'cert_compute_time_per_step': cert_time_per_step,
+            'uncert_compute_time_total': uncert_elapsed,
+            'uncert_compute_time_per_step': uncert_time_per_step,
+        },
+    )
+
     # Get state indices
     theta_idx = sys_config['theta_idx']
     theta_dot_idx = sys_config['theta_dot_idx']
     pos_idx = sys_config['pos_idx']
     pos2_idx = sys_config['pos2_idx']
+
+    # Compute metrics
+    metrics = {
+        'experiment': exp_name,
+        'seed': seed,
+        'system': system,
+        'num_corrections': int(np.sum(corrections)),
+        'total_correction_magnitude': float(np.linalg.norm(mpsc_results['correction'][0])),
+        'max_correction': float(np.max(np.abs(mpsc_results['correction'][0]))),
+        'avg_correction': float(np.mean(np.abs(mpsc_results['correction'][0]))),
+        'episode_length_cert': int(cert_metrics['average_length']),
+        'episode_length_uncert': int(uncert_metrics['average_length']),
+        'constraint_violations_cert': int(cert_metrics['average_constraint_violation']),
+        'constraint_violations_uncert': int(uncert_metrics['average_constraint_violation']),
+        'rmse_cert': float(cert_metrics['average_rmse']),
+        'rmse_uncert': float(uncert_metrics['average_rmse']),
+        'theta_max': float(np.max(np.abs(cert_results['obs'][0][:, theta_idx]))),
+        'theta_dot_max': float(np.max(np.abs(cert_results['obs'][0][:, theta_dot_idx]))),
+    }
+
+    # Add robustification metrics
+    metrics.update(robust_metrics)
 
     # Create phase plot (theta vs theta_dot)
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -280,30 +332,137 @@ def evaluate_and_plot(exp_name, model_path, seed, save_dir, system='cartpole'):
 
     np.savez(os.path.join(save_dir, 'trajectory_data.npz'), **trajectory_data)
 
-    # Compute metrics
-    metrics = {
-        'experiment': exp_name,
-        'seed': seed,
-        'system': system,
-        'num_corrections': int(np.sum(corrections)),
-        'total_correction_magnitude': float(np.linalg.norm(mpsc_results['correction'][0])),
-        'max_correction': float(np.max(np.abs(mpsc_results['correction'][0]))),
-        'avg_correction': float(np.mean(np.abs(mpsc_results['correction'][0]))),
-        'episode_length_cert': int(cert_metrics['average_length']),
-        'episode_length_uncert': int(uncert_metrics['average_length']),
-        'constraint_violations_cert': int(cert_metrics['average_constraint_violation']),
-        'constraint_violations_uncert': int(uncert_metrics['average_constraint_violation']),
-        'rmse_cert': float(cert_metrics['average_rmse']),
-        'rmse_uncert': float(uncert_metrics['average_rmse']),
-        'theta_max': float(np.max(np.abs(cert_results['obs'][0][:, theta_idx]))),
-        'theta_dot_max': float(np.max(np.abs(cert_results['obs'][0][:, theta_dot_idx]))),
-    }
-
     print(f'  Corrections: {metrics["num_corrections"]}, '
           f'Total: {metrics["total_correction_magnitude"]:.2f}, '
           f'Theta max: {metrics["theta_max"]:.3f}')
 
     return metrics
+
+
+def create_robustification_summary(all_metrics, output_dir, system='cartpole'):
+    '''Create summary plots comparing robustification metrics across ablation variants.
+
+    Args:
+        all_metrics: List of metric dictionaries
+        output_dir: Directory to save the summary plot
+        system: System type for labeling
+    '''
+    # Filter metrics for this system
+    system_metrics = [m for m in all_metrics if m.get('system', 'cartpole') == system]
+
+    if not system_metrics:
+        print(f'No metrics found for system: {system}')
+        return
+
+    # Get unique experiment names
+    exp_names = []
+    for m in system_metrics:
+        if m['experiment'] not in exp_names:
+            exp_names.append(m['experiment'])
+
+    # Aggregate metrics across seeds
+    summary = {}
+    for exp_name in exp_names:
+        exp_metrics = [m for m in system_metrics if m['experiment'] == exp_name]
+        if exp_metrics:
+            summary[exp_name] = {
+                'cert_violation_rate_mean': np.mean([m.get('cert_violation_rate', 0) for m in exp_metrics]),
+                'cert_violation_rate_std': np.std([m.get('cert_violation_rate', 0) for m in exp_metrics]),
+                'uncert_violation_rate_mean': np.mean([m.get('uncert_violation_rate', 0) for m in exp_metrics]),
+                'cert_integrated_slack_mean': np.mean([m.get('cert_integrated_slack', 0) for m in exp_metrics]),
+                'cert_integrated_slack_std': np.std([m.get('cert_integrated_slack', 0) for m in exp_metrics]),
+                'num_corrections_mean': np.mean([m.get('num_corrections', 0) for m in exp_metrics]),
+                'num_corrections_std': np.std([m.get('num_corrections', 0) for m in exp_metrics]),
+                'max_correction_mean': np.mean([m.get('max_correction', 0) for m in exp_metrics]),
+                'cert_control_effort_l1_mean': np.mean([m.get('cert_control_effort', 0) for m in exp_metrics]),
+                'cert_control_effort_l1_std': np.std([m.get('cert_control_effort', 0) for m in exp_metrics]),
+                'cert_mean_action_rate_mean': np.mean([m.get('cert_mean_action_rate', 0) for m in exp_metrics]),
+            }
+
+    # Create comparison plots
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+
+    exp_labels = list(summary.keys())
+    x = np.arange(len(exp_labels))
+    width = 0.6
+
+    # Plot 1: Certified violation rate
+    ax1 = axes[0, 0]
+    means = [summary[e]['cert_violation_rate_mean'] for e in exp_labels]
+    stds = [summary[e]['cert_violation_rate_std'] for e in exp_labels]
+    ax1.bar(x, means, width, yerr=stds, capsize=3, color='steelblue', alpha=0.8)
+    ax1.set_ylabel('Violation Rate', fontsize=11)
+    ax1.set_title(f'Certified Violation Rate ({system})', fontsize=12)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(exp_labels, rotation=45, ha='right', fontsize=8)
+    ax1.grid(True, alpha=0.3, axis='y')
+
+    # Plot 2: Integrated slack
+    ax2 = axes[0, 1]
+    means = [summary[e]['cert_integrated_slack_mean'] for e in exp_labels]
+    stds = [summary[e]['cert_integrated_slack_std'] for e in exp_labels]
+    ax2.bar(x, means, width, yerr=stds, capsize=3, color='darkorange', alpha=0.8)
+    ax2.set_ylabel('Integrated Slack', fontsize=11)
+    ax2.set_title(f'Severity: Integrated Slack ({system})', fontsize=12)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(exp_labels, rotation=45, ha='right', fontsize=8)
+    ax2.grid(True, alpha=0.3, axis='y')
+
+    # Plot 3: Number of corrections
+    ax3 = axes[0, 2]
+    means = [summary[e]['num_corrections_mean'] for e in exp_labels]
+    stds = [summary[e]['num_corrections_std'] for e in exp_labels]
+    ax3.bar(x, means, width, yerr=stds, capsize=3, color='forestgreen', alpha=0.8)
+    ax3.set_ylabel('Number of Corrections', fontsize=11)
+    ax3.set_title(f'Safety Filter Corrections ({system})', fontsize=12)
+    ax3.set_xticks(x)
+    ax3.set_xticklabels(exp_labels, rotation=45, ha='right', fontsize=8)
+    ax3.grid(True, alpha=0.3, axis='y')
+
+    # Plot 4: Max correction magnitude
+    ax4 = axes[1, 0]
+    means = [summary[e]['max_correction_mean'] for e in exp_labels]
+    ax4.bar(x, means, width, color='crimson', alpha=0.8)
+    ax4.set_ylabel('Max Correction', fontsize=11)
+    ax4.set_title(f'Max Correction Magnitude ({system})', fontsize=12)
+    ax4.set_xticks(x)
+    ax4.set_xticklabels(exp_labels, rotation=45, ha='right', fontsize=8)
+    ax4.grid(True, alpha=0.3, axis='y')
+
+    # Plot 5: Control effort
+    ax5 = axes[1, 1]
+    means = [summary[e]['cert_control_effort_l1_mean'] for e in exp_labels]
+    stds = [summary[e]['cert_control_effort_l1_std'] for e in exp_labels]
+    ax5.bar(x, means, width, yerr=stds, capsize=3, color='purple', alpha=0.8)
+    ax5.set_ylabel('Control Effort (L1)', fontsize=11)
+    ax5.set_title(f'Certified Control Effort ({system})', fontsize=12)
+    ax5.set_xticks(x)
+    ax5.set_xticklabels(exp_labels, rotation=45, ha='right', fontsize=8)
+    ax5.grid(True, alpha=0.3, axis='y')
+
+    # Plot 6: Action rate of change
+    ax6 = axes[1, 2]
+    means = [summary[e]['cert_mean_action_rate_mean'] for e in exp_labels]
+    ax6.bar(x, means, width, color='teal', alpha=0.8)
+    ax6.set_ylabel('Mean Action Rate Δu', fontsize=11)
+    ax6.set_title(f'Action Smoothness ({system})', fontsize=12)
+    ax6.set_xticks(x)
+    ax6.set_xticklabels(exp_labels, rotation=45, ha='right', fontsize=8)
+    ax6.grid(True, alpha=0.3, axis='y')
+
+    plt.suptitle(f'Robustification Analysis: Ablation Variants ({system})', fontsize=14, y=1.00)
+    plt.tight_layout()
+
+    # Determine save path based on system
+    if system == 'cartpole':
+        summary_path = os.path.join(output_dir, 'robustification_ablation_summary.png')
+    else:
+        summary_path = os.path.join(output_dir, SYSTEM_CONFIGS[system]['output_subdir'], 'robustification_ablation_summary.png')
+
+    plt.savefig(summary_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    print(f'Robustification summary plot saved to: {summary_path}')
 
 
 def create_summary_plot(all_metrics, output_dir, system='cartpole'):
@@ -678,6 +837,7 @@ def main():
     # Create summary plots and save metrics
     if all_metrics:
         create_summary_plot(all_metrics, OUTPUT_DIR, system=system)
+        create_robustification_summary(all_metrics, OUTPUT_DIR, system=system)
         save_metrics_csv(all_metrics, OUTPUT_DIR, system=system)
         plot_all_phase_plots(OUTPUT_DIR, experiments, args.seeds, system=system)
 

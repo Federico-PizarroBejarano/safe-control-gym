@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Utility for visualizing PPO adversarial training logs.
 
 Reads scalar log files produced by ``ExperimentLogger`` (saved under

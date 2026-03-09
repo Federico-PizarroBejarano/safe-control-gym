@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 '''Template training/plotting/testing script.'''
 
 import os
