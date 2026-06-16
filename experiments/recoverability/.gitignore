@@ -1,0 +1,15 @@
+# Generated ACADOS artifacts
+acados_ocp_mpsf_noj_na_*.json
+c_generated_code_mpsf_noj_na_*/
+
+# Training/evaluation outputs
+ppo_runs/
+quick_jobs_runs/
+slurm_logs/
+sweeps/
+
+# Local summaries
+quick_jobs_summary.csv
+
+# Python cache
+__pycache__/
