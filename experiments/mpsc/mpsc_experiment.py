@@ -16,6 +16,14 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
+def parse_model_arg():
+    '''Parse --model=NAME from command-line arguments.'''
+    for arg in sys.argv:
+        if arg.startswith('--model='):
+            return arg.split('=', 1)[1]
+    return None
+
+
 def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None, model='none'):
     '''Main function to run MPSC experiments.
 
@@ -70,8 +78,9 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                 output_dir=curr_path + '/temp')
 
     if config.algo in ['ppo', 'sac']:
-        # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/seed_{config.task_config.seed}/model_latest.pt')
+        checkpoint_path = os.path.join(
+            curr_path, 'models', 'rl_models', system, task, config.algo, model, 'model_best.pt')
+        ctrl.load(checkpoint_path)
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -259,7 +268,8 @@ def run_multiple_models(plot=True, model=None):
 if __name__ == '__main__':
     # run()
     # determine_feasible_starting_points(num_points=100)
-    if '--model=' in sys.argv:
-        run_multiple_models(plot=False, model='none')
+    model = parse_model_arg()
+    if model is not None and model != 'none':
+        run(plot=True, training=False, n_episodes=1, model=model)
     else:
-        run_multiple_models(plot=False, model=sys.argv[-1].split('=')[1])
+        run_multiple_models(plot=False, model=model if model != 'none' else None)

@@ -12,10 +12,10 @@ algo_config:
   gamma: 0.98
   use_gae: False
   gae_lambda: 0.8
-  use_clipped_value: False
+  use_clipped_value: True
   clip_param: 0.1
-  target_kl: 1.587713889686473e-07
-  entropy_coef: 0.00010753631441212628
+  target_kl: 0.01
+  entropy_coef: 0.0001
 
   # optim args
   opt_epochs: 5
@@ -42,6 +42,6 @@ algo_config:
 
   # safety filter
   filter_train_actions: True
-  penalize_sf_diff: True
+  penalize_sf_diff: False
   sf_penalty: 1
   use_safe_reset: True

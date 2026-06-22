@@ -234,13 +234,11 @@ class PPO(BaseController):
 
             # Adding safety filter
             if self.safety_filter is not None:
-                success = False
                 physical_action = env.denormalize_action(action)
                 unextended_obs = np.squeeze(obs)[:env.symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success:
-                    action = env.normalize_action(certified_action)
-                elif self.safety_filter.use_acados:
+                action = env.normalize_action(certified_action)
+                if not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
@@ -294,9 +292,9 @@ class PPO(BaseController):
                 physical_action = self.env.envs[0].denormalize_action(action)
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
-                if success and self.filter_train_actions is True:
+                if self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
-                elif not success and self.safety_filter.use_acados:
+                if not success and self.safety_filter.use_acados:
                     self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
