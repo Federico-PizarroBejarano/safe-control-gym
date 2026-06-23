@@ -78,8 +78,17 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                 output_dir=curr_path + '/temp')
 
     if config.algo in ['ppo', 'sac']:
-        checkpoint_path = os.path.join(
-            curr_path, 'models', 'rl_models', system, task, config.algo, model, 'model_best.pt')
+        checkpoint_dir = os.path.join(
+            curr_path, 'models', 'rl_models', system, task, config.algo, model)
+        seed = config.task_config.get('seed', None)
+        if seed is not None:
+            checkpoint_dir = os.path.join(checkpoint_dir, f'seed_{seed}')
+        checkpoint_path = os.path.join(checkpoint_dir, 'model_best.pt')
+        if not os.path.isfile(checkpoint_path):
+            raise FileNotFoundError(
+                f'Checkpoint not found at {checkpoint_path}. '
+                f'Expected models/rl_models/{system}/{task}/{config.algo}/{model}/'
+                f'seed_{seed}/model_best.pt when using seed subdirs from train_model.sbatch.')
         ctrl.load(checkpoint_path)
 
         # Remove temporary files and directories
@@ -195,8 +204,8 @@ def determine_feasible_starting_points(num_points=100):
         unextended_obs = np.squeeze(init_state)[:nx]
         safety_filter.reset_before_run()
         _, success = safety_filter.certify_action(unextended_obs, physical_action, info)
-        if not success:
-            safety_filter.ocp_solver.reset()
+        if not success and safety_filter.acados_needs_rebuild:
+            safety_filter.recover_acados_solver(rebuild=True)
             _, success = safety_filter.certify_action(unextended_obs, physical_action, info)
         elif np.all(safety_filter.slack_prev < 1e-4):
             starting_points += [init_state]

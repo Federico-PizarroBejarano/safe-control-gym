@@ -181,8 +181,6 @@ class BaseExperiment:
             unextended_obs = np.squeeze(obs)[:self.env.symbolic.nx]
             certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
             action = self.env.normalize_action(certified_action)
-            if not success and self.safety_filter.use_acados:
-                self.safety_filter.ocp_solver.reset()
 
         if self.last_step_timestep is not None and \
                 self.env.GUI is True and \

@@ -32,6 +32,8 @@ from safe_control_gym.utils.utils import is_wrapped
 class PPO(BaseController):
     '''Proximal policy optimization.'''
 
+    SAFE_RESET_MAX_RETRIES = 200
+
     def __init__(self,
                  env_func,
                  training=True,
@@ -238,8 +240,6 @@ class PPO(BaseController):
                 unextended_obs = np.squeeze(obs)[:env.symbolic.nx]
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 action = env.normalize_action(certified_action)
-                if not success and self.safety_filter.use_acados:
-                    self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action]))
             obs, rew, done, info = env.step(action)
@@ -294,8 +294,6 @@ class PPO(BaseController):
                 certified_action, success = self.safety_filter.certify_action(unextended_obs, physical_action, info)
                 if self.filter_train_actions is True:
                     action = self.env.envs[0].normalize_action(certified_action)
-                if not success and self.safety_filter.use_acados:
-                    self.safety_filter.ocp_solver.reset()
 
             action = np.atleast_2d(np.squeeze([action])).reshape((self.rollout_batch_size, -1))
             next_obs, rew, done, info = self.env.step(action)
@@ -416,20 +414,26 @@ class PPO(BaseController):
             obs (ndarray): The initial observation.
             info (dict): The initial info.
         '''
-        success = False
         action = self.model.U_EQ
         obs, info = env.reset()
         if self.safety_filter is not None:
             self.safety_filter.reset_before_run()
 
-        if use_safe_reset is True and self.safety_filter is not None:
-            while success is not True or np.any(self.safety_filter.slack_prev > 1e-4):
+        if use_safe_reset and self.safety_filter is not None:
+            for _ in range(self.SAFE_RESET_MAX_RETRIES):
                 obs, info = env.reset()
                 info['current_step'] = 1
                 unextended_obs = np.squeeze(obs)[:self.env.envs[0].symbolic.nx]
                 self.safety_filter.reset_before_run()
                 _, success = self.safety_filter.certify_action(unextended_obs, action, info)
-                if not success and self.safety_filter.use_acados:
-                    self.safety_filter.ocp_solver.reset()
+                slack = self.safety_filter.slack_prev
+                slack_ok = not isinstance(slack, np.ndarray) or np.all(slack <= 1e-4)
+                if success and slack_ok:
+                    break
+                if self.safety_filter.acados_needs_rebuild:
+                    self.safety_filter.recover_acados_solver(rebuild=True)
+            else:
+                print(f'[WARNING] Safe reset failed after {self.SAFE_RESET_MAX_RETRIES} attempts; '
+                      'continuing with the last sampled initial state.')
 
         return obs, info

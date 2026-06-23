@@ -143,6 +143,69 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
         return
 
+    @staticmethod
+    def _is_finite(arr):
+        '''Return whether an array contains only finite values.'''
+        if arr is None:
+            return False
+        return np.all(np.isfinite(np.asarray(arr)))
+
+    def _clip_to_input_bounds(self, action):
+        '''Clip an action to the environment input bounds.'''
+        lower = self.constraints.input_constraints[0].lower_bounds
+        upper = self.constraints.input_constraints[0].upper_bounds
+        return np.clip(np.squeeze(action), lower, upper)
+
+    def _lqr_backup_action(self, current_state):
+        '''Return an LQR backup action, or equilibrium input if the state is invalid.'''
+        if not self._is_finite(current_state):
+            return self._clip_to_input_bounds(self.U_EQ)
+        current_state = np.asarray(current_state, dtype=float).reshape(self.model.nx)
+        action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
+        if self.integration_algo == 'LTI':
+            action = action + np.squeeze(self.U_EQ)
+        return self._clip_to_input_bounds(action)
+
+    def reinstantiate_acados_solver(self):
+        '''Recreate the Acados solver (subclasses may reload without recompiling).'''
+        self.setup_acados_optimizer()
+
+    def recover_acados_solver(self, rebuild=False):
+        '''Clear warmstart state and recover from a failed or poisoned Acados solve.
+
+        Args:
+            rebuild (bool): If True, recreate the solver instance instead of only calling reset().
+        '''
+        self.z_prev = None
+        self.v_prev = None
+        if not self.use_acados or not hasattr(self, 'ocp_solver'):
+            self._acados_needs_rebuild = False
+            return
+        if rebuild:
+            self.reinstantiate_acados_solver()
+        else:
+            try:
+                self.ocp_solver.reset()
+            except Exception:
+                self.reinstantiate_acados_solver()
+        self._acados_needs_rebuild = False
+
+    @property
+    def acados_needs_rebuild(self):
+        '''Whether the Acados solver needs reinstantiation after a poisoned solve.'''
+        return self._acados_needs_rebuild
+
+    def _probe_acados_solver(self):
+        '''Check whether the Acados solver can solve from the equilibrium state.'''
+        try:
+            self.ocp_solver.cost_set(
+                0, 'yref',
+                np.concatenate((np.zeros((self.model.nx)), np.atleast_1d(np.squeeze(self.U_EQ)))))
+            self.ocp_solver.solve_for_x0(x0_bar=self.X_EQ)
+            return True
+        except Exception:
+            return False
+
     def solve_optimization(self,
                            obs,
                            uncertified_action,
@@ -246,6 +309,15 @@ class MPSC(BaseSafetyFilter, ABC):
             feasible (bool): Whether the safety filtering was feasible or not.
         '''
 
+        obs = np.asarray(obs, dtype=float).reshape(self.model.nx)
+        uncertified_action = np.atleast_1d(np.squeeze(uncertified_action))
+        if not self._is_finite(obs) or not self._is_finite(uncertified_action):
+            return None, False
+
+        if self.z_prev is not None and not self._is_finite(self.z_prev):
+            self.z_prev = None
+            self.v_prev = None
+
         ocp_solver = self.ocp_solver
         ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.atleast_1d(np.squeeze(uncertified_action)))))
 
@@ -267,6 +339,10 @@ class MPSC(BaseSafetyFilter, ABC):
                 x_val[i, :] = ocp_solver.get(i, 'x')
                 u_val[i, :] = ocp_solver.get(i, 'u')
             x_val[self.horizon, :] = ocp_solver.get(self.horizon, 'x')
+            if not all(self._is_finite(a) for a in (action, x_val, u_val, self.slack_prev)):
+                self._acados_needs_rebuild = True
+                self.recover_acados_solver(rebuild=True)
+                return None, False
             self.z_prev = x_val.T
             self.v_prev = u_val.T
             # Take the first one from solved action sequence.
@@ -275,6 +351,10 @@ class MPSC(BaseSafetyFilter, ABC):
         except Exception as e:
             print('Error Return Status:', ocp_solver.status)
             print(e)
+            self.recover_acados_solver(rebuild=False)
+            if 'NAN' in f'{e}'.upper() or not self._probe_acados_solver():
+                self._acados_needs_rebuild = True
+                self.recover_acados_solver(rebuild=True)
             feasible = False
             action = None
         return action, feasible
@@ -299,35 +379,48 @@ class MPSC(BaseSafetyFilter, ABC):
         self.results_dict['uncertified_action'].append(uncertified_action)
         success = True
 
+        if not self._is_finite(current_state):
+            certified_action = self._clip_to_input_bounds(self.U_EQ)
+            self.results_dict['feasible'].append(False)
+            self.results_dict['kinf'].append(self.kinf)
+            self.results_dict['certified_action'].append(certified_action)
+            self.results_dict['correction'].append(np.linalg.norm(certified_action - uncertified_action))
+            return certified_action, False
+
         self.before_optimization(current_state)
         iteration = self.extract_step(info)
         action, feasible = self.solve_optimization(current_state, uncertified_action, iteration)
         self.results_dict['feasible'].append(feasible)
 
-        if feasible:
+        if feasible and self._is_finite(action):
             self.kinf = 0
             certified_action = action
         else:
             self.kinf += 1
-            if (self.kinf <= self.horizon - 1 and self.z_prev is not None and self.v_prev is not None):
+            if all((
+                self.kinf <= self.horizon - 1,
+                self.z_prev is not None,
+                self.v_prev is not None,
+                self._is_finite(self.z_prev),
+                self._is_finite(self.v_prev),
+            )):
                 action = np.squeeze(self.v_prev[:, self.kinf]) + \
                     np.squeeze(self.lqr_gain @ (current_state.reshape((self.model.nx, 1)) - self.z_prev[:, self.kinf].reshape((self.model.nx, 1))))
                 if self.integration_algo == 'LTI':
                     action = np.squeeze(action) + np.squeeze(self.U_EQ)
                 action = np.squeeze(action)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
+                clipped_action = self._clip_to_input_bounds(action)
 
                 if np.linalg.norm(clipped_action - action) >= 0.01:
                     success = False
                 certified_action = clipped_action
             else:
-                action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
-                if self.integration_algo == 'LTI':
-                    action += np.squeeze(self.U_EQ)
-                clipped_action = np.clip(action, self.constraints.input_constraints[0].lower_bounds, self.constraints.input_constraints[0].upper_bounds)
-
+                certified_action = self._lqr_backup_action(current_state)
                 success = False
-                certified_action = clipped_action
+
+        if not self._is_finite(certified_action):
+            certified_action = self._clip_to_input_bounds(self.U_EQ)
+            success = False
 
         certified_action = np.squeeze(np.array(certified_action))
         self.results_dict['kinf'].append(self.kinf)
@@ -366,5 +459,6 @@ class MPSC(BaseSafetyFilter, ABC):
         self.z_prev = None
         self.v_prev = None
         self.slack_prev = 0
+        self._acados_needs_rebuild = False
         self.kinf = self.horizon - 1
         self.setup_results_dict()
