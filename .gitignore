@@ -5,8 +5,12 @@ temp/
 
 # Experiments
 experiments/mpsc/models/rl_models/
+experiments/mpsc/models/rl_models/*
 experiments/adversarial/models/rl_models/
 experiments/adversarial/plots/
+experiments/adversarial/ablation/
+experiments/adversarial/ablation_robustification/
+experiments/adversarial/robustification/
 
 # Large binary files (models, images, data)
 *.pt
@@ -52,6 +56,9 @@ poetry.lock
 
 # Logs
 *.log
+
+# Docs
+docs/
 
 # Experiment artifacts
 training_time.txt

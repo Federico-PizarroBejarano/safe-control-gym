@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Train models across both ablation variants AND robustification parameters
-# This sweeps: reward function components × MPC horizons × max_w disturbances
+# This sweeps: reward function components × MPC horizons × max_w constraint tightening
 #
 # Usage: ./train_ablation_robustification_sweep.sh [seed]
 # Example: ./train_ablation_robustification_sweep.sh 42
@@ -26,23 +26,21 @@ echo ""
 # Format: "name:override1:override2:..."
 ABLATIONS=(
     "baseline"
-    "state_only:algo_config.adv_use_correction_reward=False:algo_config.adv_use_correction_ratio=False:algo_config.adv_use_correction_bonus=False:algo_config.adv_use_no_correction_penalty=False"
-    "no_correction_mag:algo_config.adv_use_correction_reward=False"
-    "no_correction_bonus:algo_config.adv_use_correction_bonus=False"
-    "no_velocity:algo_config.adv_use_velocity_reward=False"
-    "no_stability_penalty:algo_config.adv_use_stability_penalty=False"
-    "w_correction_10:algo_config.adv_w_correction=10.0"
-    "temp_30:algo_config.adv_reward_temperature=30.0"
+    "state_only:algo_config.adversarial_reward.use_correction_reward=False:algo_config.adversarial_reward.use_correction_ratio=False:algo_config.adversarial_reward.use_correction_bonus=False:algo_config.adversarial_reward.use_no_correction_penalty=False"
+    "no_correction_mag:algo_config.adversarial_reward.use_correction_reward=False"
+    "no_correction_bonus:algo_config.adversarial_reward.use_correction_bonus=False"
+    "no_velocity:algo_config.adversarial_reward.use_velocity_reward=False"
+    "no_stability_penalty:algo_config.adversarial_reward.use_stability_penalty=False"
+    "w_correction_10:algo_config.adversarial_reward.w_correction=10.0"
+    "temp_30:algo_config.adversarial_reward.temperature=30.0"
 )
 
 # Robustification parameters
 HORIZONS=(20 30 40)
-COST_HORIZONS=(6 8 10)
 MAX_W_VALUES=(0.001 0.002 0.005)
-TERMINAL_SETS=(false)
 
 # Calculate total experiments
-TOTAL=$((${#ABLATIONS[@]} * ${#HORIZONS[@]} * ${#COST_HORIZONS[@]} * ${#MAX_W_VALUES[@]} * ${#TERMINAL_SETS[@]}))
+TOTAL=$((${#ABLATIONS[@]} * ${#HORIZONS[@]} * ${#MAX_W_VALUES[@]}))
 echo "Total experiments: $TOTAL"
 echo ""
 
@@ -60,38 +58,34 @@ for ABLATION in "${ABLATIONS[@]}"; do
     done
 
     for HORIZON in "${HORIZONS[@]}"; do
-        for COST_HORIZON in "${COST_HORIZONS[@]}"; do
-            for MAX_W in "${MAX_W_VALUES[@]}"; do
-                for TERMINAL_SET in "${TERMINAL_SETS[@]}"; do
-                    COUNT=$((COUNT + 1))
+        for MAX_W in "${MAX_W_VALUES[@]}"; do
+            COUNT=$((COUNT + 1))
 
-                    # Create experiment name
-                    EXP_NAME="${ABLATION_NAME}_h${HORIZON}_ch${COST_HORIZON}_w${MAX_W}_ts${TERMINAL_SET}"
-                    EXP_DIR="${OUTPUT_DIR}/seed_${SEED}/${EXP_NAME}"
+            # Create experiment name
+            EXP_NAME="${ABLATION_NAME}_h${HORIZON}_w${MAX_W}"
+            EXP_DIR="${OUTPUT_DIR}/seed_${SEED}/${EXP_NAME}"
 
-                    echo "[${COUNT}/${TOTAL}] Training: $EXP_NAME"
+            echo "[${COUNT}/${TOTAL}] Training: $EXP_NAME"
 
-                    # Build safety filter overrides
-                    SF_OVERRIDES="sf_config.horizon=${HORIZON} sf_config.mpsc_cost_horizon=${COST_HORIZON} sf_config.max_w=${MAX_W} sf_config.use_terminal_set=${TERMINAL_SET}"
+            # Build safety filter overrides
+            SF_OVERRIDES="sf_config.horizon=${HORIZON} sf_config.max_w=${MAX_W}"
 
-                    # Run training
-                    python3 ./train_rl.py \
-                        --algo ${ALGO} \
-                        --task ${SYS_NAME} \
-                        --safety_filter ${SAFETY_FILTER} \
-                        --overrides \
-                            ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
-                            ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
-                            ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
-                        --output_dir ${EXP_DIR} \
-                        --seed ${SEED} \
-                        --kv_overrides ${ABLATION_OVERRIDES} ${SF_OVERRIDES}
+            # Run training
+            python3 ./train_rl.py \
+                --algo ${ALGO} \
+                --task ${SYS_NAME} \
+                --safety_filter ${SAFETY_FILTER} \
+                --overrides \
+                    ./config_overrides/${SYS}/${ALGO}_${SYS}.yaml \
+                    ./config_overrides/${SYS}/${SYS}_${TASK}.yaml \
+                    ./config_overrides/${SYS}/${SAFETY_FILTER}_${SYS}.yaml \
+                --output_dir ${EXP_DIR} \
+                --seed ${SEED} \
+                --kv_overrides ${ABLATION_OVERRIDES} ${SF_OVERRIDES}
 
-                    if [ $? -ne 0 ]; then
-                        echo "  [FAILED] Training failed for $EXP_NAME"
-                    fi
-                done
-            done
+            if [ $? -ne 0 ]; then
+                echo "  [FAILED] Training failed for $EXP_NAME"
+            fi
         done
     done
 done

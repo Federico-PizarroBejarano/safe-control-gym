@@ -12,6 +12,13 @@ This version extends run_ablation.py to:
 
 import numpy as np
 
+# State index for primary angle constraint (theta) per plant family.
+THETA_IDX_BY_SYSTEM = {
+    'cartpole': 2,
+    'quadrotor_2D': 4,
+    'quadrotor': 4,
+}
+
 
 def compute_robustification_metrics(cert_results, uncert_results, mpsc_results, config, system='cartpole', info=None):
     """Compute robustification metrics for violation, control, and performance analysis.
@@ -44,7 +51,9 @@ def compute_robustification_metrics(cert_results, uncert_results, mpsc_results, 
         upper_bounds = [2.4, 100, 0.2, 100]
         lower_bounds = [-2.4, -100, -0.2, -100]
 
-    theta_idx = 2  # cartpole theta is at index 2
+    theta_idx = THETA_IDX_BY_SYSTEM.get(system, 2)
+    if theta_idx >= len(upper_bounds):
+        raise ValueError(f'constraint bounds too short for system={system!r} theta_idx={theta_idx}')
     theta_ub = upper_bounds[theta_idx]
     theta_lb = lower_bounds[theta_idx]
 
@@ -205,7 +214,7 @@ def format_robustification_summary(all_metrics):
         lines.append(line)
 
     lines.append('=' * 120)
-    lines.append('\nLegend: H=Horizon, CH=Cost Horizon, W=Max Disturbance, TS=Terminal Set')
+    lines.append('\nLegend: H=Horizon, CH=Cost Horizon, W=Max Constraint Tightening (max_w), TS=Terminal Set')
     lines.append('        CViol=Certified Violation Rate, UViol=Uncertified Violation Rate')
     lines.append('        CSlack=Certified Slack, USlack=Uncertified Slack, TtFV=Time to First Violation')
     lines.append('        #Corr=Number of Corrections, MaxC=Max Correction, CtrlEf=Control Effort (L1)')

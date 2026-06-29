@@ -48,9 +48,7 @@ class NL_MPSC(MPSC):
             decay_factor (float): How much to discount future costs.
             soften_constraints (bool): Whether to soften the constraints or not.
             slack_cost (float): The slack cost for the constraints.
-            max_w (float or list): The constraint tightening rate per horizon step. Can be a scalar
-                (applied uniformly to all state constraints) or an array of length (n_states + n_inputs)
-                for per-variable tightening rates. Only state constraints are tightened (input rates ignored).
+            max_w (float): The maximum weight for the constraints.
         '''
 
         super().__init__(
@@ -88,15 +86,6 @@ class NL_MPSC(MPSC):
         self.L_x = np.vstack((L_x, np.zeros((p_u, self.n))))
         self.L_u = np.vstack((np.zeros((p_x, self.m)), L_u))
         self.l_xu = np.concatenate([l_x, l_u])
-
-        # Convert max_w to array of length p/2 (one per variable: n states + m inputs)
-        n_vars = self.p // 2  # Number of constrained variables (states + inputs)
-        if np.isscalar(self.max_w):
-            self.max_w = np.full(n_vars, self.max_w)
-        else:
-            self.max_w = np.array(self.max_w)
-            if len(self.max_w) != n_vars:
-                raise ValueError(f'max_w must be a scalar or array of length {n_vars} (p/2), got {len(self.max_w)}')
 
         self.setup_optimizer()
 
@@ -152,68 +141,82 @@ class NL_MPSC(MPSC):
         '''Setup the certifying MPC problem in casadi.'''
         raise NotImplementedError('Removed Casadi optimizer for NL MPSC.')
 
-    def setup_acados_optimizer(self):
-        '''Setup the certifying MPC problem in acados.'''
-        # Create ocp object to formulate the OCP
-        ocp = AcadosOcp()
+    def setup_acados_optimizer(self, regenerate=True):
+        '''Setup the certifying MPC problem in acados.
 
-        # Setup model
-        model = AcadosModel()
-        model.x = self.model.x_sym
-        model.u = self.model.u_sym
-        model.name = self.env.NAME
+        Args:
+            regenerate (bool): If False, reload the solver from existing generated code.
+        '''
+        if regenerate or not hasattr(self, '_acados_ocp'):
+            ocp = AcadosOcp()
 
-        # Dynamics model
-        model.f_expl_expr = self.model.fc_func(model.x, model.u)
-        model.x_labels = self.env.STATE_LABELS
-        model.u_labels = self.env.ACTION_LABELS
-        model.t_label = 'time'
-        ocp.model = model
+            # Setup model
+            model = AcadosModel()
+            model.x = self.model.x_sym
+            model.u = self.model.u_sym
+            model.name = self.env.NAME
 
-        nx, nu = self.model.nx, self.model.nu
-        ny = nx + nu
+            # Dynamics model
+            model.f_expl_expr = self.model.fc_func(model.x, model.u)
 
-        # Set cost module
-        ocp.cost.cost_type = 'LINEAR_LS'
-        Q_mat = np.zeros((nx, nx))
-        R_mat = np.eye(nu)
-        ocp.cost.W = block_diag(Q_mat, R_mat)
-        ocp.cost.Vx = np.zeros((ny, nx))
-        ocp.cost.Vu = np.zeros((ny, nu))
-        ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
+            ocp.model = model
 
-        # Updated on each iteration
-        ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
+            nx, nu = self.model.nx, self.model.nu
+            ny = nx + nu
 
-        # Setup constraints
-        ocp.constraints.constr_type = 'BGH'
-        ocp.constraints.x0 = self.model.X_EQ
-        ocp.constraints.C = self.L_x
-        ocp.constraints.D = self.L_u
-        ocp.constraints.lg = -1000 * np.ones((self.p))
-        ocp.constraints.ug = np.zeros((self.p))
+            # Set cost module
+            ocp.cost.cost_type = 'LINEAR_LS'
+            Q_mat = np.zeros((nx, nx))
+            R_mat = np.eye(nu)
+            ocp.cost.W = block_diag(Q_mat, R_mat)
+            ocp.cost.Vx = np.zeros((ny, nx))
+            ocp.cost.Vu = np.zeros((ny, nu))
+            ocp.cost.Vu[nx:nx + nu, :] = np.eye(nu)
 
-        # Slack
-        if self.soften_constraints:
-            ocp.constraints.Jsg = np.eye(self.p)
-            ocp.cost.Zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-            ocp.cost.Zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-            ocp.cost.zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
-            ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+            # Updated on each iteration
+            ocp.cost.yref = np.concatenate((self.model.X_EQ, self.model.U_EQ))
 
-        # Options
-        ocp.solver_options.N_horizon = self.horizon
-        ocp.solver_options.tf = self.dt * self.horizon
-        ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
-        ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-        ocp.solver_options.hpipm_mode = 'BALANCE'
-        ocp.solver_options.integrator_type = 'ERK'
-        ocp.solver_options.nlp_solver_type = 'SQP_RTI'
-        ocp.solver_options.nlp_solver_max_iter = 200
+            # Setup constraints
+            ocp.constraints.constr_type = 'BGH'
+            ocp.constraints.x0 = self.model.X_EQ
+            ocp.constraints.C = self.L_x
+            ocp.constraints.D = self.L_u
+            ocp.constraints.lg = -1000 * np.ones((self.p))
+            ocp.constraints.ug = np.zeros((self.p))
 
-        solver_json = 'acados_ocp_mpsf.json'
-        ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=True, build=True)
+            # Slack
+            if self.soften_constraints:
+                ocp.constraints.Jsg = np.eye(self.p)
+                ocp.cost.Zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+                ocp.cost.Zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+                ocp.cost.zu = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
+                ocp.cost.zl = np.array([self.slack_cost] * nx * 2 + [self.slack_cost * 100] * nu * 2)
 
+            # Options
+            ocp.solver_options.N_horizon = self.horizon
+            ocp.solver_options.tf = self.dt * self.horizon
+            ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
+            ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
+            ocp.solver_options.hpipm_mode = 'BALANCE'
+            ocp.solver_options.integrator_type = 'ERK'
+            ocp.solver_options.nlp_solver_type = 'SQP_RTI'
+            ocp.solver_options.print_level = 0
+            ocp.solver_options.qp_print_level = 0
+
+            self._acados_ocp = ocp
+        else:
+            ocp = self._acados_ocp
+
+        solver_json = getattr(self, 'acados_solver_json', 'acados_ocp_mpsf.json')
+        self.ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json, generate=regenerate, build=regenerate)
+        self._configure_acados_solver(self.ocp_solver, ocp)
+
+    def reinstantiate_acados_solver(self):
+        '''Reload the Acados solver from existing generated code without recompiling.'''
+        self.setup_acados_optimizer(regenerate=False)
+
+    def _configure_acados_solver(self, ocp_solver, ocp):
+        '''Apply horizon-dependent costs and tightened constraints to an Acados solver.'''
         for stage in range(self.mpsc_cost_horizon):
             ocp_solver.cost_set(stage, 'W', (self.cost_function.decay_factor**stage) * ocp.cost.W)
 
@@ -224,11 +227,7 @@ class NL_MPSC(MPSC):
 
         for i in range(self.horizon):
             for j in range(self.p):
-                var_idx = j // 2  # Which variable this constraint belongs to (upper/lower pairs)
-                is_state = var_idx < self.n  # Only tighten state constraints
-                tighten_by = (self.max_w[var_idx] * i) if is_state else 0
+                tighten_by = (self.max_w * i) if j < self.n * 2 else 0
                 g[i, j] = (self.l_xu[j] - tighten_by)
             g[i, :] += (self.L_x @ self.X_mid) + (self.L_u @ self.U_mid)
             ocp_solver.constraints_set(i, 'ug', g[i, :])
-
-        self.ocp_solver = ocp_solver

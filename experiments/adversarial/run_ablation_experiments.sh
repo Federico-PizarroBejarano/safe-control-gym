@@ -25,30 +25,30 @@ echo ""
 # Ablation experiment configurations
 # Format: "experiment_name:kv_override1:kv_override2:..."
 EXPERIMENTS=(
-    # "correction_only:algo_config.adv_use_theta_reward=False:algo_config.adv_use_velocity_reward=False:algo_config.adv_use_oscillation_reward=False:algo_config.adv_use_stability_penalty=False"
-    "state_only:algo_config.adv_use_correction_reward=False:algo_config.adv_use_correction_ratio=False:algo_config.adv_use_correction_bonus=False:algo_config.adv_use_no_correction_penalty=False"
-    "no_correction_mag:algo_config.adv_use_correction_reward=False"
-    # "no_correction_ratio:algo_config.adv_use_correction_ratio=False"
-    "no_correction_bonus:algo_config.adv_use_correction_bonus=False"
-    # "no_correction_penalty:algo_config.adv_use_no_correction_penalty=False"
-    # "no_theta:algo_config.adv_use_theta_reward=False"
-    "no_velocity:algo_config.adv_use_velocity_reward=False"
-    # "no_oscillation:algo_config.adv_use_oscillation_reward=False"
-    "no_stability_penalty:algo_config.adv_use_stability_penalty=False"
-    # "no_cart_penalty:algo_config.adv_use_cart_penalty=False"  # cartpole only
-    "w_correction_10:algo_config.adv_w_correction=10.0"
-    # "w_correction_50:algo_config.adv_w_correction=50.0"
-    # "temp_5:algo_config.adv_reward_temperature=5.0"
-    "temp_30:algo_config.adv_reward_temperature=30.0"
-    "temp_500:algo_config.adv_reward_temperature=500.0"
+    # "correction_only:algo_config.adversarial_reward.use_theta_reward=False:algo_config.adversarial_reward.use_velocity_reward=False:algo_config.adversarial_reward.use_oscillation_reward=False:algo_config.adversarial_reward.use_stability_penalty=False"
+    "state_only:algo_config.adversarial_reward.use_correction_reward=False:algo_config.adversarial_reward.use_correction_ratio=False:algo_config.adversarial_reward.use_correction_bonus=False:algo_config.adversarial_reward.use_no_correction_penalty=False"
+    "no_correction_mag:algo_config.adversarial_reward.use_correction_reward=False"
+    # "no_correction_ratio:algo_config.adversarial_reward.use_correction_ratio=False"
+    "no_correction_bonus:algo_config.adversarial_reward.use_correction_bonus=False"
+    # "no_correction_penalty:algo_config.adversarial_reward.use_no_correction_penalty=False"
+    # "no_theta:algo_config.adversarial_reward.use_theta_reward=False"
+    "no_velocity:algo_config.adversarial_reward.use_velocity_reward=False"
+    # "no_oscillation:algo_config.adversarial_reward.use_oscillation_reward=False"
+    "no_stability_penalty:algo_config.adversarial_reward.use_stability_penalty=False"
+    # "no_cart_penalty:algo_config.adversarial_reward.use_cart_penalty=False"  # cartpole only
+    "w_correction_10:algo_config.adversarial_reward.w_correction=10.0"
+    # "w_correction_50:algo_config.adversarial_reward.w_correction=50.0"
+    # "temp_5:algo_config.adversarial_reward.temperature=5.0"
+    "temp_30:algo_config.adversarial_reward.temperature=30.0"
+    "temp_500:algo_config.adversarial_reward.temperature=500.0"
     # "no_safe_reset:algo_config.use_safe_reset=False"
 )
 
 # Add quadrotor-specific ablations if running quadrotor
 if [ "$SYS" == 'quadrotor_2D' ]; then
     EXPERIMENTS+=(
-        "no_altitude_penalty:algo_config.adv_use_altitude_penalty=False"
-        "no_position_reward:algo_config.adv_use_position_reward=False"
+        "no_altitude_penalty:algo_config.adversarial_reward.use_altitude_penalty=False"
+        "no_position_reward:algo_config.adversarial_reward.use_position_reward=False"
     )
 fi
 

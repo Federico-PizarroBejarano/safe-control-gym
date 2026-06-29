@@ -34,6 +34,7 @@ MPSC_COST='precomputed_cost'
 # MPSC_COST='learned_cost'
 
 MPSC_COST_HORIZON=2
+DECAY_FACTOR=0.85
 
 if [ "$SYS" == 'cartpole' ]; then
     SYS_NAME=$SYS
@@ -59,6 +60,8 @@ python3 ./mpsc_experiment.py \
     --kv_overrides \
         sf_config.cost_function=${MPSC_COST} \
         sf_config.mpsc_cost_horizon=${MPSC_COST_HORIZON} \
+        sf_config.decay_factor=${DECAY_FACTOR} \
+        sf_config.soften_constraints=True \
         task_config.seed=${SEED} \
         algo_config.seed=${SEED} \
         sf_config.seed=${SEED} \

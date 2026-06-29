@@ -143,6 +143,48 @@ class MPSC(BaseSafetyFilter, ABC):
         '''
         return
 
+    def reinstantiate_acados_solver(self):
+        '''Recreate the Acados solver (subclasses may reload without recompiling).'''
+        self.setup_acados_optimizer()
+
+    def recover_acados_solver(self, rebuild=False):
+        '''Clear warmstart state and recover from a failed Acados solve.'''
+        self.z_prev = None
+        self.v_prev = None
+        if not self.use_acados or not hasattr(self, 'ocp_solver'):
+            self._acados_needs_rebuild = False
+            return
+        if rebuild:
+            self.reinstantiate_acados_solver()
+        else:
+            try:
+                self.ocp_solver.reset()
+            except Exception:
+                self.reinstantiate_acados_solver()
+        self._acados_needs_rebuild = False
+
+    @property
+    def acados_needs_rebuild(self):
+        '''Whether the Acados solver needs reinstantiation after a poisoned solve.'''
+        return self._acados_needs_rebuild
+
+    def _probe_acados_solver(self):
+        '''Check whether the Acados solver can solve from the equilibrium state.'''
+        try:
+            self.ocp_solver.cost_set(
+                0, 'yref',
+                np.concatenate((np.zeros((self.model.nx)), np.atleast_1d(np.squeeze(self.U_EQ)))))
+            self.ocp_solver.solve_for_x0(x0_bar=self.X_EQ)
+            return self.ocp_solver.status == 0
+        except Exception:
+            return False
+
+    def _handle_acados_solve_failure(self):
+        '''Reset solver state after a failed solve; flag rebuild if probe still fails.'''
+        self.recover_acados_solver(rebuild=False)
+        if not self._probe_acados_solver():
+            self._acados_needs_rebuild = True
+
     def solve_optimization(self,
                            obs,
                            uncertified_action,
@@ -264,6 +306,15 @@ class MPSC(BaseSafetyFilter, ABC):
             feasible (bool): Whether the safety filtering was feasible or not.
         '''
 
+        state_vec = self._extract_state_vector(obs)
+        uncertified_action = np.atleast_1d(np.squeeze(uncertified_action))
+        if not np.all(np.isfinite(state_vec)) or not np.all(np.isfinite(uncertified_action)):
+            return None, False
+
+        if self.z_prev is not None and not np.all(np.isfinite(self.z_prev)):
+            self.z_prev = None
+            self.v_prev = None
+
         ocp_solver = self.ocp_solver
         ocp_solver.cost_set(0, 'yref', np.concatenate((np.zeros((self.model.nx)), np.atleast_1d(np.squeeze(uncertified_action)))))
 
@@ -273,29 +324,37 @@ class MPSC(BaseSafetyFilter, ABC):
             for stage in range(1, self.mpsc_cost_horizon):
                 ocp_solver.cost_set(stage, 'yref', np.concatenate((np.zeros((self.model.nx)), uncert_input_traj[:, stage])))
 
-        # Solve the optimization problem.
         try:
-            action = ocp_solver.solve_for_x0(x0_bar=obs)
-            self.cost_prev = ocp_solver.get_cost()
-            self.slack_prev = np.zeros((self.horizon, self.p))
-            x_val = np.zeros((self.horizon + 1, self.model.nx))
-            u_val = np.zeros((self.horizon, self.model.nu))
-            for i in range(self.horizon):
-                self.slack_prev[i, :] = ocp_solver.get(i, 'su')
-                x_val[i, :] = ocp_solver.get(i, 'x')
-                u_val[i, :] = ocp_solver.get(i, 'u')
-            x_val[self.horizon, :] = ocp_solver.get(self.horizon, 'x')
-            self.z_prev = x_val.T
-            self.v_prev = u_val.T
-            # Take the first one from solved action sequence.
-            self.prev_action = action
-            feasible = True
+            action = ocp_solver.solve_for_x0(
+                x0_bar=state_vec,
+                fail_on_nonzero_status=False,
+                print_stats_on_failure=False,
+            )
         except Exception as e:
             print('Error Return Status:', ocp_solver.status)
             print(e)
-            feasible = False
-            action = None
-        return action, feasible
+            self._handle_acados_solve_failure()
+            return None, False
+
+        if ocp_solver.status != 0 or not np.all(np.isfinite(action)):
+            self._handle_acados_solve_failure()
+            return None, False
+
+        self.cost_prev = ocp_solver.get_cost()
+        self.slack_prev = np.zeros((self.horizon, self.p))
+        x_val = np.zeros((self.horizon + 1, self.model.nx))
+        u_val = np.zeros((self.horizon, self.model.nu))
+        read_slack = getattr(self, 'soften_constraints', False)
+        for i in range(self.horizon):
+            if read_slack:
+                self.slack_prev[i, :] = ocp_solver.get(i, 'su')
+            x_val[i, :] = ocp_solver.get(i, 'x')
+            u_val[i, :] = ocp_solver.get(i, 'u')
+        x_val[self.horizon, :] = ocp_solver.get(self.horizon, 'x')
+        self.z_prev = x_val.T
+        self.v_prev = u_val.T
+        self.prev_action = action
+        return action, True
 
     def certify_action(self,
                        current_state,
@@ -327,9 +386,7 @@ class MPSC(BaseSafetyFilter, ABC):
             certified_action = action
         else:
             self.kinf += 1
-            if (self.kinf <= self.horizon - 1 and self.z_prev is not None and self.v_prev is not None):
-                # action = np.squeeze(self.v_prev[:, self.kinf]) + \
-                #     np.squeeze(self.lqr_gain @ (current_state.reshape((self.model.nx, 1)) - self.z_prev[:, self.kinf].reshape((self.model.nx, 1))))
+            if self.kinf <= self.horizon - 1 and self.z_prev is not None and self.v_prev is not None:
                 current_state_vec = self._extract_state_vector(current_state).reshape((self.model.nx, 1))
                 reference_vec = self._extract_state_vector(self.z_prev[:, self.kinf]).reshape((self.model.nx, 1))
                 action = np.squeeze(self.v_prev[:, self.kinf]) + np.squeeze(self.lqr_gain @ (current_state_vec - reference_vec))
@@ -342,7 +399,6 @@ class MPSC(BaseSafetyFilter, ABC):
                     success = False
                 certified_action = clipped_action
             else:
-                # action = np.squeeze(self.lqr_gain @ (current_state - self.X_EQ))
                 current_state_vec = self._extract_state_vector(current_state)
                 x_delta = current_state_vec - self._extract_state_vector(self.X_EQ)
                 action = np.squeeze(self.lqr_gain @ x_delta.reshape((self.model.nx, 1)))
@@ -390,5 +446,6 @@ class MPSC(BaseSafetyFilter, ABC):
         self.z_prev = None
         self.v_prev = None
         self.slack_prev = 0
+        self._acados_needs_rebuild = False
         self.kinf = self.horizon - 1
         self.setup_results_dict()

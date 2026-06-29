@@ -74,7 +74,12 @@ class ConfigFactory:
         # Experiment-specific overrides, e.g. training hyperparameters.
         if args.overrides:
             for f in args.overrides:
-                merge_dict(config_dict, read_file(f))
+                data = read_file(f)
+                if data is None:
+                    raise FileNotFoundError(
+                        f'Config override not found or unreadable: {f!r} '
+                        f'(cwd={os.getcwd()!r}, abspath={os.path.abspath(f)!r})')
+                merge_dict(config_dict, data)
         if args.kv_overrides:
             kv_dict = {}
             for kv in args.kv_overrides:

@@ -11,7 +11,7 @@ sf_config:
 
   # MPC Parameters
   use_acados: True
-  horizon: 20
+  horizon: 30
   warmstart: True
   integration_algo: rk4
   use_terminal_set: False
@@ -23,7 +23,7 @@ sf_config:
     prior_prop_rand_info: null
 
   # Learning disturbance bounds
-  n_samples: 6000
+  n_samples: 10000
 
   # Cost function
   cost_function: one_step_cost
@@ -32,4 +32,4 @@ sf_config:
 
   # Softening
   soften_constraints: False
-  slack_cost: 1000
+  slack_cost: 10000

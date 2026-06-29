@@ -44,43 +44,33 @@ algo_config:
   filter_train_actions: True
   use_safe_reset: True
 
-  # Adversarial reward config
-  adv_reward_temperature: 15.0
-  adv_reward_scale: 1.0
-  adv_reward_exponential: False
-
-  # Correction-based rewards
-  adv_use_correction_reward: True
-  adv_w_correction: 30.0
-  adv_use_correction_ratio: True
-  adv_w_correction_ratio: 40.0
-  adv_use_correction_bonus: True
-  adv_correction_bonus_tier1: 1.0
-  adv_correction_bonus_tier2: 2.0
-  adv_correction_bonus_tier3: 5.0
-  adv_use_no_correction_penalty: True
-  adv_no_correction_penalty: -3.0
-
-  # State-based rewards - adapted for quadrotor
-  # Quadrotor state: [x, x_dot, z, z_dot, theta, theta_dot]
-  adv_use_theta_reward: True
-  adv_w_theta: 8.0
-  adv_use_velocity_reward: True
-  adv_w_velocity: 4.0
-  adv_use_oscillation_reward: True
-  adv_w_oscillation: 3.0
-
-  # Penalties - adapted for quadrotor
-  adv_use_cart_penalty: False  # Not applicable for quadrotor
-  adv_w_cart: 0.0
-  adv_cart_threshold: 0.0
-  adv_use_stability_penalty: True
-  adv_stability_threshold: 0.15
-  adv_stability_penalty: -8.0
-
-  # Quadrotor-specific rewards
-  adv_use_altitude_penalty: True
-  adv_w_altitude: 5.0
-  adv_altitude_threshold: 0.3  # Minimum safe altitude
-  adv_use_position_reward: True
-  adv_w_position: 3.0
+  adversary_strategy: adversary
+  adversarial_reward:
+    temperature: 15.0
+    use_correction_reward: True
+    use_correction_ratio: True
+    use_correction_bonus: True
+    use_no_correction_penalty: True
+    use_theta_reward: True
+    use_velocity_reward: True
+    use_oscillation_reward: True
+    use_cart_penalty: False
+    use_stability_penalty: True
+    use_altitude_penalty: True
+    use_position_reward: True
+    w_correction: 30.0
+    w_correction_ratio: 40.0
+    w_theta: 8.0
+    w_velocity: 4.0
+    w_oscillation: 3.0
+    w_altitude: 5.0
+    w_position: 3.0
+    w_cart_penalty: 0.0
+    w_termination_penalty: 100.0
+    correction_bonus_tier1: 1.0
+    correction_bonus_tier2: 2.0
+    correction_bonus_tier3: 5.0
+    no_correction_penalty: -3.0
+    altitude_threshold: 0.3
+    quad_stability_penalty: -8.0
+    plant_family: quadrotor_2d

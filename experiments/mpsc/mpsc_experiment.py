@@ -16,6 +16,14 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 
+def parse_model_arg():
+    '''Parse --model=NAME from command-line arguments.'''
+    for arg in sys.argv:
+        if arg.startswith('--model='):
+            return arg.split('=', 1)[1]
+    return None
+
+
 def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', init_state=None, model='none'):
     '''Main function to run MPSC experiments.
 
@@ -70,8 +78,18 @@ def run(plot=True, training=False, n_episodes=1, n_steps=None, curr_path='.', in
                 output_dir=curr_path + '/temp')
 
     if config.algo in ['ppo', 'sac']:
-        # Load state_dict from trained.
-        ctrl.load(f'{curr_path}/models/rl_models/{system}/{task}/{config.algo}/{model}/seed_{config.task_config.seed}/model_latest.pt')
+        checkpoint_dir = os.path.join(
+            curr_path, 'models', 'rl_models', system, task, config.algo, model)
+        seed = config.task_config.get('seed', None)
+        if seed is not None:
+            checkpoint_dir = os.path.join(checkpoint_dir, f'seed_{seed}')
+        checkpoint_path = os.path.join(checkpoint_dir, 'model_best.pt')
+        if not os.path.isfile(checkpoint_path):
+            raise FileNotFoundError(
+                f'Checkpoint not found at {checkpoint_path}. '
+                f'Expected models/rl_models/{system}/{task}/{config.algo}/{model}/'
+                f'seed_{seed}/model_best.pt when using seed subdirs from train_model.sbatch.')
+        ctrl.load(checkpoint_path)
 
         # Remove temporary files and directories
         shutil.rmtree(f'{curr_path}/temp', ignore_errors=True)
@@ -186,8 +204,8 @@ def determine_feasible_starting_points(num_points=100):
         unextended_obs = np.squeeze(init_state)[:nx]
         safety_filter.reset_before_run()
         _, success = safety_filter.certify_action(unextended_obs, physical_action, info)
-        if not success:
-            safety_filter.ocp_solver.reset()
+        if not success and safety_filter.acados_needs_rebuild:
+            safety_filter.recover_acados_solver(rebuild=True)
             _, success = safety_filter.certify_action(unextended_obs, physical_action, info)
         elif np.all(safety_filter.slack_prev < 1e-4):
             starting_points += [init_state]
@@ -259,7 +277,8 @@ def run_multiple_models(plot=True, model=None):
 if __name__ == '__main__':
     # run()
     # determine_feasible_starting_points(num_points=100)
-    if '--model=' in sys.argv:
-        run_multiple_models(plot=False, model='none')
+    model = parse_model_arg()
+    if model is not None and model != 'none':
+        run(plot=True, training=False, n_episodes=1, model=model)
     else:
-        run_multiple_models(plot=False, model=sys.argv[-1].split('=')[1])
+        run_multiple_models(plot=False, model=model if model != 'none' else None)
