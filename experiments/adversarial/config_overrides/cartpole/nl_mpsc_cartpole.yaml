@@ -3,19 +3,18 @@ sf_config:
   # LQR controller parameters
   r_lin:
     - 0.1
-
   q_lin:
     - 0.02
     - 0.001
     - 10
     - 0.5
 
-  # MPC parameters
+  # MPC Parameters
   use_acados: True
-  horizon: 20
+  horizon: 30
   warmstart: True
   integration_algo: rk4
-  use_terminal_set: True
+  use_terminal_set: False
 
   # Prior info
   prior_info:
@@ -25,11 +24,11 @@ sf_config:
 
   # Cost function
   cost_function: one_step_cost
-  mpsc_cost_horizon: 6
+  mpsc_cost_horizon: 5
   decay_factor: 0.85
 
   # Softening
-  soften_constraints: True
-  slack_cost: 300
+  soften_constraints: False
+  slack_cost: 10000
 
   max_w: 0.002

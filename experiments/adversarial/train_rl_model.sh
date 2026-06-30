@@ -33,4 +33,5 @@ python3 train_rl.py \
     --seed 2 \
     --kv_overrides \
         task_config.init_state=None \
+        sf_config.cost_function=one_step_cost \
         sf_config.soften_constraints=True \
